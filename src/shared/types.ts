@@ -158,7 +158,28 @@ export type Api = {
     topic: string;
     goal: string;
     cli: CliId;
+    folder: string | null;
+    webSearch: boolean;
+    attachPaths: string[];
   }): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
+  pickFolder(): Promise<string | null>;
+  pickFiles(): Promise<string[]>;
+  setSessionFolder(
+    id: string,
+    folder: string | null,
+  ): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
+  setSessionWebSearch(
+    id: string,
+    on: boolean,
+  ): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
+  addAttachments(
+    id: string,
+    paths: string[],
+  ): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
+  removeAttachment(
+    id: string,
+    file: string,
+  ): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
   setSessionCli(
     id: string,
     cli: CliId,
@@ -166,7 +187,7 @@ export type Api = {
   getSession(id: string): Promise<Session | null>;
   deleteSession(id: string): Promise<void>;
   advance(id: string): Promise<TurnResult>;
-  answer(id: string, answer: Answer): Promise<TurnResult>;
+  answer(id: string, answer: Answer, attachPaths: string[]): Promise<TurnResult>;
   stop(id: string): Promise<void>;
   isRunning(id: string): Promise<boolean>;
   listKnowledge(): Promise<KnowledgeView[]>;

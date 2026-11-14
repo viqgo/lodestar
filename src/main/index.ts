@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
@@ -62,7 +62,17 @@ async function main(): Promise<void> {
     notify: (s) => send("session:updated", s),
     listFolder: (f) => listFolder(fsp, f, FILE_LIST_MAX),
   });
-  registerIpc({ ipcMain, adapters, store, turns, now, newId, send });
+  const dialogs = {
+    pickFolder: async (): Promise<string | null> => {
+      const r = await dialog.showOpenDialog({ properties: ["openDirectory"] });
+      return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0];
+    },
+    pickFiles: async (): Promise<string[]> => {
+      const r = await dialog.showOpenDialog({ properties: ["openFile", "multiSelections"] });
+      return r.canceled ? [] : r.filePaths;
+    },
+  };
+  registerIpc({ ipcMain, adapters, store, turns, now, newId, send, dialogs });
   if (!process.env.ELECTRON_RENDERER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({

@@ -50,6 +50,9 @@ describe("NewLessonForm", () => {
       topic: "Derivatives",
       goal: "Limits",
       cli: "codex",
+      folder: null,
+      webSearch: false,
+      attachPaths: [],
     });
   });
   it("NewLessonForm hands the created lesson on", async () => {
@@ -158,6 +161,9 @@ describe("NewLessonForm", () => {
       topic: "Derivatives",
       goal: "Limits",
       cli: "claude",
+      folder: null,
+      webSearch: false,
+      attachPaths: [],
     });
   });
 });

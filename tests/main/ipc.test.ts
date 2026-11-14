@@ -12,7 +12,13 @@ const NOW = "2026-03-03T00:00:00.000Z";
 const ID1 = "s_00000001-0000-0000-0000-000000000000";
 const ID2 = "s_00000002-0000-0000-0000-000000000000";
 
-const setup = async (isRunning = false) => {
+const setup = async (
+  isRunning = false,
+  dialogs = {
+    pickFolder: async () => null as string | null,
+    pickFiles: async () => [] as string[],
+  },
+) => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-ipc-"));
   const store = await createStore(dir, fsp);
   const handlers = new Map<string, (...a: any[]) => any>();
@@ -38,9 +44,10 @@ const setup = async (isRunning = false) => {
     now: () => NOW,
     newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000",
     send,
+    dialogs,
   });
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(null, ...args);
-  return { store, turns, send, call, result };
+  return { store, turns, send, call, result, dir };
 };
 
 const withId = (id: string, updatedAt: string, events: Session["events"]): Session => ({
@@ -293,6 +300,178 @@ describe("ipc", () => {
     await store.addKnowledge([k]);
     await call("knowledge:delete", k.id);
     expect(await store.readKnowledge()).toEqual([]);
+  });
+});
+
+const makeFiles = async (names: string[], bytes = 5) => {
+  const d = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-src-"));
+  const out: string[] = [];
+  for (const n of names) {
+    await fsp.writeFile(path.join(d, n), "x".repeat(bytes));
+    out.push(path.join(d, n));
+  }
+  return out;
+};
+
+const REFUSED = "A reply is already on the way.";
+
+describe("ipc material", () => {
+  it("folder_chooser_stores_path (ipc)", async () => {
+    const { store, send, call } = await setup();
+    const r = await call("sessions:create", {
+      topic: "Maths",
+      goal: "Limits",
+      cli: "codex",
+      folder: "/notes/a",
+      webSearch: false,
+      attachPaths: [],
+    });
+    expect(r.session.folder).toBe("/notes/a");
+    const b = await call("sessions:setFolder", r.session.id, "/notes/b");
+    expect(b.ok && b.session.folder).toBe("/notes/b");
+    expect((await store.readSession(r.session.id))?.folder).toBe("/notes/b");
+    expect(send).toHaveBeenCalledWith("session:updated", b.session);
+    const c = await call("sessions:setFolder", r.session.id, null);
+    expect(c.ok && c.session.folder).toBeNull();
+    expect((await store.readSession(r.session.id))?.folder).toBeNull();
+  });
+
+  it("web_search_off_by_default", async () => {
+    const { store, call } = await setup();
+    const r = await call("sessions:create", { topic: "Maths", goal: "Limits", cli: "codex" });
+    expect(r.session.webSearch).toBe(false);
+    expect(r.session.folder).toBeNull();
+    const on = await call("sessions:setWebSearch", r.session.id, true);
+    expect(on.ok && on.session.webSearch).toBe(true);
+    expect((await store.readSession(r.session.id))?.webSearch).toBe(true);
+  });
+
+  it("create copies attachments and refuses a bad one without leaving a lesson", async () => {
+    const { store, call, dir } = await setup();
+    const [a, b] = await makeFiles(["a.txt", "b.md"]);
+    const ok = await call("sessions:create", {
+      topic: "Maths",
+      goal: "Limits",
+      cli: "codex",
+      folder: null,
+      webSearch: false,
+      attachPaths: [a, b],
+    });
+    expect(ok.session.attachments.map((x: { name: string }) => x.name)).toEqual(["a.txt", "b.md"]);
+    expect((await store.readSession(ok.session.id))?.attachments).toHaveLength(2);
+    expect(await fsp.readdir(store.attachmentsDir(ok.session.id))).toHaveLength(2);
+    const [c] = await makeFiles(["c.txt"]);
+    const [bad] = await makeFiles(["bad.exe"]);
+    const refused = await call("sessions:create", {
+      topic: "Maths",
+      goal: "Limits",
+      cli: "codex",
+      folder: null,
+      webSearch: false,
+      attachPaths: [c, bad],
+    });
+    expect(refused).toEqual({ ok: false, message: "That file type is not supported." });
+    expect((await store.listSessions()).map((x) => x.id)).toEqual([ok.session.id]);
+    expect(await fsp.readdir(path.join(dir, "attachments"))).toEqual([ok.session.id]);
+  });
+
+  it("addAttachments stops at the first refusal", async () => {
+    const { store, call } = await setup();
+    await store.writeSession(session());
+    const [a, c] = await makeFiles(["a.txt", "c.txt"]);
+    const [bad] = await makeFiles(["bad.exe"]);
+    const r = await call("sessions:addAttachments", session().id, [a, bad, c]);
+    expect(r).toEqual({ ok: false, message: "That file type is not supported." });
+    const stored = (await store.readSession(session().id))!;
+    expect(stored.attachments.map((x) => x.name)).toEqual(["a.txt"]);
+    expect(await fsp.readdir(store.attachmentsDir(session().id))).toEqual(["a1-a.txt"]);
+    const ok = await call("sessions:addAttachments", session().id, [c]);
+    expect(ok.ok && ok.session.attachments.map((x: { name: string }) => x.name)).toEqual([
+      "a.txt",
+      "c.txt",
+    ]);
+  });
+
+  it("removeAttachment deletes the copy and the entry", async () => {
+    const { store, call } = await setup();
+    await store.writeSession(session());
+    const [a, b] = await makeFiles(["a.txt", "b.txt"]);
+    const added = await call("sessions:addAttachments", session().id, [a, b]);
+    const file = added.session.attachments[0].file;
+    const r = await call("sessions:removeAttachment", session().id, file);
+    expect(r.ok && r.session.attachments.map((x: { name: string }) => x.name)).toEqual(["b.txt"]);
+    expect((await store.readSession(session().id))?.attachments).toHaveLength(1);
+    expect(await fsp.readdir(store.attachmentsDir(session().id))).toEqual(["a1-b.txt"]);
+  });
+
+  it("header_controls_disabled_while_running (ipc)", async () => {
+    const { store, call } = await setup(true);
+    const before = session();
+    await store.writeSession(before);
+    const id = before.id;
+    const refusal = { ok: false, message: REFUSED };
+    expect(await call("sessions:setFolder", id, "/x")).toEqual(refusal);
+    expect(await call("sessions:setWebSearch", id, true)).toEqual(refusal);
+    expect(await call("sessions:addAttachments", id, ["/x.txt"])).toEqual(refusal);
+    expect(await call("sessions:removeAttachment", id, "a1-x.txt")).toEqual(refusal);
+    expect(await store.readSession(id)).toEqual(before);
+  });
+
+  it("setters refuse a deleted lesson", async () => {
+    const { call } = await setup();
+    const id = "s_99999999-0000-0000-0000-000000000000";
+    const gone = { ok: false, message: "This lesson no longer exists." };
+    expect(await call("sessions:setFolder", id, "/x")).toEqual(gone);
+    expect(await call("sessions:setWebSearch", id, true)).toEqual(gone);
+    expect(await call("sessions:addAttachments", id, ["/x.txt"])).toEqual(gone);
+    expect(await call("sessions:removeAttachment", id, "a1-x.txt")).toEqual(gone);
+  });
+
+  it("answer with files stores their names and copies them", async () => {
+    const { store, call, result } = await setup();
+    const s = session([act(A.probe())]);
+    await store.writeSession(s);
+    const [a, b] = await makeFiles(["a.txt", "b.png"]);
+    const answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
+    expect(await call("lesson:answer", s.id, answer, [a, b])).toEqual(result);
+    const stored = (await store.readSession(s.id))!;
+    expect(stored.events[1]).toEqual({
+      kind: "answer",
+      at: NOW,
+      answer: { ...answer, attachments: ["a1-a.txt", "a1-b.png"] },
+    });
+    expect((await fsp.readdir(store.attachmentsDir(s.id))).sort()).toEqual([
+      "a1-a.txt",
+      "a1-b.png",
+    ]);
+  });
+
+  it("answer refuses a fourth file and copies nothing", async () => {
+    const { store, turns, call } = await setup();
+    const s = session([act(A.probe())]);
+    await store.writeSession(s);
+    const files = await makeFiles(["a.txt", "b.txt", "c.txt", "d.txt"]);
+    const answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
+    const r = await call("lesson:answer", s.id, answer, files);
+    expect(r.error).toEqual({
+      kind: "invalid_answer",
+      message: "An answer can hold at most 3 files.",
+    });
+    expect((await store.readSession(s.id))?.events).toEqual(s.events);
+    expect(await fsp.readdir(store.attachmentsDir(s.id)).catch(() => [])).toEqual([]);
+    expect(turns.advance).not.toHaveBeenCalled();
+  });
+
+  it("pick channels pass the dialog results through", async () => {
+    const { call } = await setup(false, {
+      pickFolder: async () => "/picked",
+      pickFiles: async () => ["/a.pdf", "/b.png"],
+    });
+    expect(await call("dialog:pickFolder")).toBe("/picked");
+    expect(await call("dialog:pickFiles")).toEqual(["/a.pdf", "/b.png"]);
+    const none = await setup();
+    expect(await none.call("dialog:pickFolder")).toBeNull();
+    expect(await none.call("dialog:pickFiles")).toEqual([]);
   });
 });
 

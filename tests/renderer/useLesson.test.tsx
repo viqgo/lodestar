@@ -87,7 +87,7 @@ describe("useLesson", () => {
     const { result } = renderHook(() => useLesson("s_1", false));
     await waitFor(() => expect(result.current.session).toEqual(s));
     rtlAct(() => result.current.submit(ANSWER));
-    expect(api.answer).toHaveBeenCalledWith("s_1", ANSWER);
+    expect(api.answer).toHaveBeenCalledWith("s_1", ANSWER, []);
     expect(result.current.busy).toBe(true);
     rtlAct(() => emitEnded("s_1", { ok: true, session: s2 }));
     expect(result.current.busy).toBe(false);

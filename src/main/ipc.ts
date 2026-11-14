@@ -1,8 +1,11 @@
+import { basename } from "node:path";
 import { isCliId } from "../shared/clis";
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
+import { ATTACH_PER_ANSWER, ATTACH_PER_LESSON } from "../shared/limits";
 import type {
   Answer,
+  Attachment,
   CliId,
   KnowledgeView,
   Session,
@@ -22,16 +25,22 @@ export type IpcDeps = {
   now: () => string;
   newId: (prefix: "s" | "k") => string;
   send: (channel: string, ...args: unknown[]) => void;
+  dialogs: { pickFolder(): Promise<string | null>; pickFiles(): Promise<string[]> };
 };
 
+type SessionResult = { ok: true; session: Session } | { ok: false; message: string };
+
 export function registerIpc(deps: IpcDeps): void {
-  const { ipcMain, adapters, store, turns, now, newId, send } = deps;
+  const { ipcMain, adapters, store, turns, now, newId, send, dialogs } = deps;
 
   const runTurn = async (id: string): Promise<TurnResult> => {
     const result = await turns.advance(id);
     send("turn:ended", id, result);
     return result;
   };
+
+  ipcMain.handle("dialog:pickFolder", () => dialogs.pickFolder());
+  ipcMain.handle("dialog:pickFiles", () => dialogs.pickFiles());
 
   ipcMain.handle("clis:detect", () => detectAll(adapters));
 
@@ -55,7 +64,17 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle(
     "sessions:create",
-    async (_event, input: { topic: string; goal: string; cli: CliId }) => {
+    async (
+      _event,
+      input: {
+        topic: string;
+        goal: string;
+        cli: CliId;
+        folder?: string | null;
+        webSearch?: boolean;
+        attachPaths?: string[];
+      },
+    ) => {
       const message = validateNewLesson(input.topic, input.goal);
       if (message !== null) return { ok: false as const, message };
       const cli = input.cli;
@@ -69,32 +88,77 @@ export function registerIpc(deps: IpcDeps): void {
         createdAt: now(),
         updatedAt: now(),
         events: [],
-        folder: null,
+        folder: input.folder ?? null,
         attachments: [],
-        webSearch: false,
+        webSearch: input.webSearch ?? false,
       };
       await store.writeSession(session);
-      return { ok: true as const, session };
+      const attachments: Attachment[] = [];
+      for (const [i, p] of (input.attachPaths ?? []).entries()) {
+        const r = await store.addAttachment(session.id, p, i, ATTACH_PER_LESSON);
+        if (!r.ok) {
+          await store.deleteSession(session.id);
+          return { ok: false as const, message: r.message };
+        }
+        attachments.push(r.attachment);
+      }
+      if (attachments.length === 0) return { ok: true as const, session };
+      const withFiles: Session = { ...session, attachments };
+      await store.writeSession(withFiles);
+      return { ok: true as const, session: withFiles };
     },
   );
 
-  ipcMain.handle("sessions:setCli", async (_event, id: string, cli: unknown) => {
-    if (!isCliId(cli)) return { ok: false as const, message: "Choose a tutor." };
-    if (turns.isRunning(id)) {
-      return { ok: false as const, message: "A reply is already on the way." };
-    }
+  const mutate = async (
+    id: string,
+    change: (session: Session) => Promise<{ session: Session; message?: string }>,
+  ): Promise<SessionResult> => {
+    const busy = { ok: false as const, message: "A reply is already on the way." };
+    if (turns.isRunning(id)) return busy;
     const session = await store.readSession(id);
     if (session === null) {
       return { ok: false as const, message: "This lesson no longer exists." };
     }
-    if (turns.isRunning(id)) {
-      return { ok: false as const, message: "A reply is already on the way." };
-    }
-    const updated: Session = { ...session, cli, updatedAt: now() };
+    if (turns.isRunning(id)) return busy;
+    const { session: next, message } = await change(session);
+    const updated: Session = { ...next, updatedAt: now() };
     await store.writeSession(updated);
     send("session:updated", updated);
+    if (message !== undefined) return { ok: false as const, message };
     return { ok: true as const, session: updated };
+  };
+
+  ipcMain.handle("sessions:setCli", async (_event, id: string, cli: unknown) => {
+    if (!isCliId(cli)) return { ok: false as const, message: "Choose a tutor." };
+    return mutate(id, async (s) => ({ session: { ...s, cli } }));
   });
+
+  ipcMain.handle("sessions:setFolder", (_event, id: string, folder: string | null) =>
+    mutate(id, async (s) => ({ session: { ...s, folder } })),
+  );
+
+  ipcMain.handle("sessions:setWebSearch", (_event, id: string, on: boolean) =>
+    mutate(id, async (s) => ({ session: { ...s, webSearch: on } })),
+  );
+
+  ipcMain.handle("sessions:addAttachments", (_event, id: string, paths: string[]) =>
+    mutate(id, async (s) => {
+      const attachments = [...s.attachments];
+      for (const p of paths) {
+        const r = await store.addAttachment(id, p, attachments.length, ATTACH_PER_LESSON);
+        if (!r.ok) return { session: { ...s, attachments }, message: r.message };
+        attachments.push(r.attachment);
+      }
+      return { session: { ...s, attachments } };
+    }),
+  );
+
+  ipcMain.handle("sessions:removeAttachment", (_event, id: string, file: string) =>
+    mutate(id, async (s) => {
+      await store.removeAttachment(id, file);
+      return { session: { ...s, attachments: s.attachments.filter((a) => a.file !== file) } };
+    }),
+  );
 
   ipcMain.handle("sessions:get", (_event, id: string) => store.readSession(id));
 
@@ -105,39 +169,59 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle("lesson:advance", (_event, id: string) => runTurn(id));
 
-  ipcMain.handle("lesson:answer", async (_event, id: string, answer: Answer) => {
-    if (turns.isRunning(id)) {
-      return {
-        ok: false as const,
-        error: { kind: "busy" as const, message: "A reply is already on the way." },
-        session: null,
+  ipcMain.handle(
+    "lesson:answer",
+    async (_event, id: string, answer: Answer, attachPaths: string[] = []) => {
+      if (turns.isRunning(id)) {
+        return {
+          ok: false as const,
+          error: { kind: "busy" as const, message: "A reply is already on the way." },
+          session: null,
+        };
+      }
+      const session = await store.readSession(id);
+      if (session === null) {
+        return {
+          ok: false as const,
+          error: { kind: "not_found" as const, message: "This lesson no longer exists." },
+          session: null,
+        };
+      }
+      const message = checkAnswer(deriveState(session.events), {
+        ...answer,
+        attachments: attachPaths.map((p) => basename(p)),
+      });
+      if (message !== null) {
+        return {
+          ok: false as const,
+          error: { kind: "invalid_answer" as const, message },
+          session,
+        };
+      }
+      const stored: string[] = [];
+      for (const [i, p] of attachPaths.entries()) {
+        const r = await store.addAttachment(id, p, i, ATTACH_PER_ANSWER);
+        if (!r.ok) {
+          for (const file of stored) await store.removeAttachment(id, file);
+          return {
+            ok: false as const,
+            error: { kind: "invalid_answer" as const, message: r.message },
+            session,
+          };
+        }
+        stored.push(r.attachment.file);
+      }
+      const saved: Answer = stored.length > 0 ? { ...answer, attachments: stored } : answer;
+      const updated: Session = {
+        ...session,
+        updatedAt: now(),
+        events: [...session.events, { kind: "answer", at: now(), answer: saved }],
       };
-    }
-    const session = await store.readSession(id);
-    if (session === null) {
-      return {
-        ok: false as const,
-        error: { kind: "not_found" as const, message: "This lesson no longer exists." },
-        session: null,
-      };
-    }
-    const message = checkAnswer(deriveState(session.events), answer);
-    if (message !== null) {
-      return {
-        ok: false as const,
-        error: { kind: "invalid_answer" as const, message },
-        session,
-      };
-    }
-    const updated: Session = {
-      ...session,
-      updatedAt: now(),
-      events: [...session.events, { kind: "answer", at: now(), answer }],
-    };
-    await store.writeSession(updated);
-    send("session:updated", updated);
-    return runTurn(id);
-  });
+      await store.writeSession(updated);
+      send("session:updated", updated);
+      return runTurn(id);
+    },
+  );
 
   ipcMain.handle("lesson:stop", (_event, id: string) => {
     turns.stop(id);

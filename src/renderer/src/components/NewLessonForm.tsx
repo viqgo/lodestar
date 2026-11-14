@@ -24,7 +24,14 @@ export function NewLessonForm(props: {
     if (busy.current || cli === null) return;
     busy.current = true;
     try {
-      const result = await window.api.createSession({ topic, goal, cli });
+      const result = await window.api.createSession({
+        topic,
+        goal,
+        cli,
+        folder: null,
+        webSearch: false,
+        attachPaths: [],
+      });
       if (result.ok) props.onCreated(result.session);
       else setError(result.message);
     } catch {

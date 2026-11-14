@@ -38,6 +38,12 @@ describe("preload", () => {
       [
         "detectClis",
         "setSessionCli",
+        "pickFolder",
+        "pickFiles",
+        "setSessionFolder",
+        "setSessionWebSearch",
+        "addAttachments",
+        "removeAttachment",
         "listSessions",
         "createSession",
         "getSession",
@@ -58,7 +64,14 @@ describe("preload", () => {
 
   it("each method calls its channel with its arguments", async () => {
     const api = await load();
-    const input = { topic: "t", goal: "g", cli: "codex" as const };
+    const input = {
+      topic: "t",
+      goal: "g",
+      cli: "codex" as const,
+      folder: null,
+      webSearch: false,
+      attachPaths: [],
+    };
     const results = [
       await api.detectClis(),
       await api.listSessions(),
@@ -66,7 +79,7 @@ describe("preload", () => {
       await api.getSession("a"),
       await api.deleteSession("a"),
       await api.advance("a"),
-      await api.answer("a", ANSWER),
+      await api.answer("a", ANSWER, ["/x.pdf"]),
       await api.stop("a"),
       await api.isRunning("a"),
       await api.listKnowledge(),
@@ -74,6 +87,12 @@ describe("preload", () => {
       await api.getProfile(),
       await api.saveProfile("p"),
       await api.setSessionCli("a", "claude"),
+      await api.pickFolder(),
+      await api.pickFiles(),
+      await api.setSessionFolder("a", "/f"),
+      await api.setSessionWebSearch("a", true),
+      await api.addAttachments("a", ["/x.pdf"]),
+      await api.removeAttachment("a", "a1-x.pdf"),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -82,7 +101,7 @@ describe("preload", () => {
       ["sessions:get", "a"],
       ["sessions:delete", "a"],
       ["lesson:advance", "a"],
-      ["lesson:answer", "a", ANSWER],
+      ["lesson:answer", "a", ANSWER, ["/x.pdf"]],
       ["lesson:stop", "a"],
       ["lesson:running", "a"],
       ["knowledge:list"],
@@ -90,8 +109,14 @@ describe("preload", () => {
       ["profile:get"],
       ["profile:save", "p"],
       ["sessions:setCli", "a", "claude"],
+      ["dialog:pickFolder"],
+      ["dialog:pickFiles"],
+      ["sessions:setFolder", "a", "/f"],
+      ["sessions:setWebSearch", "a", true],
+      ["sessions:addAttachments", "a", ["/x.pdf"]],
+      ["sessions:removeAttachment", "a", "a1-x.pdf"],
     ]);
-    expect(results).toEqual(Array(14).fill("R"));
+    expect(results).toEqual(Array(20).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

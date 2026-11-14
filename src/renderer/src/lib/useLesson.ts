@@ -85,7 +85,7 @@ export function useLesson(
     (a: Answer) => {
       setError(null);
       setBusy(true);
-      window.api.answer(id, a).then(handleResult, onReject);
+      window.api.answer(id, a, []).then(handleResult, onReject);
     },
     [id, onReject, handleResult],
   );

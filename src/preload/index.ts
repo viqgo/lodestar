@@ -6,12 +6,25 @@ const api: Api = {
   listSessions: () => ipcRenderer.invoke("sessions:list") as ReturnType<Api["listSessions"]>,
   createSession: (input) =>
     ipcRenderer.invoke("sessions:create", input) as ReturnType<Api["createSession"]>,
+  pickFolder: () => ipcRenderer.invoke("dialog:pickFolder") as Promise<string | null>,
+  pickFiles: () => ipcRenderer.invoke("dialog:pickFiles") as Promise<string[]>,
+  setSessionFolder: (id, folder) =>
+    ipcRenderer.invoke("sessions:setFolder", id, folder) as ReturnType<Api["setSessionFolder"]>,
+  setSessionWebSearch: (id, on) =>
+    ipcRenderer.invoke("sessions:setWebSearch", id, on) as ReturnType<Api["setSessionWebSearch"]>,
+  addAttachments: (id, paths) =>
+    ipcRenderer.invoke("sessions:addAttachments", id, paths) as ReturnType<Api["addAttachments"]>,
+  removeAttachment: (id, file) =>
+    ipcRenderer.invoke("sessions:removeAttachment", id, file) as ReturnType<
+      Api["removeAttachment"]
+    >,
   setSessionCli: (id, cli) =>
     ipcRenderer.invoke("sessions:setCli", id, cli) as ReturnType<Api["setSessionCli"]>,
   getSession: (id) => ipcRenderer.invoke("sessions:get", id) as ReturnType<Api["getSession"]>,
   deleteSession: (id) => ipcRenderer.invoke("sessions:delete", id) as Promise<void>,
   advance: (id) => ipcRenderer.invoke("lesson:advance", id) as Promise<TurnResult>,
-  answer: (id, answer) => ipcRenderer.invoke("lesson:answer", id, answer) as Promise<TurnResult>,
+  answer: (id, answer, attachPaths) =>
+    ipcRenderer.invoke("lesson:answer", id, answer, attachPaths) as Promise<TurnResult>,
   stop: (id) => ipcRenderer.invoke("lesson:stop", id) as Promise<void>,
   isRunning: (id) => ipcRenderer.invoke("lesson:running", id) as Promise<boolean>,
   listKnowledge: () => ipcRenderer.invoke("knowledge:list") as ReturnType<Api["listKnowledge"]>,

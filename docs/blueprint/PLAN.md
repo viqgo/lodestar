@@ -88,7 +88,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T58 Adapters turn options into flags
 - [x] T59 The prompt and the answer rule
 - [x] T60 The turn passes material to the tutor
-- [ ] T61 Channels for folder, files and search
+- [x] T61 Channels for folder, files and search
 - [ ] T62 Material controls
 - [ ] T63 Material on the New lesson form
 - [ ] T64 Material in the lesson header
@@ -3028,7 +3028,7 @@ What exists at the end: a lesson can have a material folder, attached files (on 
 ### T61 - Channels for folder, files and search
 **Implements**: B35, B40, B41, B43, B44 · ARCHITECTURE: `main/ipc.ts` rows (M3), flow 2
 **Depends on**: T60
-**Files**: modify `src/shared/types.ts` (`Api`), `src/main/ipc.ts`, `src/main/index.ts`, `src/preload/index.ts`, `tests/main/ipc.test.ts`, `tests/preload/index.test.ts`, `tests/helpers/dom.ts`
+**Files**: modify `src/shared/types.ts` (`Api`), `src/renderer/src/components/NewLessonForm.tsx` and `src/renderer/src/lib/useLesson.ts` (only: pass `folder: null, webSearch: false, attachPaths: []` to `createSession`, and `[]` as the third argument of `api.answer`; T63 and T65 replace these), `tests/renderer/NewLessonForm.test.tsx` and `tests/renderer/useLesson.test.tsx` (only: the new arguments in the three `toHaveBeenCalledWith` expectations that now see them), `src/main/ipc.ts`, `src/main/index.ts`, `src/preload/index.ts`, `tests/main/ipc.test.ts`, `tests/preload/index.test.ts`, `tests/helpers/dom.ts`
 **Details**
 - `IpcDeps` gains `dialogs: { pickFolder(): Promise<string | null>; pickFiles(): Promise<string[]> }` (`index.ts`: Electron `dialog.showOpenDialog` with `properties: ["openDirectory"]` and `["openFile", "multiSelections"]`; cancelled -> `null` / `[]`).
 - `Api`: `pickFolder()`, `pickFiles()`, `createSession(input: { topic; goal; cli; folder: string | null; webSearch: boolean; attachPaths: string[] })`, `setSessionFolder(id, folder: string | null)`, `setSessionWebSearch(id, on: boolean)`, `addAttachments(id, paths: string[])`, `removeAttachment(id, file: string)` (each of the four returns `{ ok: true; session } | { ok: false; message }`), `answer(id, answer, attachPaths: string[])`.
