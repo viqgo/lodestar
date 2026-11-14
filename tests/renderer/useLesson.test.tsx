@@ -203,4 +203,22 @@ describe("useLesson", () => {
     expect(result.current.busy).toBe(true);
     expect(result.current.asideError).toBeNull();
   });
+
+  it("corrupt_lesson_shows_message_not_blank", async () => {
+    const { emitUpdated } = installApi({ getSession: async () => S([pick(1)]) });
+    const { result } = renderHook(() => useLesson("s_1", false));
+    await waitFor(() =>
+      expect(result.current.error).toEqual({
+        kind: "not_found",
+        message: "This lesson could not be read.",
+      }),
+    );
+    expect(result.current.session).toBeNull();
+    expect(result.current.state).toBeNull();
+    expect(result.current.busy).toBe(false);
+    const good = S([act(A.probe())]);
+    rtlAct(() => emitUpdated(good));
+    expect(result.current.session).toEqual(good);
+    expect(result.current.error).toBeNull();
+  });
 });

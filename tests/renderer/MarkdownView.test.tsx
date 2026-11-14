@@ -27,4 +27,21 @@ describe("MarkdownView", () => {
     expect(container.querySelector("script")).toBeNull();
     expect(container.querySelector("b")).toBeNull();
   });
+
+  it("remote_images_are_blocked", () => {
+    const { container, rerender } = render(
+      <MarkdownView
+        markdown={
+          "text ![a](https://example.com/a.png) ![b](http://example.com/b.png) ![c](//example.com/c.png) end"
+        }
+      />,
+    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.textContent).toContain("text");
+    expect(container.textContent).toContain("end");
+    rerender(<MarkdownView markdown="![d](pic.png)" />);
+    const imgs = container.querySelectorAll("img");
+    expect(imgs).toHaveLength(1);
+    expect(imgs[0]?.getAttribute("src")).toBe("pic.png");
+  });
 });

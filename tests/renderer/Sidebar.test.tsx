@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "../helpers/dom";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "../../src/renderer/src/components/Sidebar";
@@ -203,5 +203,23 @@ describe("Sidebar", () => {
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect(follows(screen.getByRole("button", { name: "Review" }), button)).toBe(true);
     expect(follows(button, screen.getByRole("button", { name: "Knowledge" }))).toBe(true);
+  });
+  it("relative_times_tick", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime("2026-03-03T00:00:30.000Z");
+      const { view } = setup({
+        sessions: [{ ...sessions[0], updatedAt: "2026-03-03T00:00:00.000Z" }],
+      });
+      expect(screen.getByText("teaching · just now")).toBeInTheDocument();
+      act(() => {
+        vi.advanceTimersByTime(60000);
+      });
+      expect(screen.getByText("teaching · 1m ago")).toBeInTheDocument();
+      view.unmount();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

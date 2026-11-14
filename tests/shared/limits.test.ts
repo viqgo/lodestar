@@ -3,6 +3,7 @@ import * as limits from "../../src/shared/limits";
 
 it("limits match the spec", () => {
   expect(limits.MAX_PROBE).toBe(8);
+  expect(limits.TIME_TICK_MS).toBe(60000);
   expect(limits.PLAN_MIN).toBe(2);
   expect(limits.PLAN_MAX).toBe(12);
   expect(limits.MAX_FAILS).toBe(3);

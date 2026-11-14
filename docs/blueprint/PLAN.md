@@ -144,7 +144,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T101 Policy and paths
 - [x] T102 Deferred fixes: CLI and lesson files
 - [x] T102b Deferred fixes: subject writes and folder
-- [ ] T103 Deferred fixes: window
+- [x] T103 Deferred fixes: window
 - [ ] T103b Deferred fixes: subject folder button, calls
 - [ ] T104 Build config
 - [ ] T105 Build and check

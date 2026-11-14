@@ -28,3 +28,4 @@ export const KEY_MAX = 200;
 export const BOX_DAYS = [1, 3, 7, 14, 30];
 export const PRACTICE_MAX = 10;
 export const CARD_BATCH = 20;
+export const TIME_TICK_MS = 60000;

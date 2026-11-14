@@ -65,6 +65,8 @@ export function LessonScreen(props: {
   const blocked = session !== null && (props.statuses === null || missing);
   const switching = useRef(false);
 
+  const retryAction = props.statuses === null ? {} : { actionLabel: "Retry", onAction: retry };
+
   let banner: React.ReactNode = null;
   if (session && missing) {
     banner = (
@@ -77,21 +79,14 @@ export function LessonScreen(props: {
     );
   } else if (error) {
     if (error.kind === "stopped") {
-      banner = <Banner kind="info" message="Stopped." actionLabel="Retry" onAction={retry} />;
+      banner = <Banner kind="info" message="Stopped." {...retryAction} />;
     } else if (error.kind === "folder_missing" || error.kind === "not_found") {
       banner = <Banner kind="error" message={error.message} />;
     } else {
-      banner = <Banner kind="error" message={error.message} actionLabel="Retry" onAction={retry} />;
+      banner = <Banner kind="error" message={error.message} {...retryAction} />;
     }
   } else if (!busy && session && state && state.awaiting.who === "model") {
-    banner = (
-      <Banner
-        kind="info"
-        message="The last reply did not arrive."
-        actionLabel="Retry"
-        onAction={retry}
-      />
-    );
+    banner = <Banner kind="info" message="The last reply did not arrive." {...retryAction} />;
   }
 
   let finished: React.ReactNode = null;

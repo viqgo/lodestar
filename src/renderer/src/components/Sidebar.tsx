@@ -1,4 +1,5 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { TIME_TICK_MS } from "../../../shared/limits";
 import type { SessionSummary, SubjectSummary } from "../../../shared/types";
 import { phaseLabel, relativeTime } from "../lib/time";
 import { ConfirmDialog } from "./ConfirmDialog";
@@ -23,6 +24,11 @@ export function Sidebar(props: {
 }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [confirmSubjectId, setConfirmSubjectId] = useState<string | null>(null);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick((n) => n + 1), TIME_TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
   const nowIso = new Date().toISOString();
   const subjectIds = new Set(props.subjects.map((x) => x.id));
   const free = props.sessions.filter((s) => s.subjectId === null || !subjectIds.has(s.subjectId));

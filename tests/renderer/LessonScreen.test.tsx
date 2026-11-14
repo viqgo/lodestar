@@ -663,4 +663,53 @@ describe("LessonScreen call", () => {
     expect(screen.getByLabelText("Ask a side question")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Ask" })).toBeDisabled();
   });
+  it("retry_banners_wait_for_cli_check", async () => {
+    const events = [act(A.probe()), pick(1)];
+    const retryButton = () => screen.queryByRole("button", { name: "Retry" });
+    {
+      const { api, emitEnded } = installApi({ getSession: vi.fn(async () => S(events)) });
+      const view = render(
+        <LessonScreen id={ID} start={false} statuses={null} onRetryDetect={() => {}} />,
+      );
+      expect(await screen.findByText("The last reply did not arrive.")).toBeInTheDocument();
+      expect(retryButton()).toBeNull();
+      rtlAct(() =>
+        emitEnded(ID, {
+          ok: false,
+          error: { kind: "cli", message: "Codex failed: boom" },
+          session: null,
+        }),
+      );
+      expect(await screen.findByText("Codex failed: boom")).toBeInTheDocument();
+      expect(retryButton()).toBeNull();
+      rtlAct(() =>
+        emitEnded(ID, {
+          ok: false,
+          error: { kind: "stopped", message: "Stopped." },
+          session: null,
+        }),
+      );
+      expect(await screen.findByText("Stopped.")).toBeInTheDocument();
+      expect(retryButton()).toBeNull();
+      view.rerender(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+      await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+      expect(api.advance).toHaveBeenCalledTimes(1);
+      view.unmount();
+    }
+    installApi({ getSession: vi.fn(async () => S(events)) });
+    render(<LessonScreen id={ID} start={false} statuses={null} onRetryDetect={() => {}} />);
+    await screen.findByText("The last reply did not arrive.");
+    expect(retryButton()).toBeNull();
+  });
+
+  it("corrupt_lesson_shows_message_not_blank (screen)", async () => {
+    installApi({ getSession: vi.fn(async () => S([pick(1)])) });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    expect(await screen.findByText("This lesson could not be read.")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("This lesson could not be read.");
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("heading")).not.toBeInTheDocument();
+    expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  });
 });

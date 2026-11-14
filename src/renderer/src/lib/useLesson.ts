@@ -94,7 +94,15 @@ export function useLesson(
     };
   }, [id, start, onReject, handleResult]);
 
-  const state = useMemo(() => (session ? deriveState(session.events) : null), [session]);
+  const derived = useMemo(() => {
+    if (!session) return { state: null, corrupt: false };
+    try {
+      return { state: deriveState(session.events), corrupt: false };
+    } catch {
+      return { state: null, corrupt: true };
+    }
+  }, [session]);
+  const state = derived.state;
 
   const submit = useCallback(
     (a: Answer, attachPaths: string[]) => {
@@ -138,6 +146,20 @@ export function useLesson(
   const stop = useCallback(() => {
     void window.api.stop(id);
   }, [id]);
+
+  if (derived.corrupt) {
+    return {
+      session: null,
+      state: null,
+      busy: false,
+      error: { kind: "not_found" as const, message: "This lesson could not be read." },
+      asideError,
+      ask,
+      submit,
+      retry,
+      stop,
+    };
+  }
 
   return { session, state, busy, error, asideError, ask, submit, retry, stop };
 }

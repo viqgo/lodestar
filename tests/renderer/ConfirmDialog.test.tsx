@@ -65,4 +65,35 @@ describe("ConfirmDialog", () => {
     await userEvent.setup().keyboard("{Escape}");
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
+
+  it("dialog_traps_focus", async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button>outside</button>
+        <ConfirmDialog
+          message={MESSAGE}
+          confirmLabel="Delete"
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />
+      </>,
+    );
+    const cancel = screen.getByRole("button", { name: "Cancel" });
+    const confirm = screen.getByRole("button", { name: "Delete" });
+    const outside = screen.getByRole("button", { name: "outside" });
+    expect(confirm).toHaveFocus();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+    await user.tab();
+    expect(confirm).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(cancel).toHaveFocus();
+    await user.tab({ shift: true });
+    expect(confirm).toHaveFocus();
+    expect(outside).not.toHaveFocus();
+    outside.focus();
+    await user.tab();
+    expect(cancel).toHaveFocus();
+  });
 });
