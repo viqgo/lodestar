@@ -23,7 +23,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T6 Lesson state: start, probe, plan
 - [x] T7 Lesson state: teaching
 - [x] T8 What the model may do next
-- [ ] T9 Answer checks, learned items, move notes
+- [x] T9 Answer checks, learned items, move notes
 - [ ] T10 The prompt
 - [ ] GATE A The lesson rules work from the test suite
 - [ ] T11 Finding the CLI on disk

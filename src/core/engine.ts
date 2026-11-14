@@ -1,5 +1,12 @@
-import { FIELD_MAX, MAX_FAILS, MAX_PROBE } from "../shared/limits";
-import type { Action, ActionType, LessonState, SessionEvent, Verdict } from "../shared/types";
+import { ANSWER_TEXT_MAX, FIELD_MAX, MAX_FAILS, MAX_PROBE } from "../shared/limits";
+import type {
+  Action,
+  ActionType,
+  Answer,
+  LessonState,
+  SessionEvent,
+  Verdict,
+} from "../shared/types";
 import { allNodesSettled, eligibleNodes, validatePlan } from "./plan";
 
 export function validateNewLesson(topic: string, goal: string): string | null {
@@ -180,5 +187,72 @@ export function checkAction(state: LessonState, action: Action): string | null {
       return null;
     default:
       return null;
+  }
+}
+
+export function checkAnswer(state: LessonState, answer: Answer): string | null {
+  const awaiting = state.awaiting;
+  if (awaiting.who !== "learner") return "No question is waiting for an answer.";
+  if (awaiting.question.kind === "choice") {
+    const i = answer.choiceIndex;
+    const valid =
+      i !== null &&
+      Number.isInteger(i) &&
+      i >= 0 &&
+      i <= awaiting.question.options.length - 1 &&
+      answer.text === null;
+    return valid ? null : "Pick an option.";
+  }
+  const length = answer.text === null ? 0 : answer.text.trim().length;
+  return length >= 1 && length <= ANSWER_TEXT_MAX && answer.choiceIndex === null
+    ? null
+    : "Write an answer.";
+}
+
+export function learnedToSave(
+  state: LessonState,
+  action: Extract<Action, { type: "lesson_done" }>,
+): { nodeId: string; text: string }[] {
+  return action.learned.filter(
+    (item) => state.nodes[item.nodeId]?.status === "passed" && item.text.trim().length > 0,
+  );
+}
+
+export function moveNotes(state: LessonState): string[] {
+  if (state.awaiting.who !== "model") return [];
+  const id = state.currentNodeId;
+  if (state.phase === "probe") {
+    return state.probeAnswered >= MAX_PROBE
+      ? [`You have asked ${MAX_PROBE} questions. You must return probe_done now.`]
+      : [];
+  }
+  if (state.phase === "plan") {
+    return ["Return the plan: 2 to 12 nodes, each one idea, deps listing the nodes it builds on."];
+  }
+  if (state.phase !== "teach") return [];
+  const fails = id === null ? 0 : (state.nodes[id]?.fails ?? 0);
+  switch (state.teachStep) {
+    case "need_predict":
+      return allNodesSettled(state.nodes)
+        ? ["Every node is passed or shaky. Return lesson_done."]
+        : [
+            `Start the next node with a predict question. Nodes that can start now: ${eligibleNodes(state.plan!, state.nodes).join(", ")}.`,
+          ];
+    case "need_explain":
+      return [`Explain node ${id} and include a check question.`];
+    case "need_repair":
+      return [
+        `The learner failed the check on node ${id} (failure ${fails} of 3). Explain node ${id} again from a different angle that targets their mistake, with a new check question.`,
+      ];
+    case "need_verdict":
+      return fails < 2
+        ? [
+            `The learner's last answer is a free-text check on node ${id}. Set verdict. If pass, continue with the next step. If fail, explain node ${id} again from a different angle with a new check question.`,
+          ]
+        : [
+            `The learner's last answer is a free-text check on node ${id}, and it was their last attempt. Set verdict, then move on: predict for another node, or lesson_done if none remain.`,
+          ];
+    default:
+      return [];
   }
 }

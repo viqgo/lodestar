@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { allowedActions, checkAction, deriveState, validateNewLesson } from "../../src/core/engine";
-import type { SessionEvent } from "../../src/shared/types";
+import {
+  allowedActions,
+  checkAction,
+  checkAnswer,
+  deriveState,
+  learnedToSave,
+  moveNotes,
+  validateNewLesson,
+} from "../../src/core/engine";
+import type { Answer, SessionEvent } from "../../src/shared/types";
 import {
   A,
   PLAN,
@@ -226,5 +234,89 @@ describe("allowedActions and checkAction", () => {
     expect(checkAction(state, A.predict("n2", "pass"))).toBeNull();
     expect(checkAction(state, A.predict("n2", "fail"))).toBe("predict is not allowed now");
     expect(checkAction(state, A.explain("n1", choiceQ, "fail"))).toBeNull();
+  });
+});
+
+describe("checkAnswer, learnedToSave and moveNotes", () => {
+  const st = (...events: SessionEvent[]) => deriveState([...toTeach, ...events]);
+  const eight = Array.from({ length: 8 }, () => [act(A.probe()), pick(1)]).flat();
+  const answerOf = (e: SessionEvent): Answer => {
+    if (e.kind !== "answer") throw new Error("not an answer");
+    return e.answer;
+  };
+  const pickAnswer = (i: number) => answerOf(pick(i));
+  const sayAnswer = (t: string) => answerOf(say(t));
+
+  it("checkAnswer refuses when no question is waiting", () => {
+    expect(checkAnswer(deriveState([]), pickAnswer(0))).toBe(
+      "No question is waiting for an answer.",
+    );
+  });
+
+  it("checkAnswer needs a valid option for a choice question", () => {
+    const state = deriveState([act(A.probe())]);
+    expect(checkAnswer(state, { ...pickAnswer(0), choiceIndex: null })).toBe("Pick an option.");
+    expect(checkAnswer(state, pickAnswer(3))).toBe("Pick an option.");
+    expect(checkAnswer(state, pickAnswer(1))).toBeNull();
+  });
+
+  it("checkAnswer needs text for a text question", () => {
+    const state = st(act(A.predict("n1")));
+    expect(checkAnswer(state, sayAnswer("  "))).toBe("Write an answer.");
+    expect(checkAnswer(state, sayAnswer("x".repeat(4001)))).toBe("Write an answer.");
+    expect(checkAnswer(state, sayAnswer("ok"))).toBeNull();
+  });
+
+  it("lesson_done_saves_only_passed", () => {
+    const events = [
+      ...toTeach,
+      ...toCheck("n1"),
+      pick(1),
+      ...toCheck("n2"),
+      pick(0),
+      act(A.explain("n2")),
+      pick(0),
+      act(A.explain("n2")),
+      pick(0),
+      act(A.done()),
+    ];
+    expect(learnedToSave(deriveState(events), A.done() as any)).toEqual([
+      { nodeId: "n1", text: "t1" },
+    ]);
+  });
+
+  it("moveNotes tells the model to conclude after 8 probe answers", () => {
+    expect(moveNotes(deriveState(eight))).toEqual([
+      "You have asked 8 questions. You must return probe_done now.",
+    ]);
+  });
+
+  it("moveNotes lists the nodes that can start", () => {
+    expect(moveNotes(st())).toEqual([
+      "Start the next node with a predict question. Nodes that can start now: n1.",
+    ]);
+  });
+
+  it("moveNotes asks for a repair after a failed check", () => {
+    expect(moveNotes(st(...toCheck("n1"), pick(0)))).toEqual([
+      "The learner failed the check on node n1 (failure 1 of 3). Explain node n1 again from a different angle that targets their mistake, with a new check question.",
+    ]);
+  });
+
+  it("moveNotes flags the last attempt on a text check", () => {
+    expect(
+      moveNotes(
+        st(
+          ...toCheck("n1"),
+          pick(0),
+          act(A.explain("n1")),
+          pick(0),
+          act(A.explain("n1", textQ)),
+          say(),
+        ),
+      ),
+    ).toEqual([
+      "The learner's last answer is a free-text check on node n1, and it was their last attempt. Set verdict, then move on: predict for another node, or lesson_done if none remain.",
+    ]);
   });
 });
