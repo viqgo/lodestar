@@ -55,7 +55,7 @@ What the owner can see working at the end: `npm test` shows 61 passing tests tha
 **Depends on**: nothing. The repository already exists on branch `build/codex-loop` with `docs/blueprint/` committed.
 
 **Files**
-- Create: `package.json`, `tsconfig.json`, `vitest.config.ts`, `vitest.eval.config.ts`, `eslint.config.mjs`, `.prettierrc.json`, `.prettierignore`, `.gitignore`, `LICENSE`, `tests/smoke.test.ts`
+- Create: `package.json`, `tsconfig.json`, `vitest.config.mts`, `vitest.eval.config.mts`, `eslint.config.mjs`, `.prettierrc.json`, `.prettierignore`, `.gitignore`, `LICENSE`, `tests/smoke.test.ts`
 - Created by the tool: `package-lock.json`
 - Do NOT create anything under `src/`. Do NOT change any version below.
 
@@ -73,7 +73,7 @@ What the owner can see working at the end: `npm test` shows 61 passing tests tha
        "dev": "electron-vite dev",
        "build": "electron-vite build",
        "test": "vitest run",
-       "eval": "vitest run --config vitest.eval.config.ts",
+       "eval": "vitest run --config vitest.eval.config.mts",
        "lint": "eslint . && prettier --check .",
        "format": "prettier --write .",
        "typecheck": "tsc --noEmit"
@@ -128,15 +128,15 @@ What the owner can see working at the end: `npm test` shows 61 passing tests tha
        "noEmit": true,
        "types": ["node"]
      },
-     "include": ["src", "tests", "evals", "*.ts"]
+     "include": ["src", "tests", "evals", "*.ts", "*.mts"]
    }
    ```
-3. Create `vitest.config.ts`:
+3. Create `vitest.config.mts` (the `.mts` extension avoids a Vite warning, because `package.json` has no `"type": "module"`):
    ```ts
    import { defineConfig } from "vitest/config";
    export default defineConfig({ test: { include: ["tests/**/*.test.{ts,tsx}"] } });
    ```
-   Create `vitest.eval.config.ts`:
+   Create `vitest.eval.config.mts`:
    ```ts
    import { defineConfig } from "vitest/config";
    export default defineConfig({
@@ -160,7 +160,7 @@ What the owner can see working at the end: `npm test` shows 61 passing tests tha
      { files: ["tests/**", "evals/**"], rules: { "@typescript-eslint/no-explicit-any": "off" } },
    );
    ```
-5. Create `.prettierrc.json` with `{ "printWidth": 100 }`. Create `.prettierignore` with the lines `out`, `node_modules`, `docs`, `package-lock.json`. Create `.gitignore` with the lines `node_modules`, `out`, `dist`, `.DS_Store`.
+5. Create `.prettierrc.json` with `{ "printWidth": 100 }`. Create `.prettierignore` with the lines `out`, `node_modules`, `docs`, `package-lock.json`, `CLAUDE.md`. Create `.gitignore` with the lines `node_modules`, `out`, `dist`, `.DS_Store`.
 6. Create `LICENSE` with the standard MIT License text, copyright line `Copyright (c) 2026 lodestar contributors`.
 7. Create `tests/smoke.test.ts`:
    ```ts
