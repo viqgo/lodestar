@@ -64,6 +64,10 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T40 Reading and Continue in the window
 - [x] T41 Evals for the reading
 - [x] GATE D A lesson with readings
+- [ ] T42 Profile rules and prompt section (CR-4)
+- [ ] T43 Save, load and use the profile
+- [ ] T44 The Profile screen
+- [ ] GATE E Tutor profile in the window
 
 Conventions used in every task:
 - "Run tests" means `npm test`. The expected line is the vitest summary line, e.g. `Tests  9 passed (9)`.
@@ -2292,9 +2296,96 @@ What the owner can see at the end: tutor text and question cards look clearly di
 **Try it yourself**: `npm run dev`; start a lesson; after the probe and plan expect per step: a predict card, then a long reading with Continue, then a short bridge with a check card. Tutor text should read as plain prose; only questions are boxed. Judge whether the readings are the right length and depth.
 **Then decide**: tune the prompt (reading length, tone) / milestone 2 (Gemini and Claude adapters) / ship.
 
+## Stage E - tutor profile (CR-4, D38)
+What the owner can see at the end: a Profile screen where their instructions are saved and shape every next reply.
+
+### T42 - Profile rules and prompt section
+
+**Implements**: CR-4 (D38) · SPEC B22 · ARCHITECTURE: limits, `validateProfile`, `buildPrompt`, "LLM calls"
+**Depends on**: T41
+
+**Files**
+- Modify: `src/shared/limits.ts`, `src/shared/types.ts`, `src/core/engine.ts`, `src/core/prompt.ts`, `tests/shared/limits.test.ts`, `tests/core/engine.test.ts`, `tests/core/prompt.test.ts`
+- Do NOT touch any other file. No dependencies.
+
+**Steps**
+1. Add 3 tests and one line to an existing test:
+   - `limits.test.ts`: add `expect(limits.PROFILE_MAX).toBe(2000);` to the existing test (not a new test).
+
+   | Test | File | Expect |
+   |------|------|--------|
+   | validateProfile accepts blank and 2000 characters, rejects 2001 | engine.test.ts | `""` and `"a".repeat(2000)` -> `null`; `"a".repeat(2001)` -> `"Keep it under 2000 characters."` |
+   | prompt includes the tutor instructions | prompt.test.ts | `buildPrompt({..., profile: "  Keep readings short.  "})` contains, in this order, the heading `# The learner's instructions for you`, the line `Keep readings short.` (trimmed), then `# Lesson`; the full intro paragraph is exactly the one in ARCHITECTURE "LLM calls" |
+   | prompt omits the instructions when the profile is blank | prompt.test.ts | `profile` `""`, `"   "` and omitted -> the prompt does not contain `The learner's instructions for you` |
+2. Run tests. Expected: `Tests  4 failed | 279 passed (283)`: the three new tests and the edited limits test fail. Paste. Anything else failing: stop and report.
+3. Implement: `PROFILE_MAX = 2000` in `limits.ts`; `Api` gets `getProfile` and `saveProfile` exactly as in ARCHITECTURE (this will break `tests/helpers/dom.ts` typing only if typed strictly; it is built from a `Partial<Record<keyof Api, unknown>>`, so add `getProfile: vi.fn(async () => "")` and `saveProfile: vi.fn(async () => ({ ok: true }))` there too - `tests/helpers/dom.ts` is allowed for this one change); `validateProfile` in `engine.ts`; `buildPrompt` gets optional `profile` and the new section placed immediately before `# Lesson`, text from ARCHITECTURE copied character for character.
+4. Run `npm test` -> `Tests  283 passed (283)`; `npm run format && npm run lint && npm run typecheck && npm run build` -> exit 0. (`typecheck` fails in `src/preload/index.ts` because `api: Api` lacks the two new methods: add them there as `ipcRenderer.invoke("profile:get")` / `invoke("profile:save", text)` casts like their neighbours, and update the key list in `tests/preload/index.test.ts` and its channel table accordingly; report this under NOT IN THE PLAN.) Paste.
+5. Tick T42, stage by name, commit `feat: profile rules and prompt section`.
+
+**Stop and report if** an existing test breaks beyond the ones named, or tests fail after two attempts.
+
+### T43 - Save, load and use the profile (main process)
+
+**Implements**: CR-4 (D38) · SPEC B22 · ARCHITECTURE: Store, ipc, turn
+**Depends on**: T42
+
+**Files**
+- Modify: `src/main/store.ts`, `src/main/turn.ts`, `src/main/ipc.ts`, `tests/main/store.test.ts`, `tests/main/turn.test.ts`, `tests/main/ipc.test.ts`
+- Do NOT touch other files.
+
+**Steps**
+1. Add 5 tests:
+
+   | Test | File | Expect |
+   |------|------|--------|
+   | profile reads empty when no file exists | store.test.ts | `readProfile()` -> `""`; a `profile.json` containing `{"instructions": 5}` or garbage -> `""` |
+   | profile is saved and read back | store.test.ts | `writeProfile("Be brief.")` then `readProfile()` -> `"Be brief."`; no `.tmp` file is left |
+   | turn passes the saved profile to the prompt | turn.test.ts | with `writeProfile("Be brief.")` before `advance`, the prompt given to the fake adapter contains `Be brief.`; after a second `writeProfile("Be long.")` the next call's prompt contains `Be long.` and not `Be brief.` |
+   | profile channels read and save | ipc.test.ts | `profile:get` returns the saved text; `profile:save` with `"Be brief."` returns `{ ok: true }` and `profile:get` then returns it |
+   | profile save refuses text over 2000 characters | ipc.test.ts | `profile:save` with 2001 characters returns `{ ok: false, message: "Keep it under 2000 characters." }` and the stored profile is unchanged |
+2. Run tests. Expected: `Tests  5 failed | 283 passed (288)`. Paste.
+3. Implement: `Store.readProfile` / `writeProfile` (file `profile.json` in the data dir, through `writeJsonAtomic`, serialized with the same `serial` helper under its own key); `modelStep` deps gain `profile: string` and pass it to `buildPrompt`; `createTurnRunner` reads `store.readProfile()` next to `readKnowledge()` on every loop iteration; `registerIpc` adds `profile:get` and `profile:save` as in ARCHITECTURE (catch a thrown write and return the disk-space message).
+4. Run `npm test` -> `Tests  288 passed (288)`; format, lint, typecheck, build exit 0. Paste.
+5. Tick T43, stage by name, commit `feat: save and use the tutor profile`.
+
+**Stop and report if** an existing test breaks beyond what the new `profile` argument needs, or tests fail after two attempts.
+
+### T44 - The Profile screen
+
+**Implements**: CR-4 (D38) · SPEC B22 · UI.md (Profile screen, copy)
+**Depends on**: T43
+
+**Files**
+- Create: `src/renderer/src/components/ProfileScreen.tsx`, `tests/renderer/ProfileScreen.test.tsx`
+- Modify: `src/renderer/src/components/Sidebar.tsx`, `src/renderer/src/App.tsx`, `tests/renderer/Sidebar.test.tsx`, `tests/renderer/App.test.tsx`
+- Do NOT touch other files. Use existing classes (`.content`, `.field`, `.btn is-primary`, `.note`, `.label`); no new CSS unless a rule is truly missing, and then only tokens from `tokens.css`.
+
+**Steps**
+1. Add 6 tests (renderer test conventions as in the neighbours: `// @vitest-environment jsdom`, `import "../helpers/dom";`, `installApi`):
+
+   | Test | File | Expect |
+   |------|------|--------|
+   | ProfileScreen shows the saved instructions | ProfileScreen.test.tsx | `getProfile` resolves `"Be brief."` -> the `Tutor instructions` textarea has that value; title `Profile` and the note text from UI.md are present |
+   | ProfileScreen enables Save only after an edit | ProfileScreen.test.tsx | `Save` disabled at first; after typing, enabled; after typing the original text back, disabled again |
+   | ProfileScreen saves and confirms | ProfileScreen.test.tsx | type, click `Save` -> `saveProfile` called with the text, `Saved.` shown, `Save` disabled again |
+   | ProfileScreen reports a failed save | ProfileScreen.test.tsx | `saveProfile` resolves `{ ok: false, message: "Keep it under 2000 characters." }` -> that message is shown, no `Saved.`; a rejection shows `Could not save. Check free disk space.` (two assertions, one test) |
+   | Sidebar opens the profile | Sidebar.test.tsx | click `Profile` -> `onProfile` called once (update the existing renders to pass `onProfile`) |
+   | App opens the profile screen | App.test.tsx | click `Profile` -> the title `Profile` appears and `getProfile` was called |
+2. Run tests: only the new tests (and the existing Sidebar tests, if `onProfile` is required and TypeScript is not enforced at test time) may fail. Expected `Tests  6 failed | 288 passed (294)`. Paste.
+3. Implement: `ProfileScreen` (textarea `maxLength` from `PROFILE_MAX`, `label` text `Tutor instructions`, the copy in UI.md exactly, ignore a double click while saving); `Sidebar` gets a required `onProfile()` and a `Profile` button next to `Knowledge` (same `btn` style); `App` gets a `{ name: "profile" }` screen showing `<ProfileScreen />`.
+4. Run `npm test` -> `Tests  294 passed (294)`; format, lint, typecheck, build exit 0. Paste.
+5. Tick T44, stage by name, commit `feat: profile screen`.
+
+**Stop and report if** an existing test breaks and needs an unlisted file, or tests fail after two attempts.
+
+### GATE E - Tutor profile in the window
+
+**Run**: `npm test` -> `Tests  294 passed (294)`; lint, typecheck, build exit 0.
+**Try it yourself**: `npm run dev`; open Profile, write "Keep readings under 300 words and use a cooking analogy", Save; start a lesson (or continue one); the next reading should be shorter and use that style. Clear the text, save, and the next call should be back to normal.
+**Then decide**: streaming spike / milestone 2 (Gemini and Claude adapters) / tune.
+
 ## Backlog (owner requests after Gate D, not yet planned)
 - Faster feel: streaming of the reply. First a spike: does `codex exec --json` emit partial text of the final message, or only the whole message at the end? Other ideas: write the bridge and check while the learner reads (the Continue answer carries no information).
-- Profile tab: the owner writes standing instructions for the tutor (tone, depth, length, examples); stored locally, added to every prompt, cannot override the JSON rules.
 
 ## Milestone 2 - Gemini CLI and Claude Code (outline)
 Planned after Gate C. Each adapter implements `CliAdapter` (`detect`, `run`) and returns the same JSON reply.

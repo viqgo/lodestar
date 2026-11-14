@@ -40,6 +40,7 @@ The template is `ui-template.html` (open it in a browser). Styling is plain CSS:
 | Lesson row (`Sidebar`) | default, hover (shows ×), active | topic, then phase and relative time |
 | Plan map (`PlanPanel`) | node: todo, current, passed, shaky | Mermaid graph; plain list fallback |
 | Reading (`ChatItemView`) | pending (with Continue), continued | CR-3: the tutor's full text as plain prose in the column, no box; Continue is the one primary button; once continued the button is gone |
+| Profile screen (`ProfileScreen`) | empty, edited, saved, error | CR-4: one textarea (`.field`) with a visible label, one Save button (primary, disabled until edited) |
 | Probe summary (`ChatItemView`) | one | known list + goal |
 | Lesson summary (`ChatItemView`) | one | summary + counts line |
 | Confirm dialog (`ConfirmDialog`) | one | centered over a dimmed window |
@@ -104,6 +105,7 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 | Errors | "The model gave an unusable reply. Press Retry."; "Codex failed: <detail>"; "This lesson no longer exists."; "Could not save. Check free disk space."; button "Retry" |
 | Lesson summary | the summary text is shown as normal prose above a block that holds the label "Lesson complete" and (D31);  "<n> items added to your knowledge list." and, when any step is shaky, " <m> step is still shaky." / " <m> steps are still shaky." |
 | Delete lesson | "Delete this lesson? This cannot be undone."; "Cancel", "Delete" |
+| Profile | sidebar button "Profile"; title "Profile"; "Tell your tutor how you want to be taught. It is added to every lesson from the next reply on."; label "Tutor instructions"; placeholder "e.g. Explain like I'm a nurse. Use more worked examples. Keep readings short."; button "Save"; "Saved."; error "Could not save. Check free disk space." |
 | Knowledge | title "Knowledge"; "What you have shown you understand. Later lessons start from here."; "Deleted lesson" when the source is gone; empty text above |
 
 ## Telling text from questions (CR-3)

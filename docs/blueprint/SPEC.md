@@ -45,6 +45,9 @@ Knowledge list
 - B18. The Knowledge screen lists items newest first, each with the title (topic) of the lesson it came from. Each item can be deleted (no confirmation).
 - B19. The newest 200 knowledge items are included in every probe-phase prompt.
 
+Tutor profile (CR-4)
+- B22. A Profile screen holds one text box of standing instructions for the tutor (0 to 2000 characters). Save stores it in `profile.json`. Every model call from then on carries it, including in lessons already running. Blank means no section. Over 2000 characters is refused with "Keep it under 2000 characters." The instructions may change tone, depth, language, examples and reading length; they never change the reply format, the allowed action types or the lesson rules.
+
 Safety
 - B20. Codex is spawned without a shell, with cwd set to a new empty temporary directory, with flags `exec --json --output-schema <schema path> --ephemeral --sandbox read-only --skip-git-repo-check -`, prompt on stdin. The temporary directory is removed after success, error and stop.
 
@@ -67,6 +70,7 @@ Question rules: `kind: "choice"` needs 2 to 6 options and `correctIndex` inside 
 Failure: during probing the model returns `{"type":"plan",...}` -> retried once with "Your last reply was not usable: plan is not allowed now. Allowed now: probe, probe_done." -> second bad reply -> B11 message, session file unchanged.
 
 Files (under Electron `userData`):
+- `profile.json` - `{ "instructions": "..." }` (CR-4).
 - `sessions/<id>.json` - one per lesson.
 - `knowledge.json` - `[{ "id": "k_...", "text": "...", "sessionId": "s_...", "nodeId": "avg-rate", "createdAt": "2026-11-13T10:15:00.000Z" }]`
 

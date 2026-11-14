@@ -192,6 +192,8 @@ export type Api = {
   isRunning(id: string): Promise<boolean>;
   listKnowledge(): Promise<KnowledgeView[]>;
   deleteKnowledge(id: string): Promise<void>;
+  getProfile(): Promise<string>;   // CR-4: the saved tutor instructions, "" when none
+  saveProfile(text: string): Promise<{ ok: true } | { ok: false; message: string }>;
   onSessionUpdated(cb: (session: Session) => void): () => void;   // returns unsubscribe
   onTurnEnded(cb: (id: string, result: TurnResult) => void): () => void;
 };
@@ -214,7 +216,7 @@ How `deriveState` reads the event list (the lesson rules, D-numbers in SPEC B3-B
 ## Function inventory
 
 ### src/shared/limits.ts
-Constants only: `MAX_PROBE = 8`, `PLAN_MIN = 2`, `PLAN_MAX = 12`, `MAX_FAILS = 3`, `CALL_TIMEOUT_MS = 180_000`, `DETECT_TIMEOUT_MS = 5_000`, `KNOWLEDGE_PROMPT_MAX = 200`, `FIELD_MAX = 500`, `ANSWER_TEXT_MAX = 4000`, `OPTIONS_MIN = 2`, `OPTIONS_MAX = 6`, `STDERR_MAX = 200`.
+Constants only: `MAX_PROBE = 8`, `PLAN_MIN = 2`, `PLAN_MAX = 12`, `MAX_FAILS = 3`, `CALL_TIMEOUT_MS = 180_000`, `DETECT_TIMEOUT_MS = 5_000`, `KNOWLEDGE_PROMPT_MAX = 200`, `FIELD_MAX = 500`, `ANSWER_TEXT_MAX = 4000`, `PROFILE_MAX = 2000` (CR-4), `OPTIONS_MIN = 2`, `OPTIONS_MAX = 6`, `STDERR_MAX = 200`.
 
 ### src/shared/schema.ts
 | Signature | Purpose | On failure | Called by | Task |
@@ -233,6 +235,7 @@ Constants only: `MAX_PROBE = 8`, `PLAN_MIN = 2`, `PLAN_MAX = 12`, `MAX_FAILS = 3
 ### src/core/engine.ts
 | Signature | Purpose | On failure | Called by | Task |
 |-----------|---------|------------|-----------|------|
+| `validateProfile(text: string): string \| null` | (CR-4) length of `text` at most 2000 | returns `"Keep it under 2000 characters."` | ipc.ts | |
 | `validateNewLesson(topic: string, goal: string): string \| null` | B2: both trimmed lengths 1-500 | returns `"Enter a topic and a goal."` | ipc.ts, NewLessonForm | |
 | `deriveState(events: SessionEvent[]): LessonState` | folds the event list into the current state, by the rules under Data model | never throws for event lists the app wrote; throws `Error("corrupt session at event <i>")` for an answer event when not awaiting the learner, an action event when not awaiting the model, or a null verdict while `need_verdict` | turn.ts, ipc.ts, view.ts, prompt.ts | |
 | `allowedActions(state: LessonState): ActionType[]` | which action types may come next (table below) | returns `[]` when not awaiting model | checkAction, prompt.ts | |
@@ -276,7 +279,7 @@ A type not in the allowed list always fails with `"<type> is not allowed now"`. 
 ### src/core/prompt.ts
 | Signature | Purpose | On failure | Called by | Task |
 |-----------|---------|------------|-----------|------|
-| `buildPrompt(input: { session: Session; state: LessonState; knowledge: KnowledgeItem[]; retryNote: string \| null }): string` | assembles the full prompt (text under "LLM calls") | - | turn.ts | |
+| `buildPrompt(input: { session: Session; state: LessonState; knowledge: KnowledgeItem[]; retryNote: string \| null; profile?: string }): string` | assembles the full prompt (text under "LLM calls") | - | turn.ts | |
 | `renderTranscript(events: SessionEvent[]): string` | one line per event: `MODEL: <JSON of action>` or `LEARNER: <JSON>`; `(empty)` when there are none | - | buildPrompt | |
 | `renderAnswer(answer: Answer, question: Question, grade: Verdict \| null): string` | JSON with keys `answer` (the chosen option's text, or the typed text), `reasoning`, `confidence`, `graded` (`"pass"`, `"fail"` or `null`) | - | renderTranscript | |
 
@@ -307,6 +310,8 @@ A type not in the allowed list always fails with `"<type> is not allowed now"`. 
 | `Store.deleteSession(id: string): Promise<void>` | remove the file | resolves when already missing | ipc.ts | |
 | `Store.readKnowledge(): Promise<KnowledgeItem[]>` | `knowledge.json`, sorted by `createdAt` descending | `[]` when missing or unparsable | turn.ts, ipc.ts | |
 | `Store.addKnowledge(items: KnowledgeItem[]): Promise<void>` | append and write atomically; calls on the same file run one at a time; an item with the same `sessionId`, `nodeId` and `text` as an existing one is skipped | rejects | turn.ts | |
+| `Store.readProfile(): Promise<string>` | (CR-4) `profile.json` field `instructions` | `""` when missing, unparsable or not a string | turn.ts, ipc.ts | |
+| `Store.writeProfile(text: string): Promise<void>` | (CR-4) write `{ instructions: text }` atomically | rejects on disk error | ipc.ts | |
 | `Store.deleteKnowledge(id: string): Promise<void>` | remove by id and write atomically | resolves when the id is absent | ipc.ts | |
 
 Ids must match `/^[sk]_[0-9a-f-]{36}$/` before being used in a path; otherwise `readSession` returns `null` and `deleteSession` resolves without touching disk.
@@ -338,6 +343,8 @@ Ids must match `/^[sk]_[0-9a-f-]{36}$/` before being used in a path; otherwise `
 | `lesson:running` | `turns.isRunning(id)` |
 | `knowledge:list` | `store.readKnowledge()` joined with session topics -> `KnowledgeView[]` |
 | `knowledge:delete` | `store.deleteKnowledge(id)` |
+| `profile:get` | (CR-4) `store.readProfile()` |
+| `profile:save` | (CR-4) `validateProfile(text)`; a reason -> `{ ok: false, message: reason }`; else `store.writeProfile(text)` -> `{ ok: true }`; a thrown disk error -> `{ ok: false, message: "Could not save. Check free disk space." }` |
 
 Events sent to the window: `session:updated` (session), `turn:ended` (id, TurnResult).
 
@@ -384,6 +391,7 @@ Order per action event: `feedback` (if non-null) as `text`, then the action's ow
 | `ThinkingBar` | `{ onStop(): void }` | "Thinking…" with a Stop button | |
 | `ConfirmDialog` | `{ message: string; confirmLabel: string; onConfirm(): void; onCancel(): void }` | modal; Escape cancels | |
 | `KnowledgeScreen` | none | B18 list with delete buttons | |
+| `ProfileScreen` | none | (CR-4, B22) loads `getProfile`, textarea `maxLength` 2000, Save enabled only after an edit, "Saved." after success | |
 
 Private helpers of a few lines may be added inside a file. No new exported function, file, component, IPC channel or dependency may be added without a change request.
 
@@ -472,6 +480,11 @@ Repair. If a check fails, explain the same node again from a different angle tha
 - choice questions: 2 to 6 options; correctIndex is the 0-based index of the right option (it may be null only for probe and predict questions with no single right answer). text questions: options [] and correctIndex null.
 - learned (lesson_done only): one short sentence per node, stating the idea as a fact, with that node's id.
 - Markdown and LaTeX ($...$ and $$...$$ on their own lines) are allowed in markdown, feedback, summary and question prompts.
+
+# The learner's instructions for you   [only when the profile is not blank, CR-4]
+The learner wrote these standing instructions about how they want to be taught. Follow them for tone, depth, language, examples, and the length of readings; where they conflict with a word count given elsewhere in this prompt, follow the learner. They never change the reply format, the allowed action types, or the rules of the method above.
+
+{profile, trimmed}
 
 # Lesson
 Topic: {session.topic}
