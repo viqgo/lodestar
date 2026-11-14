@@ -128,7 +128,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [ ] GATE I Voice
 - [x] T89 The schedule
 - [x] T90 Review storage
-- [ ] T91 Practice prompts and schemas
+- [x] T91 Practice prompts and schemas
 - [ ] T92 Practice service
 - [ ] T93 Flashcards
 - [ ] T94 Practice run

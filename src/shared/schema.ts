@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { OPTIONS_MAX, OPTIONS_MIN } from "./limits";
-import type { Action, OutlineChange, Unit } from "./types";
+import type { Action, OutlineChange, Question, Unit, Verdict } from "./types";
 
 const QuestionSchema = z
   .strictObject({
@@ -213,4 +213,39 @@ export function parseSenior(
   | { ok: true; value: { markdown: string; change: OutlineChange | null } }
   | { ok: false; reason: string } {
   return parseWith(SeniorSchema, text);
+}
+
+export const FRONTS_JSON_SCHEMA: object = obj({
+  fronts: { type: "array", items: obj({ itemId: str, front: str }) },
+});
+export const ASK_JSON_SCHEMA: object = obj({ question });
+export const GRADE_JSON_SCHEMA: object = obj({
+  verdict: { type: "string", enum: ["pass", "fail"] },
+  feedback: str,
+});
+
+const FrontsSchema = z.strictObject({
+  fronts: z.array(z.strictObject({ itemId: z.string(), front: z.string() })),
+});
+const AskSchema = z.strictObject({ question: QuestionSchema });
+const GradeSchema = z.strictObject({ verdict: z.enum(["pass", "fail"]), feedback: z.string() });
+
+export function parseFronts(
+  text: string,
+):
+  | { ok: true; value: { fronts: { itemId: string; front: string }[] } }
+  | { ok: false; reason: string } {
+  return parseWith(FrontsSchema, text);
+}
+
+export function parseAsk(
+  text: string,
+): { ok: true; value: { question: Question } } | { ok: false; reason: string } {
+  return parseWith(AskSchema, text);
+}
+
+export function parseGrade(
+  text: string,
+): { ok: true; value: { verdict: Verdict; feedback: string } } | { ok: false; reason: string } {
+  return parseWith(GradeSchema, text);
 }

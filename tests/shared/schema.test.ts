@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  ASK_JSON_SCHEMA,
+  FRONTS_JSON_SCHEMA,
+  GRADE_JSON_SCHEMA,
   OUTLINE_JSON_SCHEMA,
+  parseAsk,
+  parseFronts,
+  parseGrade,
   parseOutline,
   parseReply,
   parseSenior,
@@ -168,5 +174,58 @@ describe("subject schemas", () => {
     expect(extra.ok).toBe(false);
     expect(parseSenior(JSON.stringify({ markdown: "x", change: null, more: 1 })).ok).toBe(false);
     expect(parseSenior("{")).toEqual({ ok: false, reason: "not valid JSON" });
+  });
+});
+
+describe("practice schemas", () => {
+  it("FRONTS_JSON_SCHEMA requires itemId and front", () => {
+    const top = FRONTS_JSON_SCHEMA as any;
+    const item = top.properties.fronts.items;
+    expect(item.required).toEqual(["itemId", "front"]);
+    expect(item.additionalProperties).toBe(false);
+    expect(top.additionalProperties).toBe(false);
+  });
+
+  it("parseFronts accepts fronts and refuses bad JSON and wrong shapes", () => {
+    expect(parseFronts('{"fronts":[{"itemId":"k","front":"Q"}]}').ok).toBe(true);
+    const bad = parseFronts("garbage");
+    expect(bad).toEqual({ ok: false, reason: "not valid JSON" });
+    for (const text of [
+      '{"fronts":[{"front":"Q"}]}',
+      '{"fronts":[{"itemId":"k","front":"Q","x":1}]}',
+      '{"fronts":"no"}',
+    ]) {
+      const r = parseFronts(text);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason.startsWith("does not match the schema:")).toBe(true);
+    }
+  });
+
+  it("ASK_JSON_SCHEMA carries the question shape", () => {
+    const probe = (REPLY_JSON_SCHEMA as any).properties.action.anyOf[0];
+    expect((ASK_JSON_SCHEMA as any).properties.question).toEqual(probe.properties.question);
+  });
+
+  it("parseAsk applies the question rules", () => {
+    expect(parseAsk(JSON.stringify({ question: choiceQ })).ok).toBe(true);
+    expect(parseAsk(JSON.stringify({ question: textQ })).ok).toBe(true);
+    for (const q of [
+      { ...choiceQ, options: ["only"], correctIndex: 0 },
+      { ...textQ, options: ["a"] },
+      { ...choiceQ, correctIndex: 99 },
+    ]) {
+      expect(parseAsk(JSON.stringify({ question: q })).ok).toBe(false);
+    }
+  });
+
+  it("GRADE_JSON_SCHEMA allows pass and fail only", () => {
+    expect((GRADE_JSON_SCHEMA as any).properties.verdict.enum).toEqual(["pass", "fail"]);
+  });
+
+  it("parseGrade refuses a null verdict and extra fields", () => {
+    expect(parseGrade('{"verdict":"fail","feedback":"f"}').ok).toBe(true);
+    expect(parseGrade('{"verdict":null,"feedback":"f"}').ok).toBe(false);
+    expect(parseGrade('{"verdict":"maybe","feedback":"f"}').ok).toBe(false);
+    expect(parseGrade('{"verdict":"pass","feedback":"f","x":1}').ok).toBe(false);
   });
 });
