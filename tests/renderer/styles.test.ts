@@ -39,3 +39,8 @@ it("styles have the switch and chip rules", () => {
   expect(/\.switch\s*\{[^}]*display: flex/.test(css)).toBe(true);
   expect(/\.chip\s*\{[^}]*display: inline-flex/.test(css)).toBe(true);
 });
+
+it("styles have the unit row rule", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
+  expect(/\.unit-row\s*\{[^}]*display: grid/.test(css)).toBe(true);
+});

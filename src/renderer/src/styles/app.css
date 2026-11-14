@@ -489,3 +489,12 @@ body {
   border-radius: var(--radius);
   font-size: var(--text-sm);
 }
+
+.unit-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: var(--space-3);
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+}
