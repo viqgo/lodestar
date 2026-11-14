@@ -33,6 +33,16 @@ If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PA
 
 Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far and the tutor instructions from the Profile screen are sent. Nothing else is sent.
 
+## Material, files and web search
+
+A lesson can have a material folder, attached files and a web search switch. Under the folder chooser a note depends on the tutor:
+
+- Codex: "Codex cannot change your files, but it is able to read other files on this Mac."
+- Claude Code: "Claude Code can only read inside this folder."
+- Gemini: "Gemini is experimental: what it can read has not been verified."
+
+Attached files can be PDF, PNG, JPEG, GIF, WebP, TXT or MD, at most 20 MB each, 10 per lesson and 3 per answer. They are copied into the app's data folder. The app never writes into your material folder. Codex needs `pdftotext` installed to read PDFs. A call that uses a folder, files or web search may take up to 300 seconds.
+
 ## Development
 
 - `npm test` runs the tests.
