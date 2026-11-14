@@ -21,7 +21,7 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 const THEMES = ["dark", "light", "system"];
-const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/[\]@-]*$/;
+export const MODEL_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:/[\]@-]*$/;
 
 const isObject = (v: unknown): v is Record<string, unknown> =>
   typeof v === "object" && v !== null && !Array.isArray(v);
@@ -77,7 +77,8 @@ export function cliChoice(
   cli: CliId,
 ): { model: string | null; effort: string | null } {
   const c = settings?.clis[cli];
-  const model = c ? c.model.trim() : "";
+  const trimmed = c ? c.model.trim() : "";
+  const model = trimmed.length <= MODEL_MAX && MODEL_PATTERN.test(trimmed) ? trimmed : "";
   const efforts = EFFORTS[cli] as string[] | undefined;
   return {
     model: model === "" ? null : model,

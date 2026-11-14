@@ -6,6 +6,7 @@ import {
   mergeSettings,
   validateSettings,
 } from "../../src/core/settings";
+import { MODEL_MAX } from "../../src/shared/limits";
 import type { CliId, Settings } from "../../src/shared/types";
 
 const TEXT = "Enter a speech language and a voice.";
@@ -148,5 +149,14 @@ describe("settings", () => {
     expect(cliChoice(null, "codex")).toEqual(none);
     expect(cliChoice(DEFAULT_SETTINGS, "claude")).toEqual(none);
     expect(cliChoice(DEFAULT_SETTINGS, "nope" as CliId)).toEqual(none);
+  });
+
+  it("a model name that fails the pattern never reaches a CLI", () => {
+    const bad = mergeSettings({ clis: { gemini: { model: "--yolo" } } });
+    expect(cliChoice(bad, "gemini").model).toBeNull();
+    const long = mergeSettings({ clis: { gemini: { model: "a".repeat(MODEL_MAX + 1) } } });
+    expect(cliChoice(long, "gemini").model).toBeNull();
+    const good = mergeSettings({ clis: { gemini: { model: " gemini-2.5-pro " } } });
+    expect(cliChoice(good, "gemini").model).toBe("gemini-2.5-pro");
   });
 });

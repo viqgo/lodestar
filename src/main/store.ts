@@ -1,5 +1,6 @@
 import path from "node:path";
 import { mergeSettings } from "../core/settings";
+import { PROFILE_MAX } from "../shared/limits";
 import { newReview } from "../core/review";
 import { attachmentKind, checkAttachment } from "../core/material";
 import type {
@@ -396,7 +397,8 @@ export async function createStore(
     return { ...merged, instructions: await legacyProfile() };
   };
 
-  const readProfile = async (): Promise<string> => (await readSettings()).instructions;
+  const readProfile = async (): Promise<string> =>
+    (await readSettings()).instructions.slice(0, PROFILE_MAX);
 
   const writeProfile = (text: string): Promise<void> =>
     serial(settingsFile, async () =>

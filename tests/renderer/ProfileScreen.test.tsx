@@ -390,3 +390,29 @@ describe("ProfileScreen teaching method", () => {
     });
   });
 });
+
+describe("ProfileScreen overlapping saves", () => {
+  it("overlapping profile saves keep each other's fields", async () => {
+    let release: (v: { ok: true }) => void = () => {};
+    const saveSettings = vi
+      .fn()
+      .mockImplementationOnce(() => new Promise((resolve) => (release = resolve)))
+      .mockImplementation(async () => ({ ok: true as const }));
+    const { api } = installApi({ saveSettings });
+    render(<ProfileScreen />);
+    const theme = await screen.findByLabelText("Theme");
+    await vi.waitFor(() => expect(theme).toBeEnabled());
+    const codex = within(screen.getByRole("group", { name: "Codex" }));
+    await userEvent.type(codex.getByLabelText("Model"), "gpt-x");
+    await userEvent.click(modelsSave());
+    await vi.waitFor(() => expect(api.saveSettings).toHaveBeenCalledTimes(1));
+    await userEvent.selectOptions(theme, "Light");
+    await vi.waitFor(() => expect(api.saveSettings).toHaveBeenCalledTimes(2));
+    release({ ok: true });
+    expect(api.saveSettings).toHaveBeenLastCalledWith({
+      ...DEFAULT_SETTINGS,
+      theme: "light",
+      clis: { ...DEFAULT_SETTINGS.clis, codex: { model: "gpt-x", effort: "" } },
+    });
+  });
+});

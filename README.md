@@ -43,7 +43,7 @@ If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PA
 
 ## What is sent where
 
-Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far, your knowledge list, the tutor instructions and, when the lesson has material, the files the CLI reads from that folder and your attachments are sent to the CLI you chose.
+Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far, your knowledge list, the tutor instructions, the teaching method text and, when the lesson has material, the files the CLI reads from that folder and your attachments are sent to the CLI you chose.
 
 During a call the microphone audio and the text that is read aloud also go to Deepgram, and only there (see "Voice"). The app itself makes no other connection: in the installed app the window may load nothing from the network.
 
@@ -99,7 +99,7 @@ Theme: Dark, Light or System. It changes at once. System follows the Mac, also w
 
 Models: for each CLI you can set a model name and an effort. They are set once and used for every call of that CLI from the next reply on. An empty model means the CLI's own default. The name is passed to the CLI as it is (`-m` for Codex and Gemini, `--model` for Claude Code), so use a name that CLI accepts, for example `sonnet` for Claude Code. Efforts are low, medium, high for Codex and low, medium, high, xhigh, max for Claude Code. Gemini has none. A name the CLI refuses shows as "<name> failed: <detail>" in the lesson. The lesson header shows what is in use, for example "Tutor: Claude Code · sonnet · medium".
 
-Teaching method: the four paragraphs that tell the tutor how to probe, plan, teach and repair can be rewritten (up to 6,000 characters). "Reset to default" brings the original back. The reply format and the lesson rules cannot be changed.
+Teaching method: the four paragraphs that tell the tutor how to probe, plan, teach and repair can be rewritten (up to 6,000 characters). "Reset to default" fills the box with the original text; "Save" then stores it. The reply format and the lesson rules cannot be changed.
 
 ## Development
 

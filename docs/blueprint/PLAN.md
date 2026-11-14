@@ -157,7 +157,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T110 Theme
 - [x] T111 Profile sections: models and method
 - [x] T112 Header, evals, README
-- [ ] T112b Gate L fixes
+- [x] T112b Gate L fixes
 - [ ] GATE L Customisation, then the owner's try-out
 
 Conventions used in every task:

@@ -206,7 +206,9 @@ export function registerIpc(deps: IpcDeps): void {
   });
 
   ipcMain.handle("sessions:setWebSearch", (_event, id: string, on: boolean) =>
-    mutate(id, async (s) => ({ session: { ...s, webSearch: on } })),
+    mutate(id, async (s) => ({
+      session: typeof on === "boolean" ? { ...s, webSearch: on } : s,
+    })),
   );
 
   ipcMain.handle("sessions:addAttachments", (_event, id: string, paths: string[]) =>
@@ -384,7 +386,8 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle("profile:get", () => store.readProfile());
 
   ipcMain.handle("profile:save", async (_event, text: string) => {
-    const reason = validateProfile(text);
+    const reason =
+      typeof text === "string" ? validateProfile(text) : "Keep it under 2000 characters.";
     if (reason !== null) return { ok: false as const, message: reason };
     try {
       await store.writeProfile(text);

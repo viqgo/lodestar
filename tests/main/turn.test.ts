@@ -8,7 +8,12 @@ import { createStore } from "../../src/main/store";
 import { ASIDE_JSON_SCHEMA } from "../../src/shared/schema";
 import { DEFAULT_SETTINGS } from "../../src/core/settings";
 import { NO_OPTIONS } from "../../src/shared/clis";
-import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../../src/shared/limits";
+import {
+  CALL_TIMEOUT_MS,
+  CALL_TIMEOUT_TOOLS_MS,
+  METHOD_MAX,
+  PROFILE_MAX,
+} from "../../src/shared/limits";
 import { createTurnRunner, modelStep, runOptions } from "../../src/main/turn";
 import type { RunResult, Session, SessionEvent, TurnResult } from "../../src/shared/types";
 import { fakeAdapter, fakeAdapters } from "../helpers/fakes";
@@ -900,5 +905,43 @@ describe("turn aside", () => {
     const done = (await store.readSession(ID))!;
     expect(done.events.at(-1)).toMatchObject({ kind: "action", action: A.plan() });
     expect(f.prompts[1]).toContain("ASIDE: ");
+  });
+});
+
+describe("turn gate L fixes", () => {
+  it("an over-long stored method or instructions text is cut", async () => {
+    const { store, f, runner } = await setup([], A.probe());
+    await store.writeSettings({
+      ...DEFAULT_SETTINGS,
+      method: "m".repeat(METHOD_MAX) + "ZZZ",
+      instructions: "i".repeat(PROFILE_MAX) + "QQQ",
+    });
+    expect(await store.readProfile()).toBe("i".repeat(PROFILE_MAX));
+    await runner.advance(ID);
+    expect(f.prompts[0]).toContain("m".repeat(METHOD_MAX));
+    expect(f.prompts[0]).not.toContain("ZZZ");
+    expect(f.prompts[0]).not.toContain("QQQ");
+  });
+
+  it("a hand-edited model with a dash is dropped in the lesson call", async () => {
+    const f = fakeAdapter(A.probe());
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+    const store = await createStore(dir, fsp);
+    await store.writeSession({ ...session([]), cli: "claude" });
+    const runner = createTurnRunner({
+      adapters: fakeAdapters(f.adapter),
+      store,
+      now: () => NOW,
+      newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+      listFolder: async () => ({ files: [], more: 0 }),
+      notify: () => {},
+    });
+    await store.writeSettings({
+      ...DEFAULT_SETTINGS,
+      clis: { ...DEFAULT_SETTINGS.clis, claude: { model: "--yolo", effort: "medium" } },
+    });
+    await runner.advance(ID);
+    expect(f.requests[0]!.options!.model).toBeNull();
+    expect(f.requests[0]!.options!.effort).toBe("medium");
   });
 });

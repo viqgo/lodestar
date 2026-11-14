@@ -1633,3 +1633,19 @@ describe("ipc aside", () => {
     expect(turns.aside).not.toHaveBeenCalled();
   });
 });
+
+describe("ipc gate L fixes", () => {
+  it("profile:save refuses a text that is not a string and setWebSearch ignores a non-boolean", async () => {
+    const { store, call } = await setup();
+    await store.writeProfile("Be brief.");
+    const bad = await call("profile:save", 5);
+    expect(bad).toMatchObject({ ok: false });
+    expect(await store.readProfile()).toBe("Be brief.");
+    const s = session();
+    await store.writeSession(s);
+    await call("sessions:setWebSearch", s.id, "yes");
+    expect((await store.readSession(s.id))!.webSearch).toBe(false);
+    await call("sessions:setWebSearch", s.id, true);
+    expect((await store.readSession(s.id))!.webSearch).toBe(true);
+  });
+});

@@ -5,7 +5,7 @@ import { cliChoice } from "../core/settings";
 import { deriveSubject, handoverNote, renderSubjectSection } from "../core/subject";
 import { callModel } from "./call";
 import { attachmentKind, renderMaterial } from "../core/material";
-import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../shared/limits";
+import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS, METHOD_MAX } from "../shared/limits";
 import { ASIDE_JSON_SCHEMA, REPLY_JSON_SCHEMA, parseAside, parseReply } from "../shared/schema";
 import type {
   Action,
@@ -156,7 +156,7 @@ export function createTurnRunner(deps: {
       ok: true as const,
       knowledge,
       profile,
-      method: settings.method,
+      method: settings.method.slice(0, METHOD_MAX),
       attachmentsDir,
       material,
       subjectSection,

@@ -39,6 +39,7 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
   const dBusy = useRef(false);
   const vBusy = useRef(false);
   const vEdited = useRef(false);
+  const latestRef = useRef<Settings | null>(null);
   const busy = useRef(false);
   const edited = useRef(false);
 
@@ -58,6 +59,7 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
     let live = true;
     Promise.all([window.api.getSettings(), window.api.voiceHasKey()]).then(([s, k]) => {
       if (!live) return;
+      latestRef.current = s;
       setSavedSettings(s);
       setTheme(s.theme);
       setClis(s.clis);
@@ -77,6 +79,27 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
     savedSettings !== null &&
     (language !== savedSettings.voice.language || voice !== savedSettings.voice.voice);
 
+  async function persist(fields: Partial<Settings>) {
+    const base = latestRef.current as Settings;
+    const previous: Partial<Settings> = {};
+    for (const key of Object.keys(fields) as (keyof Settings)[]) {
+      (previous as Record<string, unknown>)[key] = base[key];
+    }
+    const revert = () => {
+      if (latestRef.current !== null) latestRef.current = { ...latestRef.current, ...previous };
+    };
+    latestRef.current = { ...base, ...fields };
+    try {
+      const r = await window.api.saveSettings(latestRef.current);
+      if (r.ok) setSavedSettings((s) => (s === null ? s : { ...s, ...fields }));
+      else revert();
+      return r;
+    } catch (e) {
+      revert();
+      throw e;
+    }
+  }
+
   async function saveVoice() {
     if (vBusy.current || savedSettings === null) return;
     vBusy.current = true;
@@ -92,14 +115,12 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
         setHasKey(true);
       }
       if (voiceChanged) {
-        const next = { ...savedSettings, voice: { language, voice } };
-        const r = await window.api.saveSettings(next);
+        const r = await persist({ voice: { language, voice } });
         if (!r.ok) {
           setVFailed(true);
           setVStatus(r.message);
           return;
         }
-        setSavedSettings(next);
       }
       setVFailed(false);
       setVStatus("Saved.");
@@ -117,9 +138,8 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
     props.onTheme?.(next);
     setTStatus(null);
     try {
-      const r = await window.api.saveSettings({ ...savedSettings, theme: next });
-      if (r.ok) setSavedSettings((s) => (s === null ? s : { ...s, theme: next }));
-      else setTStatus(r.message);
+      const r = await persist({ theme: next });
+      if (!r.ok) setTStatus(r.message);
     } catch {
       setTStatus("Could not save. Check free disk space.");
     }
@@ -153,11 +173,10 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
     if (mBusy.current || savedSettings === null) return;
     mBusy.current = true;
     try {
-      const next = { ...savedSettings, clis: trimmedClis() };
-      const r = await window.api.saveSettings(next);
+      const nextClis = trimmedClis();
+      const r = await persist({ clis: nextClis });
       if (r.ok) {
-        setSavedSettings(next);
-        setClis(next.clis);
+        setClis(nextClis);
         setMFailed(false);
         setMStatus("Saved.");
       } else {
@@ -176,11 +195,10 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
     if (dBusy.current || savedSettings === null) return;
     dBusy.current = true;
     try {
-      const next = { ...savedSettings, method: stored(method) };
-      const r = await window.api.saveSettings(next);
+      const nextMethod = stored(method);
+      const r = await persist({ method: nextMethod });
       if (r.ok) {
-        setSavedSettings(next);
-        if (next.method === "") setMethod(DEFAULT_METHOD);
+        if (nextMethod === "") setMethod(DEFAULT_METHOD);
         setDFailed(false);
         setDStatus("Saved.");
       } else {
@@ -216,6 +234,8 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
       if (result.ok) {
         setSaved(sent);
         setSavedSettings((s) => (s === null ? s : { ...s, instructions: sent }));
+        if (latestRef.current !== null)
+          latestRef.current = { ...latestRef.current, instructions: sent };
         setFailed(false);
         setStatus("Saved.");
       } else {
