@@ -1650,7 +1650,7 @@ Conventions for every Stage C task (in addition to the ones at the top):
    |------|-------|--------|
    | MarkdownView renders paragraphs | `markdown="Hello **world**"` | `strong` element with text `world` |
    | MarkdownView renders inline math | `markdown="Slope $\\frac{a}{b}$ here"` | `container.querySelector(".katex")` is not null |
-   | MarkdownView renders display math | `markdown="$$x^2$$"` | `container.querySelector(".katex-display")` is not null |
+   | MarkdownView renders display math | `markdown="$$\nx^2\n$$"` (the `$$` lines are on their own lines: remark-math 6 renders a one-line `$$x^2$$` as inline math, D32) | `container.querySelector(".katex-display")` is not null |
    | MarkdownView does not render raw HTML | `markdown="a <script>alert(1)</script> <b>b</b>"` | `container.querySelector("script")` is null and `container.querySelector("b")` is null |
 2. Run tests (fails to import). Paste.
 3. Create `MarkdownView.tsx`:
