@@ -19,7 +19,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T2 Electron shell that builds
 - [x] T3 Limits and shared types
 - [x] T4 Reply schema and parseReply
-- [ ] T5 Plan validation
+- [x] T5 Plan validation
 - [ ] T6 Lesson state: start, probe, plan
 - [ ] T7 Lesson state: teaching
 - [ ] T8 What the model may do next
