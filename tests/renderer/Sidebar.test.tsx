@@ -38,6 +38,8 @@ function setup(over: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onDelete: vi.fn(),
     onKnowledge: vi.fn(),
     onProfile: vi.fn(),
+    due: 0,
+    onReview: vi.fn(),
     newDisabled: false,
     subjects: [],
     activeSubjectId: null,
@@ -178,5 +180,17 @@ describe("Sidebar", () => {
     setup({ subjects, sessions: [inSubject("s_a", "Unit A", "u_1")] });
     expect(screen.getByText("No lessons yet.")).toBeInTheDocument();
     expect(screen.getByText("Unit A")).toBeInTheDocument();
+  });
+  it("Sidebar shows Review with the due count", async () => {
+    const { props, user, view } = setup();
+    expect(screen.getByRole("button", { name: "Review" })).toBeInTheDocument();
+    view.rerender(<Sidebar {...props} due={4} />);
+    const button = screen.getByRole("button", { name: "Review · 4" });
+    await user.click(button);
+    expect(props.onReview).toHaveBeenCalledTimes(1);
+    const follows = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(screen.getByText("Lessons"), button)).toBe(true);
+    expect(follows(button, screen.getByRole("button", { name: "Knowledge" }))).toBe(true);
   });
 });

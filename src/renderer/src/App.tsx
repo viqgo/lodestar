@@ -5,6 +5,7 @@ import { KnowledgeScreen } from "./components/KnowledgeScreen";
 import { LessonScreen } from "./components/LessonScreen";
 import { NewLessonForm } from "./components/NewLessonForm";
 import { ProfileScreen } from "./components/ProfileScreen";
+import { ReviewScreen } from "./components/ReviewScreen";
 import { NewSubjectForm } from "./components/NewSubjectForm";
 import { Sidebar } from "./components/Sidebar";
 import { SubjectScreen } from "./components/SubjectScreen";
@@ -15,18 +16,37 @@ type Screen =
   | { name: "newSubject" }
   | { name: "subject"; id: string; start: boolean }
   | { name: "knowledge" }
-  | { name: "profile" };
+  | { name: "profile" }
+  | { name: "review" };
 
 export function App() {
   const [screen, setScreen] = useState<Screen>({ name: "new" });
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [subjects, setSubjects] = useState<SubjectSummary[]>([]);
   const [clis, setClis] = useState<CliStatus[] | null>(null);
+  const [due, setDue] = useState(0);
 
   const reload = () => {
     window.api.listSessions().then(setSessions);
     window.api.listSubjects().then(setSubjects);
   };
+
+  const reloadDue = () => {
+    void window.api
+      .dueItems({ subjectId: null, sessionId: null })
+      .then((r) => setDue(r.due.length));
+  };
+
+  useEffect(() => {
+    reloadDue();
+  }, [screen.name]);
+
+  useEffect(
+    () => () => {
+      if (screen.name === "review") void window.api.practiceStop();
+    },
+    [screen.name],
+  );
 
   useEffect(() => {
     let live = true;
@@ -42,7 +62,10 @@ export function App() {
 
   useEffect(() => {
     reload();
-    const offSession = window.api.onSessionUpdated(() => reload());
+    const offSession = window.api.onSessionUpdated(() => {
+      reload();
+      reloadDue();
+    });
     const offSubject = window.api.onSubjectUpdated(() => reload());
     return () => {
       offSession();
@@ -60,6 +83,16 @@ export function App() {
     content = <KnowledgeScreen />;
   } else if (screen.name === "profile") {
     content = <ProfileScreen />;
+  } else if (screen.name === "review") {
+    content = (
+      <ReviewScreen
+        statuses={clis ?? []}
+        lastUsed={sessions[0]?.cli ?? null}
+        sessions={sessions}
+        subjects={subjects}
+        onChanged={reloadDue}
+      />
+    );
   } else if (screen.name === "newSubject") {
     content = (
       <div className="content">
@@ -138,6 +171,8 @@ export function App() {
         }}
         onKnowledge={() => setScreen({ name: "knowledge" })}
         onProfile={() => setScreen({ name: "profile" })}
+        due={due}
+        onReview={() => setScreen({ name: "review" })}
       />
       <div className="main">
         <CliGate clis={clis} onRetry={retry} />

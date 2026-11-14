@@ -17,3 +17,11 @@ export function phaseLabel(phase: Phase): string {
   };
   return labels[phase];
 }
+
+export function dateLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}

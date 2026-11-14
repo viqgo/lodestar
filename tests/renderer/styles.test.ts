@@ -57,3 +57,8 @@ it("styles have the flashcard and box rules", () => {
   expect(/\.box-1\s*\{[^}]*color: var\(--color-danger\)/.test(css)).toBe(true);
   expect(/\.box-4,\s*\.box-5\s*\{[^}]*color: var\(--color-success\)/.test(css)).toBe(true);
 });
+
+it("styles have the select rule", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
+  expect(/\.field select\s*\{[^}]*border: 1px solid var\(--color-border\)/.test(css)).toBe(true);
+});

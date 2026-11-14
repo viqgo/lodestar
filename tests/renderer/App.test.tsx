@@ -1,12 +1,12 @@
 // @vitest-environment jsdom
 import "../helpers/dom";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { App } from "../../src/renderer/src/App";
 import type { SessionSummary, Subject, SubjectSummary } from "../../src/shared/types";
 import { installApi } from "../helpers/dom";
-import { AT, UNITS, readySubject, session, subject } from "../helpers/fixtures";
+import { AT, UNITS, dueItem, readySubject, session, subject } from "../helpers/fixtures";
 
 vi.mock("../../src/renderer/src/components/PlanPanel", () => ({
   PlanPanel: () => <div data-testid="plan" />,
@@ -239,5 +239,36 @@ describe("App", () => {
     expect((api.listSessions as ReturnType<typeof vi.fn>).mock.calls.length).toBe(
       sessionsBefore + 1,
     );
+  });
+
+  it("App opens the review screen", async () => {
+    const { api } = installApi();
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Review" }));
+    expect(await screen.findByRole("heading", { name: "Review" })).toBeInTheDocument();
+    expect(api.dueItems).toHaveBeenCalled();
+  });
+
+  it("App shows the due count in the sidebar and refreshes it", async () => {
+    const dueItems = vi.fn().mockResolvedValue({ due: [dueItem(1), dueItem(2)], nextDue: null });
+    const { emitUpdated } = installApi({ dueItems });
+    render(<App />);
+    expect(await screen.findByRole("button", { name: "Review · 2" })).toBeInTheDocument();
+    dueItems.mockResolvedValue({ due: [dueItem(1), dueItem(2), dueItem(3)], nextDue: null });
+    act(() => emitUpdated(session()));
+    expect(await screen.findByRole("button", { name: "Review · 3" })).toBeInTheDocument();
+  });
+
+  it("leaving the review screen stops a practice call", async () => {
+    const { api } = installApi();
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Knowledge" }));
+    await screen.findByText("What you have shown you understand. Later lessons start from here.");
+    expect(api.practiceStop).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Review" }));
+    await screen.findByRole("heading", { name: "Review" });
+    await userEvent.click(screen.getByRole("button", { name: "Knowledge" }));
+    await screen.findByText("What you have shown you understand. Later lessons start from here.");
+    expect(api.practiceStop).toHaveBeenCalledTimes(1);
   });
 });

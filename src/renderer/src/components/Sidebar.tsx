@@ -11,6 +11,8 @@ export function Sidebar(props: {
   onDelete(id: string): void;
   onKnowledge(): void;
   onProfile(): void;
+  due: number;
+  onReview(): void;
   newDisabled: boolean;
   subjects: SubjectSummary[];
   activeSubjectId: string | null;
@@ -91,6 +93,9 @@ export function Sidebar(props: {
         {free.length === 0 ? <span className="note">No lessons yet.</span> : null}
         {free.map((s) => lessonRow(s, false))}
       </div>
+      <button className="btn" onClick={props.onReview}>
+        {props.due > 0 ? `Review · ${props.due}` : "Review"}
+      </button>
       <button className="btn" onClick={props.onKnowledge}>
         Knowledge
       </button>

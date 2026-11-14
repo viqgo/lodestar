@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { phaseLabel, relativeTime } from "../../src/renderer/src/lib/time";
+import { dateLabel, phaseLabel, relativeTime } from "../../src/renderer/src/lib/time";
 
 const now = "2026-03-03T12:00:00.000Z";
 
@@ -21,5 +21,17 @@ describe("time helpers", () => {
     expect(phaseLabel("plan")).toBe("planning");
     expect(phaseLabel("teach")).toBe("teaching");
     expect(phaseLabel("done")).toBe("done");
+  });
+  it("dateLabel shows the day, the month and the year", () => {
+    const iso = "2026-03-10T12:00:00.000Z";
+    const label = dateLabel(iso);
+    expect(label).toBe(
+      new Date(iso).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      }),
+    );
+    expect(label).toContain("2026");
   });
 });

@@ -69,6 +69,14 @@ body {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
 }
+.field select {
+  font: inherit;
+  color: var(--color-text);
+  background: var(--color-surface);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
 .field textarea {
   min-height: 72px;
   resize: vertical;
@@ -397,6 +405,10 @@ body {
 }
 .field input:focus,
 .field textarea:focus {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+.field select:focus {
   outline: 2px solid var(--color-accent);
   outline-offset: 1px;
 }

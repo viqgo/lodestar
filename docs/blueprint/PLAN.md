@@ -132,7 +132,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T92 Practice service
 - [x] T93 Flashcards
 - [x] T94 Practice run
-- [ ] T95 Review screen
+- [x] T95 Review screen
 - [ ] T96 Graph data
 - [ ] T97 Graph screen
 - [ ] T98 Asides in the rules
