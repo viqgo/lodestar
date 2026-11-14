@@ -3,6 +3,7 @@ import type {
   HandoverNote,
   OutlineChange,
   Session,
+  Subject,
   SessionEvent,
   SubjectEvent,
   SubjectState,
@@ -10,6 +11,7 @@ import type {
   UnitStatus,
 } from "../shared/types";
 import { deriveState, learnedToSave } from "./engine";
+import { plain } from "./material";
 
 const UNIT_ID = /^[a-z0-9][a-z0-9-]{0,39}$/;
 const SIZE_REASON = "outline must have 2 to 30 units";
@@ -174,4 +176,29 @@ export function handoverNote(session: Session): HandoverNote {
       .filter((n) => state.nodes[n.id]?.status === "shaky")
       .map((n) => n.title),
   };
+}
+
+function noteLine(note: HandoverNote): string {
+  const shaky = note.shaky.length > 0 ? note.shaky.join("; ") : "nothing";
+  return `${note.unitId}: ${note.summary} Learned: ${note.learned.join("; ")}. Shaky: ${shaky}.`;
+}
+
+export function renderSubjectSection(
+  subject: Pick<Subject, "name">,
+  state: SubjectState,
+  unitId: string,
+): string {
+  const outline = state.units.map(
+    (u, i) => `${i + 1}. ${u.id} - ${plain(u.title)}${u.id === unitId ? " (this lesson)" : ""}`,
+  );
+  const files = state.units.find((u) => u.id === unitId)?.files ?? [];
+  const earlier = state.notes.filter((n) => n.unitId !== unitId).map(noteLine);
+  return [
+    ["# Subject", `Name: ${plain(subject.name)}`, ...outline].join("\n"),
+    [
+      "# Files for this unit",
+      ...(files.length > 0 ? files.map((f) => `- ${plain(f)}`) : ["(none listed)"]),
+    ].join("\n"),
+    ["# Earlier units", ...(earlier.length > 0 ? earlier : ["(none yet)"])].join("\n"),
+  ].join("\n\n");
 }

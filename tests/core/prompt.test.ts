@@ -1,15 +1,19 @@
 import { describe, expect, it } from "vitest";
 import { deriveState } from "../../src/core/engine";
+import { renderSubjectSection } from "../../src/core/subject";
 import { buildPrompt, renderAnswer, renderTranscript } from "../../src/core/prompt";
 import type { KnowledgeItem, SessionEvent } from "../../src/shared/types";
 import {
   A,
   AT,
+  UNITS,
   act,
   choiceQ,
   pick,
   say,
+  readySubject,
   session,
+  subject,
   textQ,
   toCheck,
   toTeach,
@@ -243,5 +247,43 @@ describe("prompt: the tutor instructions", () => {
       "a1-x.pdf",
       "a2-y.png",
     ]);
+  });
+});
+
+describe("buildPrompt with a subject", () => {
+  const events: SessionEvent[] = [act(A.probe())];
+  const base = {
+    session: session(events),
+    state: deriveState(events),
+    knowledge: [],
+    retryNote: null,
+  };
+  it("unit_prompt_carries_subject_files_and_earlier_units", () => {
+    const section = renderSubjectSection(
+      subject(readySubject),
+      {
+        phase: "ready",
+        units: UNITS,
+        notes: [],
+        chat: [],
+        pendingChange: null,
+        awaitingReply: false,
+      },
+      "u1",
+    );
+    const text = buildPrompt({ ...base, subject: section });
+    const at = (h: string) => text.indexOf(h);
+    expect(at("# Lesson")).toBeGreaterThan(-1);
+    expect(at("# Subject")).toBeGreaterThan(at("# Lesson"));
+    expect(at("# Files for this unit")).toBeGreaterThan(at("# Subject"));
+    expect(at("# Earlier units")).toBeGreaterThan(at("# Files for this unit"));
+    expect(at("# Transcript so far")).toBeGreaterThan(at("# Earlier units"));
+    const web = buildPrompt({ ...base, subject: section, webSearch: true });
+    expect(web.indexOf("# Subject")).toBeGreaterThan(web.indexOf("# Web search"));
+  });
+
+  it("prompt has no subject section without a subject", () => {
+    expect(buildPrompt({ ...base, subject: null })).toBe(buildPrompt(base));
+    expect(buildPrompt(base)).not.toContain("# Subject");
   });
 });

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { OPTIONS_MAX, OPTIONS_MIN } from "./limits";
-import type { Action } from "./types";
+import type { Action, OutlineChange, Unit } from "./types";
 
 const QuestionSchema = z
   .strictObject({
@@ -104,6 +104,19 @@ const question = obj({
   options: strList,
   correctIndex: { type: ["integer", "null"] },
 });
+const unit = obj({ id: str, title: str, goal: str, files: strList });
+export const OUTLINE_JSON_SCHEMA: object = obj({ units: { type: "array", items: unit } });
+export const SENIOR_JSON_SCHEMA: object = obj({
+  markdown: str,
+  change: {
+    anyOf: [
+      obj({ kind: lit("add"), unit, afterId: nullableStr }),
+      obj({ kind: lit("remove"), unitId: str }),
+      obj({ kind: lit("reorder"), order: strList }),
+      { type: "null" },
+    ],
+  },
+});
 const node = obj({ id: str, title: str, deps: strList });
 const learned = obj({ nodeId: str, text: str });
 export const REPLY_JSON_SCHEMA: object = obj({
@@ -151,4 +164,53 @@ export function parseReply(
     };
   }
   return { ok: true, action: result.data.action };
+}
+
+const UnitSchema = z.strictObject({
+  id: z.string(),
+  title: z.string(),
+  goal: z.string(),
+  files: z.array(z.string()),
+});
+const OutlineSchema = z.strictObject({ units: z.array(UnitSchema) });
+const ChangeSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("add"), unit: UnitSchema, afterId: z.string().nullable() }),
+  z.strictObject({ kind: z.literal("remove"), unitId: z.string() }),
+  z.strictObject({ kind: z.literal("reorder"), order: z.array(z.string()) }),
+]);
+const SeniorSchema = z.strictObject({ markdown: z.string(), change: ChangeSchema.nullable() });
+
+function parseWith<T>(
+  schema: z.ZodType<T>,
+  text: string,
+): { ok: true; value: T } | { ok: false; reason: string } {
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    return { ok: false, reason: "not valid JSON" };
+  }
+  const result = schema.safeParse(json);
+  if (!result.success) {
+    const issue = result.error.issues[0];
+    return {
+      ok: false,
+      reason: "does not match the schema: " + issue.path.join(".") + " " + issue.message,
+    };
+  }
+  return { ok: true, value: result.data };
+}
+
+export function parseOutline(
+  text: string,
+): { ok: true; value: { units: Unit[] } } | { ok: false; reason: string } {
+  return parseWith(OutlineSchema, text);
+}
+
+export function parseSenior(
+  text: string,
+):
+  | { ok: true; value: { markdown: string; change: OutlineChange | null } }
+  | { ok: false; reason: string } {
+  return parseWith(SeniorSchema, text);
 }

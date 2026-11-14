@@ -100,7 +100,8 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] GATE G More input (milestone 3)
 - [x] T67 Shared model call
 - [x] T68 Subject rules
-- [ ] T69-T78 Milestone 4: subjects (outline, expanded at stage start)
+- [x] T69 Subject schemas and prompts
+- [ ] T70-T78 Milestone 4: subjects (outline, expanded at stage start)
 - [ ] GATE H Subjects
 - [ ] T79-T88 Milestone 5: voice (outline)
 - [ ] GATE I Voice

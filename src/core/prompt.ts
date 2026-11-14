@@ -31,10 +31,15 @@ const STATIC_REST = [
   '# Fields\n- feedback: one or two sentences reacting to the learner\'s last answer, or null.\n- verdict: "pass" or "fail" only when the learner\'s last answer was a free-text check; otherwise null.\n- choice questions: 2 to 6 options; correctIndex is the 0-based index of the right option (it may be null only for probe and predict questions with no single right answer). text questions: options [] and correctIndex null.\n- learned (lesson_done only): one short sentence per node, stating the idea as a fact, with that node\'s id.\n- Markdown and LaTeX ($...$ and $$...$$ on their own lines) are allowed in markdown, feedback, summary and question prompts.',
 ];
 
+export function headParagraph(material: boolean, webSearch: boolean): string {
+  return (
+    HEAD_START +
+    HEAD_RULES[material ? (webSearch ? "both" : "material") : webSearch ? "search" : "none"]!
+  );
+}
+
 function staticHead(material: boolean, webSearch: boolean): string {
-  const rule =
-    HEAD_RULES[material ? (webSearch ? "both" : "material") : webSearch ? "search" : "none"]!;
-  return [HEAD_START + rule, ...STATIC_REST].join("\n\n");
+  return [headParagraph(material, webSearch), ...STATIC_REST].join("\n\n");
 }
 
 export function renderAnswer(
@@ -105,6 +110,7 @@ export function buildPrompt(input: {
   material?: string | null;
   webSearch?: boolean;
   attachmentsDir?: string;
+  subject?: string | null;
 }): string {
   const { session, state, knowledge, retryNote } = input;
   const profile = (input.profile ?? "").trim();
@@ -125,6 +131,7 @@ export function buildPrompt(input: {
       "# Web search\nYou may search the web when the material and your own knowledge are not enough. Name the page you used in the text.",
     );
   }
+  if (input.subject != null) sections.push(input.subject);
   if (state.phase === "probe") {
     const items = knowledge.slice(0, KNOWLEDGE_PROMPT_MAX).map((item) => "- " + item.text);
     sections.push(

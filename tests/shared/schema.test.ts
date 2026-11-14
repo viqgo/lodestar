@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { parseReply, REPLY_JSON_SCHEMA } from "../../src/shared/schema";
+import {
+  OUTLINE_JSON_SCHEMA,
+  parseOutline,
+  parseReply,
+  parseSenior,
+  REPLY_JSON_SCHEMA,
+  SENIOR_JSON_SCHEMA,
+} from "../../src/shared/schema";
 import { A, choiceQ, textQ } from "../helpers/fixtures";
 import type { Action } from "../../src/shared/types";
 
@@ -93,5 +100,73 @@ describe("the teach action", () => {
     const variants = (REPLY_JSON_SCHEMA as any).properties.action.anyOf as any[];
     expect(variants.length).toBe(7);
     expect(variants.some((v) => JSON.stringify(v.properties.type.enum) === '["teach"]')).toBe(true);
+  });
+});
+
+const U = { id: "u1", title: "One", goal: "Goal", files: ["a.txt"] };
+
+describe("subject schemas", () => {
+  it("OUTLINE_JSON_SCHEMA requires every unit field", () => {
+    const schema = OUTLINE_JSON_SCHEMA as {
+      required: string[];
+      properties: { units: { items: { required: string[]; additionalProperties: boolean } } };
+    };
+    expect(schema.required).toEqual(["units"]);
+    expect(schema.properties.units.items.required).toEqual(["id", "title", "goal", "files"]);
+    expect(schema.properties.units.items.additionalProperties).toBe(false);
+  });
+
+  it("parseOutline accepts an outline and refuses bad JSON and wrong shapes", () => {
+    expect(parseOutline(JSON.stringify({ units: [U] }))).toEqual({
+      ok: true,
+      value: { units: [U] },
+    });
+    expect(parseOutline("nope")).toEqual({ ok: false, reason: "not valid JSON" });
+    const bad = parseOutline(JSON.stringify({ units: [{ id: "u1" }] }));
+    expect(bad.ok).toBe(false);
+    if (!bad.ok) expect(bad.reason.startsWith("does not match the schema: ")).toBe(true);
+    expect(parseOutline(JSON.stringify({ units: [], extra: 1 })).ok).toBe(false);
+  });
+
+  it("SENIOR_JSON_SCHEMA allows the three changes and null", () => {
+    const schema = SENIOR_JSON_SCHEMA as {
+      required: string[];
+      properties: {
+        change: { anyOf: { properties?: { kind?: { enum: string[] } }; type?: string }[] };
+      };
+    };
+    expect(schema.required).toEqual(["markdown", "change"]);
+    const any = schema.properties.change.anyOf;
+    expect(any.map((a) => a.properties?.kind?.enum[0] ?? a.type)).toEqual([
+      "add",
+      "remove",
+      "reorder",
+      "null",
+    ]);
+  });
+
+  it("parseSenior accepts a reply with and without a change", () => {
+    const none = { markdown: "hi", change: null };
+    expect(parseSenior(JSON.stringify(none))).toEqual({ ok: true, value: none });
+    for (const change of [
+      { kind: "add", unit: U, afterId: null },
+      { kind: "add", unit: U, afterId: "u0" },
+      { kind: "remove", unitId: "u1" },
+      { kind: "reorder", order: ["u2", "u1"] },
+    ]) {
+      const value = { markdown: "hi", change };
+      expect(parseSenior(JSON.stringify(value))).toEqual({ ok: true, value });
+    }
+  });
+
+  it("parseSenior refuses an unknown change kind and extra fields", () => {
+    const kind = parseSenior(JSON.stringify({ markdown: "x", change: { kind: "rename" } }));
+    expect(kind.ok).toBe(false);
+    const extra = parseSenior(
+      JSON.stringify({ markdown: "x", change: { kind: "remove", unitId: "u1", why: "y" } }),
+    );
+    expect(extra.ok).toBe(false);
+    expect(parseSenior(JSON.stringify({ markdown: "x", change: null, more: 1 })).ok).toBe(false);
+    expect(parseSenior("{")).toEqual({ ok: false, reason: "not valid JSON" });
   });
 });

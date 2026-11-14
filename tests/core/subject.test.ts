@@ -4,6 +4,7 @@ import {
   checkChange,
   deriveSubject,
   handoverNote,
+  renderSubjectSection,
   unitStatuses,
   validateNewSubject,
   validateOutline,
@@ -19,6 +20,7 @@ import {
   readySubject,
   say,
   session,
+  subject,
   toCheck,
   toTeach,
 } from "../helpers/fixtures";
@@ -257,5 +259,45 @@ describe("subject rules", () => {
       learned: ["t1"],
       shaky: ["Two"],
     });
+  });
+});
+
+describe("renderSubjectSection", () => {
+  const noteOf = (unitId: string, summary: string, learned: string[], shaky: string[]) =>
+    ({ kind: "note", at: "t", note: { unitId, sessionId: "s", summary, learned, shaky } }) as const;
+
+  it("renderSubjectSection marks the current unit and lists its files", () => {
+    const state = deriveSubject(readySubject);
+    expect(renderSubjectSection(subject(readySubject), state, "u1")).toBe(
+      [
+        "# Subject",
+        "Name: Course",
+        "1. u1 - Unit one (this lesson)",
+        "2. u2 - Unit two",
+        "3. u3 - Unit three",
+        "",
+        "# Files for this unit",
+        "- a.txt",
+        "",
+        "# Earlier units",
+        "(none yet)",
+      ].join("\n"),
+    );
+    const none = renderSubjectSection(subject(readySubject), state, "u3");
+    expect(none).toContain("# Files for this unit\n(none listed)\n");
+    expect(renderSubjectSection(subject(readySubject), state, "zz")).toContain(
+      "# Files for this unit\n(none listed)\n",
+    );
+  });
+
+  it("renderSubjectSection lists the notes of the other units only", () => {
+    const events = [
+      ...readySubject,
+      noteOf("u1", "Did one.", ["a", "b"], ["c"]),
+      noteOf("u2", "Did two.", ["d"], []),
+    ];
+    const text = renderSubjectSection(subject(events), deriveSubject(events), "u2");
+    expect(text.split("# Earlier units\n")[1]).toBe("u1: Did one. Learned: a; b. Shaky: c.");
+    expect(text).not.toContain("Did two.");
   });
 });
