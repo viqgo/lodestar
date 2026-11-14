@@ -66,7 +66,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] GATE D A lesson with readings
 - [x] T42 Profile rules and prompt section (CR-4)
 - [x] T43 Save, load and use the profile
-- [ ] T44 The Profile screen
+- [x] T44 The Profile screen
 - [ ] GATE E Tutor profile in the window
 
 Conventions used in every task:

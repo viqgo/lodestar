@@ -4,10 +4,14 @@ import { CliGate } from "./components/CliGate";
 import { KnowledgeScreen } from "./components/KnowledgeScreen";
 import { LessonScreen } from "./components/LessonScreen";
 import { NewLessonForm } from "./components/NewLessonForm";
+import { ProfileScreen } from "./components/ProfileScreen";
 import { Sidebar } from "./components/Sidebar";
 
 type Screen =
-  { name: "new" } | { name: "lesson"; id: string; start: boolean } | { name: "knowledge" };
+  | { name: "new" }
+  | { name: "lesson"; id: string; start: boolean }
+  | { name: "knowledge" }
+  | { name: "profile" };
 
 export function App() {
   const [screen, setScreen] = useState<Screen>({ name: "new" });
@@ -42,6 +46,8 @@ export function App() {
   let content;
   if (screen.name === "knowledge") {
     content = <KnowledgeScreen />;
+  } else if (screen.name === "profile") {
+    content = <ProfileScreen />;
   } else if (screen.name === "lesson") {
     content = <LessonScreen key={screen.id} id={screen.id} start={screen.start} />;
   } else {
@@ -72,6 +78,7 @@ export function App() {
           reload();
         }}
         onKnowledge={() => setScreen({ name: "knowledge" })}
+        onProfile={() => setScreen({ name: "profile" })}
       />
       <div className="main">
         <CliGate cli={cli} onRetry={retry} />

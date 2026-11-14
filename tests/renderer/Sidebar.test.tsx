@@ -19,6 +19,7 @@ function setup(over: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onOpen: vi.fn(),
     onDelete: vi.fn(),
     onKnowledge: vi.fn(),
+    onProfile: vi.fn(),
     newDisabled: false,
     ...over,
   };
@@ -78,6 +79,11 @@ describe("Sidebar", () => {
     expect(props.onKnowledge).toHaveBeenCalledTimes(1);
     view.rerender(<Sidebar {...props} newDisabled={true} />);
     expect(screen.getByRole("button", { name: "New lesson" })).toBeDisabled();
+  });
+  it("Sidebar opens the profile", async () => {
+    const { props, user } = setup();
+    await user.click(screen.getByRole("button", { name: "Profile" }));
+    expect(props.onProfile).toHaveBeenCalledTimes(1);
   });
   it("Sidebar lets a lesson be opened with the keyboard", async () => {
     const { props, user } = setup();

@@ -117,4 +117,13 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
+
+  it("App opens the profile screen", async () => {
+    const { api } = installApi();
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Profile" }));
+    expect(await screen.findByText("Tutor instructions")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(api.getProfile).toHaveBeenCalled();
+  });
 });

@@ -10,6 +10,7 @@ export function Sidebar(props: {
   onOpen(id: string): void;
   onDelete(id: string): void;
   onKnowledge(): void;
+  onProfile(): void;
   newDisabled: boolean;
 }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
@@ -43,6 +44,9 @@ export function Sidebar(props: {
       </div>
       <button className="btn" onClick={props.onKnowledge}>
         Knowledge
+      </button>
+      <button className="btn" onClick={props.onProfile}>
+        Profile
       </button>
       {confirmId !== null ? (
         <ConfirmDialog
