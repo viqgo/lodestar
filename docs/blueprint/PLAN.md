@@ -15,7 +15,7 @@ Milestone 2 (Gemini CLI and Claude Code adapters) is outlined at the end.
 ## Progress
 Tick a box only after the task's verify step passed. Append the commit hash.
 
-- [ ] T1 Project skeleton and test runner
+- [x] T1 Project skeleton and test runner
 - [ ] T2 Electron shell that builds
 - [ ] T3 Limits and shared types
 - [ ] T4 Reply schema and parseReply
