@@ -20,3 +20,4 @@ export const FILE_WALK_MAX = 5000;
 export const UNITS_MIN = 2;
 export const UNITS_MAX = 30;
 export const CHAT_TEXT_MAX = 4000;
+export const SPEAK_CHUNK_MAX = 2000;
