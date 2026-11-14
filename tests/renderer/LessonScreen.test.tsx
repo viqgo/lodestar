@@ -190,6 +190,22 @@ describe("LessonScreen", () => {
     expect(screen.queryByRole("button", { name: "Submit" })).not.toBeInTheDocument();
   });
 
+  it("a missing CLI disables the pending card", async () => {
+    installApi({
+      getSession: vi.fn(async () => ({ ...S([act(A.probe())]), cli: "gemini" as const })),
+    });
+    const statuses: CliStatus[] = [
+      { id: "codex", installed: true, version: "1" },
+      { id: "claude", installed: true, version: "1" },
+      { id: "gemini", installed: false, version: null },
+    ];
+    render(<LessonScreen id={ID} start={false} statuses={statuses} onRetryDetect={() => {}} />);
+    expect(
+      await screen.findByText("Gemini not found. Install it and sign in, then press Retry."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+  });
+
   it("switch_tutor_asks_then_stores", async () => {
     const { api, emitUpdated } = installApi({
       getSession: vi.fn(async () => S([act(A.probe())])),

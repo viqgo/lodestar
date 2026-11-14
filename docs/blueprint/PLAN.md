@@ -2891,7 +2891,7 @@ Arguments, in this order: `["-p", "--output-format", "json", "--json-schema", JS
    - after `session` is known: `const cli: CliId = isCliId(session.cli) ? session.cli : "codex";` (import `isCliId` from `../../../shared/clis`); use `cli` instead of `session.cli` in the header text, in `missing`, and as the picker `value` and in the `onChange` comparison;
    - `const blocked = session !== null && (props.statuses === null || missing)`; pass `disabled={busy || blocked}` to the question items; the missing-CLI banner shows only when `missing` (statuses known); `Change tutor` is `disabled={busy || props.statuses === null}`;
    - `confirmSwitch`: a `useRef(false)` guard set on entry (return if already set) and cleared in `finally`; wrap the `setSessionCli` call in `try/catch`; the catch sets `setSwitchError("Could not save. Check free disk space.")`, `setAsk(null)`.
-4. Run `npm test` -> `Tests  366 passed (366)`; format, lint, typecheck, build exit 0. Paste.
+4. Run `npm test` -> `Tests  367 passed (367)`; format, lint, typecheck, build exit 0. Paste.
 5. Tick T55c, stage by name, commit `fix: tutor edge cases in the lesson screen`.
 
 **Stop and report if** an existing App or LessonScreen test breaks and the fix would need an unlisted file.
@@ -2900,7 +2900,7 @@ Arguments, in this order: `["-p", "--output-format", "json", "--json-schema", JS
 
 The builder stops here.
 
-**Run**: `npm test` -> `Tests  366 passed (366)`; lint, typecheck, build exit 0; the Claude Code eval output from T55.
+**Run**: `npm test` -> `Tests  367 passed (367)`; lint, typecheck, build exit 0; the Claude Code eval output from T55.
 **Look at**: `git diff <T44 commit>..HEAD --stat` -> only `src/shared`, `src/main`, `src/preload`, `src/renderer`, `tests`, `evals`, `README.md`, `PLAN.md`.
 **Fresh review**: Fable reviews T45-T55 against SPEC (B23-B34), ARCHITECTURE "Milestone 2", UI.md and the template.
 **Try it yourself**:
