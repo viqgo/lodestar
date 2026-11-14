@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "../helpers/dom";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileScreen } from "../../src/renderer/src/components/ProfileScreen";
@@ -175,5 +175,56 @@ describe("ProfileScreen voice", () => {
     expect(voiceSave()).toBeDisabled();
     await userEvent.type(await screen.findByLabelText("Deepgram API key"), "k");
     expect(voiceSave()).toBeEnabled();
+  });
+});
+
+describe("ProfileScreen theme", () => {
+  it("the theme is saved when it is chosen", async () => {
+    const settings = { ...DEFAULT_SETTINGS, theme: "system" as const };
+    const onTheme = vi.fn();
+    const { api } = installApi({ getSettings: vi.fn(async () => settings) });
+    render(<ProfileScreen onTheme={onTheme} />);
+    const select = await screen.findByLabelText("Theme");
+    await vi.waitFor(() => expect(select).toBeEnabled());
+    expect(select).toHaveValue("system");
+    expect(Array.from((select as HTMLSelectElement).options).map((o) => o.text)).toEqual([
+      "Dark",
+      "Light",
+      "System",
+    ]);
+    await userEvent.selectOptions(select, "Light");
+    expect(onTheme).toHaveBeenCalledWith("light");
+    await vi.waitFor(() =>
+      expect(api.saveSettings).toHaveBeenCalledWith({ ...settings, theme: "light" }),
+    );
+    await userEvent.type(screen.getByLabelText("Speech language"), "x");
+    await userEvent.click(voiceSave());
+    await vi.waitFor(() => expect(api.saveSettings).toHaveBeenCalledTimes(2));
+    expect(api.saveSettings).toHaveBeenLastCalledWith({
+      ...settings,
+      theme: "light",
+      voice: { ...settings.voice, language: `${settings.voice.language}x` },
+    });
+
+    cleanup();
+    const onTheme2 = vi.fn();
+    installApi({
+      saveSettings: vi.fn(async () => ({
+        ok: false as const,
+        message: "Could not save. Check free disk space.",
+      })),
+    });
+    render(<ProfileScreen onTheme={onTheme2} />);
+    const select2 = await screen.findByLabelText("Theme");
+    await vi.waitFor(() => expect(select2).toBeEnabled());
+    await userEvent.selectOptions(select2, "Light");
+    expect(await screen.findByText("Could not save. Check free disk space.")).toBeInTheDocument();
+    expect(onTheme2).toHaveBeenCalledWith("light");
+    cleanup();
+    installApi();
+    render(<ProfileScreen />);
+    const again = await screen.findByLabelText("Theme");
+    await vi.waitFor(() => expect(again).toBeEnabled());
+    await userEvent.selectOptions(again, "Light");
   });
 });

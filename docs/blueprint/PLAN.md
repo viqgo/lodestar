@@ -154,7 +154,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T107 Settings grow
 - [x] T108 Method text
 - [x] T109 Model and effort reach the CLI
-- [ ] T110 Theme
+- [x] T110 Theme
 - [ ] T111 Profile sections: models and method
 - [ ] T112 Header, evals, README
 - [ ] GATE L Customisation, then the owner's try-out
@@ -4733,6 +4733,7 @@ Header, evals, README
   }, [theme]);
   ```
   and `<ProfileScreen onTheme={setTheme} />`.
+- the effect has a `live` flag so a stale matchMedia listener does nothing after cleanup (D71).
 - `ProfileScreen.tsx` [D]: the component takes `props: { onTheme?(theme: Settings["theme"]): void }` (every existing `render(<ProfileScreen />)` stays valid). New state `theme` (starts `"dark"`, set to `s.theme` where the settings load sets the language and voice) and `tStatus: string | null`. After the Voice section's "Save" block:
   ```tsx
   <div className="field">

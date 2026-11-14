@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { CliStatus, SessionSummary, SubjectSummary } from "../../shared/types";
+import type { CliStatus, SessionSummary, Settings, SubjectSummary } from "../../shared/types";
 import { CliGate } from "./components/CliGate";
 import { GraphScreen } from "./components/GraphScreen";
 import { KnowledgeScreen } from "./components/KnowledgeScreen";
@@ -27,6 +27,7 @@ export function App() {
   const [subjects, setSubjects] = useState<SubjectSummary[]>([]);
   const [clis, setClis] = useState<CliStatus[] | null>(null);
   const [due, setDue] = useState(0);
+  const [theme, setTheme] = useState<Settings["theme"]>("dark");
 
   const reload = () => {
     window.api.listSessions().then(setSessions);
@@ -63,6 +64,39 @@ export function App() {
   }, [clis]);
 
   useEffect(() => {
+    let live = true;
+    window.api
+      .getSettings()
+      .then((s) => {
+        if (live) setTheme(s.theme);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (theme !== "system") {
+      root.dataset.theme = theme;
+      return;
+    }
+    const query = window.matchMedia?.("(prefers-color-scheme: light)");
+    let live = true;
+    const apply = () => {
+      if (!live) return;
+      root.dataset.theme = query?.matches ? "light" : "dark";
+    };
+    apply();
+    query?.addEventListener("change", apply);
+    return () => {
+      live = false;
+      query?.removeEventListener("change", apply);
+    };
+  }, [theme]);
+
+  useEffect(() => {
     reload();
     const offSession = window.api.onSessionUpdated(() => {
       reload();
@@ -86,7 +120,7 @@ export function App() {
   } else if (screen.name === "graph") {
     content = <GraphScreen />;
   } else if (screen.name === "profile") {
-    content = <ProfileScreen />;
+    content = <ProfileScreen onTheme={setTheme} />;
   } else if (screen.name === "review") {
     content = (
       <ReviewScreen

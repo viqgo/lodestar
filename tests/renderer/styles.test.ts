@@ -67,3 +67,33 @@ it("styles have the aside rule", () => {
   const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
   expect(/\.aside\s*\{[^}]*border-left: 3px solid var\(--color-border\)/.test(css)).toBe(true);
 });
+
+it("the light theme has the ten colors of UI.md", () => {
+  const css = fs.readFileSync(
+    path.join(process.cwd(), "src/renderer/src/styles/tokens.css"),
+    "utf8",
+  );
+  const rootStart = css.indexOf(":root");
+  const rootEnd = css.indexOf("}", rootStart);
+  const root = css.slice(rootStart, rootEnd);
+  expect(root).toContain("--color-bg: #0e0e0f");
+  const lightStart = css.indexOf('[data-theme="light"]');
+  expect(lightStart).toBeGreaterThan(rootEnd);
+  const block = css.slice(css.indexOf("{", lightStart) + 1, css.indexOf("}", lightStart));
+  const declarations = block
+    .split(";")
+    .map((d) => d.trim())
+    .filter((d) => d !== "");
+  expect(declarations).toEqual([
+    "--color-bg: #fafaf8",
+    "--color-surface: #ffffff",
+    "--color-surface-2: #f0efeb",
+    "--color-text: #1b1b1a",
+    "--color-muted: #6b6d73",
+    "--color-border: #dcdad3",
+    "--color-accent: #b07d12",
+    "--color-accent-text: #ffffff",
+    "--color-danger: #c2473d",
+    "--color-success: #2f8f57",
+  ]);
+});

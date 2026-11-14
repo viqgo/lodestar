@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import { App } from "../../src/renderer/src/App";
 import type { SessionSummary, Subject, SubjectSummary } from "../../src/shared/types";
 import { installApi } from "../helpers/dom";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
 import { AT, UNITS, dueItem, readySubject, session, subject } from "../helpers/fixtures";
 
 vi.mock("../../src/renderer/src/components/PlanPanel", () => ({
@@ -278,5 +279,69 @@ describe("App", () => {
     await userEvent.click(await screen.findByRole("button", { name: "Graph" }));
     expect(await screen.findByRole("heading", { name: "Graph" })).toBeInTheDocument();
     expect(api.getGraph).toHaveBeenCalled();
+  });
+
+  it("theme_applies_and_persists", async () => {
+    try {
+      const { api } = installApi({
+        getSettings: vi.fn(async () => ({ ...DEFAULT_SETTINGS, theme: "light" as const })),
+      });
+      const first = render(<App />);
+      await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+      await userEvent.click(await screen.findByRole("button", { name: "Profile" }));
+      const select = await screen.findByLabelText("Theme");
+      await vi.waitFor(() => expect(select).toBeEnabled());
+      expect(select).toHaveValue("light");
+      await userEvent.selectOptions(select, "Dark");
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      await vi.waitFor(() => expect(api.saveSettings).toHaveBeenCalledTimes(1));
+      expect(api.saveSettings).toHaveBeenCalledWith({ ...DEFAULT_SETTINGS, theme: "dark" });
+      first.unmount();
+      document.documentElement.removeAttribute("data-theme");
+      installApi();
+      render(<App />);
+      await vi.waitFor(() => expect(document.documentElement.dataset.theme).toBe("dark"));
+    } finally {
+      document.documentElement.removeAttribute("data-theme");
+    }
+  });
+
+  it("system_theme_follows_the_mac", async () => {
+    const listeners = new Set<() => void>();
+    const query = {
+      matches: false,
+      addEventListener: (_: string, f: () => void) => listeners.add(f),
+      removeEventListener: (_: string, f: () => void) => listeners.delete(f),
+    };
+    const matchMedia = vi.fn(() => query);
+    (window as unknown as { matchMedia: unknown }).matchMedia = matchMedia;
+    try {
+      installApi({
+        getSettings: vi.fn(async () => ({ ...DEFAULT_SETTINGS, theme: "system" as const })),
+      });
+      render(<App />);
+      await vi.waitFor(() =>
+        expect(matchMedia).toHaveBeenCalledWith("(prefers-color-scheme: light)"),
+      );
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      query.matches = true;
+      act(() => listeners.forEach((f) => f()));
+      expect(document.documentElement.dataset.theme).toBe("light");
+      await userEvent.click(await screen.findByRole("button", { name: "Profile" }));
+      const select = await screen.findByLabelText("Theme");
+      await vi.waitFor(() => expect(select).toBeEnabled());
+      const old = Array.from(listeners)[0];
+      await userEvent.selectOptions(select, "Dark");
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      expect(listeners.size).toBe(0);
+      query.matches = true;
+      act(() => old());
+      expect(document.documentElement.dataset.theme).toBe("dark");
+      await userEvent.selectOptions(select, "System");
+      expect(document.documentElement.dataset.theme).toBe("light");
+    } finally {
+      delete (window as unknown as { matchMedia?: unknown }).matchMedia;
+      document.documentElement.removeAttribute("data-theme");
+    }
   });
 });

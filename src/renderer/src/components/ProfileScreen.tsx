@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { PROFILE_MAX } from "../../../shared/limits";
 import type { Settings } from "../../../shared/types";
 
-export function ProfileScreen() {
+export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void }) {
   const [saved, setSaved] = useState("");
   const [text, setText] = useState("");
   const [status, setStatus] = useState<string | null>(null);
@@ -11,6 +11,7 @@ export function ProfileScreen() {
   const keyId = useId();
   const langId = useId();
   const voiceId = useId();
+  const themeId = useId();
   const [savedSettings, setSavedSettings] = useState<Settings | null>(null);
   const [language, setLanguage] = useState("");
   const [voice, setVoice] = useState("");
@@ -18,6 +19,8 @@ export function ProfileScreen() {
   const [hasKey, setHasKey] = useState(false);
   const [vStatus, setVStatus] = useState<string | null>(null);
   const [vFailed, setVFailed] = useState(false);
+  const [theme, setTheme] = useState<Settings["theme"]>("dark");
+  const [tStatus, setTStatus] = useState<string | null>(null);
   const vBusy = useRef(false);
   const vEdited = useRef(false);
   const busy = useRef(false);
@@ -40,6 +43,7 @@ export function ProfileScreen() {
     Promise.all([window.api.getSettings(), window.api.voiceHasKey()]).then(([s, k]) => {
       if (!live) return;
       setSavedSettings(s);
+      setTheme(s.theme);
       setHasKey(k);
       if (!vEdited.current) {
         setLanguage(s.voice.language);
@@ -86,6 +90,20 @@ export function ProfileScreen() {
       setVStatus("Could not save. Check free disk space.");
     } finally {
       vBusy.current = false;
+    }
+  }
+
+  async function chooseTheme(next: Settings["theme"]) {
+    if (savedSettings === null) return;
+    setTheme(next);
+    props.onTheme?.(next);
+    setTStatus(null);
+    try {
+      const r = await window.api.saveSettings({ ...savedSettings, theme: next });
+      if (r.ok) setSavedSettings((s) => (s === null ? s : { ...s, theme: next }));
+      else setTStatus(r.message);
+    } catch {
+      setTStatus("Could not save. Check free disk space.");
     }
   }
 
@@ -201,6 +219,22 @@ export function ProfileScreen() {
         >
           Save
         </button>
+      </div>
+      <div className="field">
+        <label className="label" htmlFor={themeId}>
+          Theme
+        </label>
+        <select
+          id={themeId}
+          value={theme}
+          disabled={savedSettings === null}
+          onChange={(e) => void chooseTheme(e.target.value as Settings["theme"])}
+        >
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+          <option value="system">System</option>
+        </select>
+        {tStatus !== null && <small>{tStatus}</small>}
       </div>
     </div>
   );

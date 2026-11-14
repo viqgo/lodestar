@@ -28,3 +28,16 @@
   --plan-width: 300px;
   --max-width: 720px;
 }
+
+[data-theme="light"] {
+  --color-bg: #fafaf8;
+  --color-surface: #ffffff;
+  --color-surface-2: #f0efeb;
+  --color-text: #1b1b1a;
+  --color-muted: #6b6d73;
+  --color-border: #dcdad3;
+  --color-accent: #b07d12;
+  --color-accent-text: #ffffff;
+  --color-danger: #c2473d;
+  --color-success: #2f8f57;
+}
