@@ -1,6 +1,7 @@
 import path from "node:path";
 import { allowedActions, checkAction, deriveState, learnedToSave } from "../core/engine";
 import { buildPrompt } from "../core/prompt";
+import { deriveSubject, handoverNote, renderSubjectSection } from "../core/subject";
 import { callModel } from "./call";
 import { attachmentKind, renderMaterial } from "../core/material";
 import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../shared/limits";
@@ -45,6 +46,7 @@ export async function modelStep(
     options: RunOptions;
     timeoutMs: number;
     material?: string | null;
+    subject?: string | null;
     attachmentsDir?: string;
   },
   session: Session,
@@ -64,6 +66,7 @@ export async function modelStep(
           retryNote,
           profile: deps.profile,
           material: deps.material ?? null,
+          subject: deps.subject ?? null,
           webSearch: deps.options.webSearch,
           ...(deps.attachmentsDir !== undefined ? { attachmentsDir: deps.attachmentsDir } : {}),
         }),
@@ -143,6 +146,17 @@ export function createTurnRunner(deps: {
             path: path.join(attachmentsDir, a.file),
           })),
         });
+        let subjectSection: string | null = null;
+        if (session.subjectId !== null && session.unitId !== null) {
+          const subject = await deps.store.readSubject(session.subjectId);
+          if (subject !== null) {
+            subjectSection = renderSubjectSection(
+              subject,
+              deriveSubject(subject.events),
+              session.unitId,
+            );
+          }
+        }
         const options = runOptions(session, attachmentsDir, null);
         const timeoutMs =
           options.readDirs.length > 0 || options.webSearch
@@ -150,7 +164,16 @@ export function createTurnRunner(deps: {
             : CALL_TIMEOUT_MS;
         const adapter = deps.adapters[session.cli] ?? deps.adapters.codex;
         const step = await modelStep(
-          { adapter, knowledge, profile, options, timeoutMs, material, attachmentsDir },
+          {
+            adapter,
+            knowledge,
+            profile,
+            options,
+            timeoutMs,
+            material,
+            subject: subjectSection,
+            attachmentsDir,
+          },
           session,
           state,
           controller.signal,
@@ -179,6 +202,22 @@ export function createTurnRunner(deps: {
               createdAt: deps.now(),
             })),
           );
+          if (next.subjectId !== null && next.unitId !== null) {
+            const subject = await deps.store.readSubject(next.subjectId);
+            if (
+              subject !== null &&
+              !subject.events.some((e) => e.kind === "note" && e.note.sessionId === next.id)
+            ) {
+              await deps.store.writeSubject({
+                ...subject,
+                updatedAt: deps.now(),
+                events: [
+                  ...subject.events,
+                  { kind: "note", at: deps.now(), note: handoverNote(next) },
+                ],
+              });
+            }
+          }
         }
         await deps.store.writeSession(next);
         session = next;

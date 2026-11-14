@@ -10,7 +10,17 @@ import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../../src/shared/limits"
 import { createTurnRunner, modelStep, runOptions } from "../../src/main/turn";
 import type { RunResult, Session, SessionEvent } from "../../src/shared/types";
 import { fakeAdapter, fakeAdapters } from "../helpers/fakes";
-import { A, act, pick, session, toCheck, toTeach } from "../helpers/fixtures";
+import {
+  A,
+  SE,
+  act,
+  pick,
+  readySubject,
+  session,
+  subject,
+  toCheck,
+  toTeach,
+} from "../helpers/fixtures";
 
 const step = async (events: SessionEvent[], ...replies: Parameters<typeof fakeAdapter>) => {
   const f = fakeAdapter(...replies);
@@ -520,5 +530,87 @@ describe("runOptions", () => {
     ]);
     const t = session([answer(["a1-pic.png"]), answer([])]);
     expect(runOptions(t, DIR, null).images).toEqual(["/data/attachments/s1/a1-pic.png"]);
+  });
+});
+
+const setupUnit = async (
+  events: SessionEvent[],
+  subjectEvents: ReturnType<typeof subject>["events"] | null,
+  ...replies: Parameters<typeof fakeAdapter>
+) => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+  const store = await createStore(dir, fsp);
+  await store.writeSession({ ...session(events), subjectId: subject().id, unitId: "u1" });
+  if (subjectEvents !== null) await store.writeSubject(subject(subjectEvents));
+  const f = fakeAdapter(...replies);
+  const runner = createTurnRunner({
+    adapters: fakeAdapters(f.adapter),
+    store,
+    now: () => NOW,
+    newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+    listFolder: async () => ({ files: [], more: 0 }),
+    notify: () => {},
+  });
+  return { store, f, runner };
+};
+
+describe("units in the lesson turn", () => {
+  it("unit_prompt_carries_subject_files_and_earlier_units (turn)", async () => {
+    const { f, runner } = await setupUnit(
+      [],
+      [...readySubject, SE.note("u2", "s_other")],
+      A.probe(),
+    );
+    await runner.advance(ID);
+    const prompt = f.prompts[0]!;
+    expect(prompt).toContain("# Subject");
+    expect(prompt).toContain("u1 - Unit one (this lesson)");
+    expect(prompt).toContain("# Files for this unit");
+    expect(prompt).toContain("- a.txt");
+    expect(prompt).toContain("# Earlier units");
+    expect(prompt).toContain("u2: s Learned: t1. Shaky: nothing.");
+  });
+
+  it("a lesson without a subject has no subject section", async () => {
+    const { f, runner } = await setup([], A.probe());
+    await runner.advance(ID);
+    expect(f.prompts[0]).not.toContain("# Subject");
+    expect(f.prompts[0]).not.toContain("# Earlier units");
+  });
+
+  it("finished_unit_writes_handover_note", async () => {
+    const { store, f, runner } = await setupUnit(doneEvents(), readySubject, A.done());
+    await runner.advance(ID);
+    const stored = await store.readSubject(subject().id);
+    const last = stored!.events[stored!.events.length - 1];
+    expect(last).toEqual({
+      kind: "note",
+      at: NOW,
+      note: { unitId: "u1", sessionId: ID, summary: "s", learned: ["t1"], shaky: ["Two"] },
+    });
+    expect(stored!.updatedAt).toBe(NOW);
+    expect(f.prompts.length).toBe(1);
+  });
+
+  it("a handover note is written once per lesson", async () => {
+    const { store, runner } = await setupUnit(
+      doneEvents(),
+      [...readySubject, SE.note("u1", ID)],
+      A.done(),
+    );
+    await runner.advance(ID);
+    const stored = await store.readSubject(subject().id);
+    expect(stored!.events.filter((e) => e.kind === "note").length).toBe(1);
+  });
+
+  it("a unit lesson whose subject is gone still runs", async () => {
+    const { store, f, runner } = await setupUnit(doneEvents(), null, A.done());
+    const result = await runner.advance(ID);
+    expect(result.ok).toBe(true);
+    expect(f.prompts[0]).not.toContain("# Subject");
+    const stored = await store.readSession(ID);
+    expect(stored!.events.some((e) => e.kind === "action" && e.action.type === "lesson_done")).toBe(
+      true,
+    );
   });
 });
