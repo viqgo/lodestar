@@ -21,4 +21,7 @@ it("limits match the spec", () => {
   expect(limits.FILE_LIST_MAX).toBe(200);
   expect(limits.CALL_TIMEOUT_TOOLS_MS).toBe(300000);
   expect(limits.FILE_WALK_MAX).toBe(5000);
+  expect(limits.UNITS_MIN).toBe(2);
+  expect(limits.UNITS_MAX).toBe(30);
+  expect(limits.CHAT_TEXT_MAX).toBe(4000);
 });

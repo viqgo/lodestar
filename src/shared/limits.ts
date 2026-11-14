@@ -17,3 +17,6 @@ export const ATTACH_PER_ANSWER = 3;
 export const FILE_LIST_MAX = 200;
 export const CALL_TIMEOUT_TOOLS_MS = 300_000;
 export const FILE_WALK_MAX = 5000;
+export const UNITS_MIN = 2;
+export const UNITS_MAX = 30;
+export const CHAT_TEXT_MAX = 4000;

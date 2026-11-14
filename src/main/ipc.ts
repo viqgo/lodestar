@@ -109,6 +109,8 @@ export function registerIpc(deps: IpcDeps): void {
         folder: input.folder ?? null,
         attachments: [],
         webSearch: input.webSearch ?? false,
+        subjectId: null,
+        unitId: null,
       };
       await store.writeSession(session);
       const attachments: Attachment[] = [];

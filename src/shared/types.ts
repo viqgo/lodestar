@@ -84,6 +84,8 @@ export type Session = {
   folder: string | null;
   attachments: Attachment[];
   webSearch: boolean;
+  subjectId: string | null;
+  unitId: string | null;
 };
 export type SessionSummary = {
   id: string;
@@ -197,3 +199,56 @@ export type Api = {
   onSessionUpdated(cb: (session: Session) => void): () => void; // returns unsubscribe
   onTurnEnded(cb: (id: string, result: TurnResult) => void): () => void;
 };
+
+export type Unit = { id: string; title: string; goal: string; files: string[] };
+export type OutlineChange =
+  | { kind: "add"; unit: Unit; afterId: string | null }
+  | { kind: "remove"; unitId: string }
+  | { kind: "reorder"; order: string[] };
+export type HandoverNote = {
+  unitId: string;
+  sessionId: string;
+  summary: string;
+  learned: string[];
+  shaky: string[];
+};
+export type SubjectEvent =
+  | { kind: "outline"; at: string; units: Unit[]; usage: Usage | null }
+  | { kind: "accepted"; at: string; units: Unit[] }
+  | { kind: "message"; at: string; text: string }
+  | {
+      kind: "reply";
+      at: string;
+      markdown: string;
+      change: OutlineChange | null;
+      usage: Usage | null;
+    }
+  | { kind: "change"; at: string; accepted: boolean }
+  | { kind: "note"; at: string; note: HandoverNote };
+export type Subject = {
+  version: 1;
+  id: string; // "u_" + crypto.randomUUID()
+  name: string;
+  folder: string;
+  cli: CliId;
+  createdAt: string;
+  updatedAt: string;
+  events: SubjectEvent[];
+};
+export type SubjectState = {
+  phase: "outline" | "review" | "ready";
+  units: Unit[];
+  notes: HandoverNote[];
+  chat: { who: "owner" | "tutor"; markdown: string }[];
+  pendingChange: OutlineChange | null;
+  awaitingReply: boolean;
+};
+export type UnitStatus = {
+  unitId: string;
+  sessionId: string | null;
+  status: "not_started" | "in_progress" | "done";
+  shaky: number;
+};
+export type SubjectSummary = { id: string; name: string; updatedAt: string };
+export type SubjectResult =
+  { ok: true; subject: Subject } | { ok: false; error: TurnError; subject: Subject | null };

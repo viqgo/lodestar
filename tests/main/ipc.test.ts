@@ -180,6 +180,8 @@ describe("ipc", () => {
       folder: null,
       attachments: [],
       webSearch: false,
+      subjectId: null,
+      unitId: null,
     };
     expect(
       await call("sessions:create", { topic: "  Maths ", goal: " Limits ", cli: "codex" }),
