@@ -190,6 +190,27 @@ describe("ipc", () => {
     });
   });
 
+  it("switch_write_window_is_closed", async () => {
+    const { store, turns, call } = await setup();
+    await store.writeSession(withId(ID1, "2026-01-01T00:00:00.000Z", [act(A.probe()), pick(1)]));
+    let release: () => void = () => {};
+    const gate = new Promise<void>((r) => (release = r));
+    turns.advance.mockImplementation(async (): Promise<TurnResult> => {
+      await gate;
+      const cur = (await store.readSession(ID1))!;
+      const next = { ...cur, events: [...cur.events, act(A.plan())] };
+      await store.writeSession(next);
+      return { ok: true, session: next };
+    });
+    const advancing = call("lesson:advance", ID1);
+    const switching = call("sessions:setCli", ID1, "claude");
+    release();
+    await Promise.all([advancing, switching]);
+    const stored = (await store.readSession(ID1))!;
+    expect(stored.events).toHaveLength(3);
+    expect(stored.cli).toBe("claude");
+  });
+
   it("switch_tutor_refused_while_running", async () => {
     const { store, call } = await setup(true);
     const before = withId(ID1, "2026-01-01T00:00:00.000Z", []);

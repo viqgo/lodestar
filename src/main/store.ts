@@ -56,6 +56,7 @@ export async function createStore(
   const subjectFile = (id: string) => path.join(subjectsDir, id + ".json");
   const fileFor = (id: string) => path.join(sessionsDir, id + ".json");
 
+  const deleted = new Set<string>();
   const tails = new Map<string, Promise<unknown>>();
   const serial = <T>(key: string, fn: () => Promise<T>): Promise<T> => {
     const result = (tails.get(key) ?? Promise.resolve()).then(fn, fn);
@@ -161,10 +162,12 @@ export async function createStore(
     );
   };
 
-  const writeSession = (s: Session): Promise<void> => writeJsonAtomic(fileFor(s.id), s);
+  const writeSession = (s: Session): Promise<void> =>
+    deleted.has(s.id) ? Promise.resolve() : writeJsonAtomic(fileFor(s.id), s);
 
   const deleteSession = async (id: string): Promise<void> => {
     if (!ID.test(id)) return;
+    deleted.add(id);
     await fs.rm(fileFor(id), { force: true });
     await fs.rm(attachmentsDir(id), { recursive: true, force: true });
   };

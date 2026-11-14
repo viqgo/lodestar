@@ -75,6 +75,25 @@ describe("store sessions", () => {
   });
 });
 
+describe("store deleted lessons", () => {
+  it("delete_during_write_does_not_resurrect", async () => {
+    const { dir, store } = await mk();
+    await store.writeSession(session());
+    await store.deleteSession(session().id);
+    const more = { ...session(), events: [...session().events, ...session().events.slice(0, 1)] };
+    await expect(store.writeSession(more)).resolves.toBeUndefined();
+    expect(await store.readSession(session().id)).toBeNull();
+    expect(await store.listSessions()).toEqual([]);
+    expect(await fsp.readdir(path.join(dir, "sessions"))).toEqual([]);
+    const other = { ...session(), id: "s_0000000f-0000-0000-0000-000000000000" };
+    await store.writeSession(other);
+    expect(await store.readSession(other.id)).toEqual(other);
+    const fresh = await createStore(dir, fsp);
+    await fresh.writeSession(session());
+    expect(await fresh.readSession(session().id)).toEqual(session());
+  });
+});
+
 const ki = (n: number, createdAt: string) => ({
   id: "k_0000000" + n + "-0000-0000-0000-000000000000",
   text: "t" + n,

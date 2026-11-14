@@ -81,17 +81,21 @@ export function runProcess(deps: ProcessDeps, spec: ProcessSpec): Promise<Proces
   if (!spec.command) return Promise.resolve({ kind: "missing" });
   if (spec.signal.aborted) return Promise.resolve({ kind: "aborted" });
   const command = spec.command;
-  const root = deps.fs.mkdtempSync(path.join(deps.tmpRoot, "lh-"));
-  const work = path.join(root, "work");
+  let root = "";
+  let work = "";
   const removeRoot = () => {
+    if (root === "") return;
     try {
       deps.fs.rmSync(root, { recursive: true, force: true });
     } catch {
       /* leave it */
     }
   };
-  const dirs = { root, work };
+  let dirs: Dirs;
   try {
+    root = deps.fs.mkdtempSync(path.join(deps.tmpRoot, "lh-"));
+    work = path.join(root, "work");
+    dirs = { root, work };
     deps.fs.mkdirSync(work);
     spec.prepare?.(dirs);
   } catch {

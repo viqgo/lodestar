@@ -13,7 +13,9 @@ export async function listFolder(
     return null;
   }
   const all: FileEntry[] = [];
+  let folders = 0;
   const walk = async (dir: string, rel: string): Promise<boolean> => {
+    if (++folders > FILE_WALK_MAX) return true;
     let entries;
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });

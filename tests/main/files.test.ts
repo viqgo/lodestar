@@ -98,4 +98,24 @@ describe("listFolder", () => {
     expect(out!.files.length).toBeLessThanOrEqual(200);
     expect(out!.files.length + out!.more).toBe(5000);
   });
+
+  it("listFolder stops walking after 5000 folders", async () => {
+    const dir = await tmp();
+    let calls = 0;
+    const fake = {
+      ...fsp,
+      readdir: async (p: string) => {
+        calls++;
+        if (p !== dir) return [];
+        return Array.from({ length: 6000 }, (_, i) => ({
+          name: "d" + i,
+          isSymbolicLink: () => false,
+          isDirectory: () => true,
+          isFile: () => false,
+        }));
+      },
+    } as unknown as typeof fsp;
+    expect(await listFolder(fake, dir, 200)).toEqual({ files: [], more: 0 });
+    expect(calls).toBeLessThanOrEqual(5000);
+  });
 });

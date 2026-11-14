@@ -66,6 +66,20 @@ describe("geminiErrorMessage", () => {
   it("geminiErrorMessage falls back to the last stderr line", () => {
     expect(geminiErrorMessage("a\nboom\n")).toBe("boom");
   });
+
+  it("find_json_is_linear_and_prefers_top_level", async () => {
+    const t = performance.now();
+    expect(geminiErrorMessage("{".repeat(50_000))).toBe("{".repeat(200));
+    expect(performance.now() - t).toBeLessThan(1000);
+    const nested = '{"wrapper":{"error":{"message":"inner"}}}';
+    expect(geminiErrorMessage(nested)).toBe(nested);
+    expect(
+      geminiErrorMessage('{"error":{"message":"first"}}\n{"error":{"message":"second"}}\n'),
+    ).toBe("second");
+    const a = make({ stdout: '{"response":"{\\"a\\":1}"}\n{"response":"{\\"a\\":2}"}\n' });
+    expect(await a.adapter.run(req())).toEqual({ ok: true, text: '{"a":2}', usage: null });
+    expect(geminiErrorMessage("oops {\n" + AUTH_ERROR + "\n")).toBe(AUTH_ERROR);
+  });
 });
 
 describe("gemini parsing with extra braces", () => {

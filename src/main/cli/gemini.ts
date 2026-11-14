@@ -41,9 +41,7 @@ export function geminiExcluded(o: RunOptions): string[] {
   );
 }
 
-export function extractJsonObject(text: string): string | null {
-  const start = text.indexOf("{");
-  if (start === -1) return null;
+function objectEnd(text: string, start: number): number {
   let depth = 0;
   let inString = false;
   let escaped = false;
@@ -59,30 +57,40 @@ export function extractJsonObject(text: string): string | null {
     else if (c === "{") depth++;
     else if (c === "}") {
       depth--;
-      if (depth === 0) return text.slice(start, i + 1);
+      if (depth === 0) return i;
     }
   }
-  return null;
+  return -1;
+}
+
+export function extractJsonObject(text: string): string | null {
+  const start = text.indexOf("{");
+  if (start === -1) return null;
+  const end = objectEnd(text, start);
+  return end === -1 ? null : text.slice(start, end + 1);
 }
 
 function findJson<T>(
   text: string,
   pick: (o: Record<string, unknown>) => T | undefined,
 ): T | undefined {
-  for (let i = text.indexOf("{"); i !== -1; i = text.indexOf("{", i + 1)) {
-    const obj = extractJsonObject(text.slice(i));
-    if (obj === null) continue;
+  let found: T | undefined;
+  let i = text.indexOf("{");
+  while (i !== -1) {
+    const end = objectEnd(text, i);
+    if (end === -1) break;
     try {
-      const parsed: unknown = JSON.parse(obj);
+      const parsed: unknown = JSON.parse(text.slice(i, end + 1));
       if (typeof parsed === "object" && parsed !== null) {
-        const found = pick(parsed as Record<string, unknown>);
-        if (found !== undefined) return found;
+        const hit = pick(parsed as Record<string, unknown>);
+        if (hit !== undefined) found = hit;
       }
     } catch {
-      // try the next brace
+      // not JSON: go on after it
     }
+    i = text.indexOf("{", end + 1);
   }
-  return undefined;
+  return found;
 }
 
 export function geminiErrorMessage(stderr: string): string {

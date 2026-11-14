@@ -112,6 +112,24 @@ describe("runProcess cleanup", () => {
     expect(empty(tmpRoot)).toBe(true);
   });
 
+  it("mkdtemp_failure_is_a_value", async () => {
+    const failing = {
+      ...fs,
+      mkdtempSync: () => {
+        throw new Error("ENOSPC");
+      },
+    } as typeof fs;
+    const { deps, f, tmpRoot } = make({}, { PATH: "" }, failing);
+    expect(await runProcess(deps, spec())).toEqual({
+      kind: "exit",
+      code: 1,
+      stdout: "",
+      stderr: "could not prepare the working folder",
+    });
+    expect(f.calls.length).toBe(0);
+    expect(empty(tmpRoot)).toBe(true);
+  });
+
   it("temp dir is removed after a failed exit and a spawn error", async () => {
     const a = make({ code: 1, stderr: "x" });
     await runProcess(a.deps, spec());
