@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 import "../helpers/dom";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileScreen } from "../../src/renderer/src/components/ProfileScreen";
 import { installApi } from "../helpers/dom";
 import { DEFAULT_SETTINGS } from "../../src/core/settings";
+import { DEFAULT_METHOD } from "../../src/core/prompt";
 
 const NOTE =
   "Tell your tutor how you want to be taught. It is added to every lesson from the next reply on.";
@@ -226,5 +227,166 @@ describe("ProfileScreen theme", () => {
     const again = await screen.findByLabelText("Theme");
     await vi.waitFor(() => expect(again).toBeEnabled());
     await userEvent.selectOptions(again, "Light");
+  });
+});
+
+const modelsSave = () => screen.getAllByRole("button", { name: "Save" })[2];
+const methodSave = () => screen.getAllByRole("button", { name: "Save" })[3];
+const optionTexts = (el: HTMLElement) =>
+  Array.from((el as HTMLSelectElement).options).map((o) => o.text);
+
+describe("ProfileScreen models", () => {
+  it("the models section shows each cli's model and effort", async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      clis: { ...DEFAULT_SETTINGS.clis, claude: { model: "sonnet", effort: "medium" } },
+    };
+    installApi({ getSettings: vi.fn(async () => settings) });
+    render(<ProfileScreen />);
+    await vi.waitFor(() =>
+      expect(
+        within(screen.getByRole("group", { name: "Claude Code" })).getByLabelText("Model"),
+      ).toHaveValue("sonnet"),
+    );
+    expect(screen.getAllByRole("group").map((g) => g.getAttribute("aria-label"))).toEqual([
+      "Codex",
+      "Claude Code",
+      "Gemini (experimental)",
+    ]);
+    const claude = within(screen.getByRole("group", { name: "Claude Code" }));
+    expect(claude.getByLabelText("Effort")).toHaveValue("medium");
+    expect(optionTexts(claude.getByLabelText("Effort"))).toEqual([
+      "default",
+      "low",
+      "medium",
+      "high",
+      "xhigh",
+      "max",
+    ]);
+    const codex = within(screen.getByRole("group", { name: "Codex" }));
+    expect(codex.getByLabelText("Model")).toHaveValue("");
+    expect(codex.getByLabelText("Effort")).toHaveValue("");
+    expect(optionTexts(codex.getByLabelText("Effort"))).toEqual([
+      "default",
+      "low",
+      "medium",
+      "high",
+    ]);
+    const gemini = within(screen.getByRole("group", { name: "Gemini (experimental)" }));
+    expect(gemini.getByLabelText("Model")).toBeInTheDocument();
+    expect(gemini.queryByLabelText("Effort")).not.toBeInTheDocument();
+    expect(modelsSave()).toBeDisabled();
+  });
+
+  it("controls save their section", async () => {
+    const { api } = installApi();
+    render(<ProfileScreen />);
+    const claude = within(await screen.findByRole("group", { name: "Claude Code" }));
+    await vi.waitFor(() => expect(screen.getByLabelText("Speech language")).toHaveValue("en"));
+    await userEvent.type(claude.getByLabelText("Model"), " sonnet ");
+    await userEvent.selectOptions(claude.getByLabelText("Effort"), "medium");
+    expect(modelsSave()).toBeEnabled();
+    await userEvent.click(modelsSave());
+    expect(api.saveSettings).toHaveBeenCalledTimes(1);
+    expect(api.saveSettings).toHaveBeenCalledWith({
+      ...DEFAULT_SETTINGS,
+      clis: { ...DEFAULT_SETTINGS.clis, claude: { model: "sonnet", effort: "medium" } },
+    });
+    expect(await screen.findByText("Saved.")).toBeInTheDocument();
+    expect(claude.getByLabelText("Model")).toHaveValue("sonnet");
+    expect(modelsSave()).toBeDisabled();
+    expect(api.saveProfile).not.toHaveBeenCalled();
+    expect(api.voiceSetKey).not.toHaveBeenCalled();
+  });
+
+  it("a refused model shows its message", async () => {
+    const saveSettings = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, message: "Enter a model name without spaces." })
+      .mockRejectedValueOnce(new Error("disk"));
+    installApi({ saveSettings });
+    render(<ProfileScreen />);
+    const codex = within(await screen.findByRole("group", { name: "Codex" }));
+    await vi.waitFor(() => expect(screen.getByLabelText("Speech language")).toHaveValue("en"));
+    await userEvent.type(codex.getByLabelText("Model"), "a b");
+    await userEvent.click(modelsSave());
+    expect(await screen.findByText("Enter a model name without spaces.")).toBeInTheDocument();
+    expect(screen.queryByText("Saved.")).not.toBeInTheDocument();
+    expect(modelsSave()).toBeEnabled();
+    await userEvent.click(modelsSave());
+    expect(await screen.findByText("Could not save. Check free disk space.")).toBeInTheDocument();
+    expect(screen.queryByText("Saved.")).not.toBeInTheDocument();
+    expect(modelsSave()).toBeEnabled();
+  });
+});
+
+describe("ProfileScreen teaching method", () => {
+  it("method_reset_restores_default", async () => {
+    const settings = { ...DEFAULT_SETTINGS, method: "Ask two questions, then teach." };
+    const { api } = installApi({ getSettings: vi.fn(async () => settings) });
+    render(<ProfileScreen />);
+    const box = await screen.findByLabelText("Teaching method");
+    await vi.waitFor(() => expect(box).toHaveValue("Ask two questions, then teach."));
+    expect(methodSave()).toBeDisabled();
+    await userEvent.click(screen.getByRole("button", { name: "Reset to default" }));
+    expect(box).toHaveValue(DEFAULT_METHOD);
+    expect(api.saveSettings).not.toHaveBeenCalled();
+    await userEvent.click(methodSave());
+    expect(api.saveSettings).toHaveBeenCalledWith({ ...settings, method: "" });
+    expect(await screen.findByText("Saved.")).toBeInTheDocument();
+  });
+
+  it("the method box shows the default and an empty box means the default", async () => {
+    const saveSettings = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: true })
+      .mockResolvedValueOnce({ ok: false, message: "Keep it under 6000 characters." });
+    const { api } = installApi({ saveSettings });
+    render(<ProfileScreen />);
+    const box = await screen.findByLabelText("Teaching method");
+    await vi.waitFor(() => expect(box).toHaveValue(DEFAULT_METHOD));
+    await vi.waitFor(() => expect(screen.getByLabelText("Speech language")).toHaveValue("en"));
+    expect(box).toHaveAttribute("maxLength", "6000");
+    expect(methodSave()).toBeDisabled();
+    await userEvent.clear(box);
+    expect(methodSave()).toBeDisabled();
+    await userEvent.type(box, "Short.");
+    expect(methodSave()).toBeEnabled();
+    await userEvent.click(methodSave());
+    expect(api.saveSettings).toHaveBeenLastCalledWith({ ...DEFAULT_SETTINGS, method: "Short." });
+    await vi.waitFor(() => expect(methodSave()).toBeDisabled());
+    await userEvent.clear(box);
+    expect(methodSave()).toBeEnabled();
+    await userEvent.click(methodSave());
+    expect(api.saveSettings).toHaveBeenLastCalledWith({ ...DEFAULT_SETTINGS, method: "" });
+    await vi.waitFor(() => expect(box).toHaveValue(DEFAULT_METHOD));
+    await userEvent.type(box, "x");
+    await userEvent.click(methodSave());
+    expect(await screen.findByText("Keep it under 6000 characters.")).toBeInTheDocument();
+  });
+
+  it("a section save keeps what the other sections saved", async () => {
+    const { api } = installApi();
+    render(<ProfileScreen />);
+    const box = await screen.findByLabelText("Tutor instructions");
+    await vi.waitFor(() => expect(screen.getByLabelText("Speech language")).toHaveValue("en"));
+    await userEvent.type(box, "Be kind.");
+    await userEvent.click(screen.getAllByRole("button", { name: "Save" })[0]);
+    expect(await screen.findByText("Saved.")).toBeInTheDocument();
+    const theme = screen.getByLabelText("Theme");
+    await vi.waitFor(() => expect(theme).toBeEnabled());
+    await userEvent.selectOptions(theme, "Light");
+    await vi.waitFor(() => expect(api.saveSettings).toHaveBeenCalledTimes(1));
+    const codex = within(screen.getByRole("group", { name: "Codex" }));
+    await userEvent.type(codex.getByLabelText("Model"), "gpt-x");
+    await userEvent.click(modelsSave());
+    await vi.waitFor(() => expect(api.saveSettings).toHaveBeenCalledTimes(2));
+    expect(api.saveSettings).toHaveBeenLastCalledWith({
+      ...DEFAULT_SETTINGS,
+      instructions: "Be kind.",
+      theme: "light",
+      clis: { ...DEFAULT_SETTINGS.clis, codex: { model: "gpt-x", effort: "" } },
+    });
   });
 });

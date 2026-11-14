@@ -155,7 +155,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T108 Method text
 - [x] T109 Model and effort reach the CLI
 - [x] T110 Theme
-- [ ] T111 Profile sections: models and method
+- [x] T111 Profile sections: models and method
 - [ ] T112 Header, evals, README
 - [ ] GATE L Customisation, then the owner's try-out
 

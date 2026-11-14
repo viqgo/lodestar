@@ -1,6 +1,12 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { PROFILE_MAX } from "../../../shared/limits";
-import type { Settings } from "../../../shared/types";
+import { DEFAULT_METHOD } from "../../../core/prompt";
+import { DEFAULT_SETTINGS, EFFORTS } from "../../../core/settings";
+import { CLI_ORDER, cliName } from "../../../shared/clis";
+import { METHOD_MAX, MODEL_MAX, PROFILE_MAX } from "../../../shared/limits";
+import type { CliId, Settings } from "../../../shared/types";
+
+const stored = (text: string): string =>
+  text.trim() === "" || text.trim() === DEFAULT_METHOD ? "" : text;
 
 export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void }) {
   const [saved, setSaved] = useState("");
@@ -12,6 +18,8 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
   const langId = useId();
   const voiceId = useId();
   const themeId = useId();
+  const modelBase = useId();
+  const methodId = useId();
   const [savedSettings, setSavedSettings] = useState<Settings | null>(null);
   const [language, setLanguage] = useState("");
   const [voice, setVoice] = useState("");
@@ -21,6 +29,14 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
   const [vFailed, setVFailed] = useState(false);
   const [theme, setTheme] = useState<Settings["theme"]>("dark");
   const [tStatus, setTStatus] = useState<string | null>(null);
+  const [clis, setClis] = useState<Settings["clis"]>(DEFAULT_SETTINGS.clis);
+  const [method, setMethod] = useState(DEFAULT_METHOD);
+  const [mStatus, setMStatus] = useState<string | null>(null);
+  const [mFailed, setMFailed] = useState(false);
+  const [dStatus, setDStatus] = useState<string | null>(null);
+  const [dFailed, setDFailed] = useState(false);
+  const mBusy = useRef(false);
+  const dBusy = useRef(false);
   const vBusy = useRef(false);
   const vEdited = useRef(false);
   const busy = useRef(false);
@@ -44,6 +60,8 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
       if (!live) return;
       setSavedSettings(s);
       setTheme(s.theme);
+      setClis(s.clis);
+      setMethod(s.method === "" ? DEFAULT_METHOD : s.method);
       setHasKey(k);
       if (!vEdited.current) {
         setLanguage(s.voice.language);
@@ -107,6 +125,76 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
     }
   }
 
+  const trimmedClis = (): Settings["clis"] => ({
+    codex: { ...clis.codex, model: clis.codex.model.trim() },
+    claude: { ...clis.claude, model: clis.claude.model.trim() },
+    gemini: { ...clis.gemini, model: clis.gemini.model.trim() },
+  });
+  const modelsChanged =
+    savedSettings !== null &&
+    CLI_ORDER.some(
+      (c) =>
+        clis[c].model.trim() !== savedSettings.clis[c].model ||
+        clis[c].effort !== savedSettings.clis[c].effort,
+    );
+  const methodChanged = savedSettings !== null && stored(method) !== savedSettings.method;
+
+  function editCli(id: CliId, field: "model" | "effort", value: string) {
+    setClis((c) => ({ ...c, [id]: { ...c[id], [field]: value } }));
+    setMStatus(null);
+  }
+
+  function editMethod(text: string) {
+    setMethod(text);
+    setDStatus(null);
+  }
+
+  async function saveModels() {
+    if (mBusy.current || savedSettings === null) return;
+    mBusy.current = true;
+    try {
+      const next = { ...savedSettings, clis: trimmedClis() };
+      const r = await window.api.saveSettings(next);
+      if (r.ok) {
+        setSavedSettings(next);
+        setClis(next.clis);
+        setMFailed(false);
+        setMStatus("Saved.");
+      } else {
+        setMFailed(true);
+        setMStatus(r.message);
+      }
+    } catch {
+      setMFailed(true);
+      setMStatus("Could not save. Check free disk space.");
+    } finally {
+      mBusy.current = false;
+    }
+  }
+
+  async function saveMethod() {
+    if (dBusy.current || savedSettings === null) return;
+    dBusy.current = true;
+    try {
+      const next = { ...savedSettings, method: stored(method) };
+      const r = await window.api.saveSettings(next);
+      if (r.ok) {
+        setSavedSettings(next);
+        if (next.method === "") setMethod(DEFAULT_METHOD);
+        setDFailed(false);
+        setDStatus("Saved.");
+      } else {
+        setDFailed(true);
+        setDStatus(r.message);
+      }
+    } catch {
+      setDFailed(true);
+      setDStatus("Could not save. Check free disk space.");
+    } finally {
+      dBusy.current = false;
+    }
+  }
+
   async function removeKey() {
     await window.api.voiceRemoveKey();
     setHasKey(false);
@@ -127,6 +215,7 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
       const result = await window.api.saveProfile(sent);
       if (result.ok) {
         setSaved(sent);
+        setSavedSettings((s) => (s === null ? s : { ...s, instructions: sent }));
         setFailed(false);
         setStatus("Saved.");
       } else {
@@ -235,6 +324,82 @@ export function ProfileScreen(props: { onTheme?(theme: Settings["theme"]): void 
           <option value="system">System</option>
         </select>
         {tStatus !== null && <small>{tStatus}</small>}
+      </div>
+      <span className="label">Models</span>
+      {CLI_ORDER.map((id) => {
+        const modelId = `${modelBase}${id}-model`;
+        const effortId = `${modelBase}${id}-effort`;
+        return (
+          <div role="group" aria-label={cliName(id)} key={id}>
+            <span className="note">{cliName(id)}</span>
+            <div className="field">
+              <label className="label" htmlFor={modelId}>
+                Model
+              </label>
+              <input
+                id={modelId}
+                maxLength={MODEL_MAX}
+                value={clis[id].model}
+                onChange={(e) => editCli(id, "model", e.target.value)}
+              />
+            </div>
+            {EFFORTS[id].length > 0 && (
+              <div className="field">
+                <label className="label" htmlFor={effortId}>
+                  Effort
+                </label>
+                <select
+                  id={effortId}
+                  value={clis[id].effort}
+                  onChange={(e) => editCli(id, "effort", e.target.value)}
+                >
+                  <option value="">default</option>
+                  {EFFORTS[id].map((e) => (
+                    <option key={e} value={e}>
+                      {e}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {mStatus !== null &&
+        (mFailed ? <small>{mStatus}</small> : <span className="note">{mStatus}</span>)}
+      <div>
+        <button
+          className="btn is-primary"
+          disabled={!modelsChanged}
+          onClick={() => void saveModels()}
+        >
+          Save
+        </button>
+      </div>
+      <div className="field">
+        <label className="label" htmlFor={methodId}>
+          Teaching method
+        </label>
+        <textarea
+          id={methodId}
+          maxLength={METHOD_MAX}
+          value={method}
+          onChange={(e) => editMethod(e.target.value)}
+        />
+        {dStatus !== null &&
+          (dFailed ? <small>{dStatus}</small> : <span className="note">{dStatus}</span>)}
+      </div>
+      <div className="row">
+        <button
+          className="btn is-primary"
+          disabled={!methodChanged}
+          onClick={() => void saveMethod()}
+        >
+          Save
+        </button>
+        <button className="btn" onClick={() => editMethod(DEFAULT_METHOD)}>
+          Reset to default
+        </button>
       </div>
     </div>
   );
