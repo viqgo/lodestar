@@ -47,7 +47,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T26 Banner, ThinkingBar, ConfirmDialog
 - [x] T27 MarkdownView with math
 - [x] T28 QuestionCard
-- [ ] T29 ChatItemView
+- [x] T29 ChatItemView
 - [ ] T30 PlanPanel
 - [ ] T31 useLesson
 - [ ] T32 Sidebar, CliGate, time helpers
