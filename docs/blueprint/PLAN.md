@@ -158,6 +158,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T111 Profile sections: models and method
 - [x] T112 Header, evals, README
 - [x] T112b Gate L fixes
+- [ ] T112c Ad-hoc signing and a smaller app
 - [x] GATE L Customisation (reviewed and fixed); the owner's try-out is still to do
 
 Conventions used in every task:
@@ -4826,6 +4827,20 @@ Header, evals, README
 
 ### Gate L findings not fixed (owner decides, all also in the final report)
 4 (one invalid stored value blocks every section's save with the wrong message; needs a patch-style `settings:save`), 6 (an old `profile.json` can come back if `settings.json` is lost), 7 (no `color-scheme` in tokens.css, so native parts follow the OS), 10 (flash of the dark window before a light theme loads), 11 (a corrupt `settings.json` is overwritten by the next save), 12 (light-theme contrast of accent, success and muted text is below AA; darker values are a UI.md change), 13 (a failed theme save keeps the new look until restart), 9 (a local backup ref `refs/original/refs/heads/build/codex-loop` still holds commits with the personal email; it is not on origin; the owner can delete it with `git update-ref -d refs/original/refs/heads/build/codex-loop` and must never push it).
+
+### T112c - Ad-hoc signing and a smaller app (owner-approved change request, D72)
+**Implements**: Gate K findings I2 and M1; D67 C5 and default 28, approved by the owner
+**Depends on**: T112b
+**Files**: modify `package.json`, `package-lock.json` (only through npm), `tests/package.test.ts`, `README.md`. Do NOT touch any other file.
+**Check first**: `package.json` has `"identity": null` under `build.mac`, and `dependencies` lists `katex`, `mermaid`, `react`, `react-dom`, `react-markdown`, `rehype-katex`, `remark-math`, `ws`, `zod`. Read `out/main/index.js` after `npm run build` and confirm it requires only `electron`, Node built-ins, `zod` and `ws` (and the preload only `electron`); if it requires any other package STOP and report.
+**Details**
+- `package.json`: `build.mac.identity` becomes `"-"` (ad-hoc signing of the whole bundle). Move `katex`, `mermaid`, `react`, `react-dom`, `react-markdown`, `rehype-katex` and `remark-math` from `dependencies` to `devDependencies` (same exact versions); `ws` and `zod` stay. Refresh the lockfile only with `npm install` (no version may change; paste `git diff --stat` of the lockfile).
+- `tests/package.test.ts`: the identity expectation becomes `"-"`; a new check that `dependencies` equals exactly `{ ws, zod }` by name (add to the existing config test or as one new test: `runtime_dependencies_are_only_ws_and_zod`).
+- README: in "First open" keep the steps but say the app is ad-hoc signed, so macOS should open it with the right-click, Open steps; keep the `xattr -cr` line as a fallback.
+**Verification (replaces standard step 4's end)**: `npm run build`, `npm test`, lint, typecheck; then `npm run dist` once and paste: `ls -la dist/*.dmg` and `du -sh dist/*.dmg` (expect far below 176M), `codesign --verify --deep --strict dist/mac-arm64/lodestar.app; echo $?` (expect 0), `codesign -dv dist/mac-arm64/lodestar.app 2>&1 | head -8`, and `npx asar list dist/mac-arm64/lodestar.app/Contents/Resources/app.asar | grep -c node_modules/mermaid` (expect 0). Then start the arm64 app with `open -n -a` and a temporary data folder (set LEARN_DATA_DIR to a temp dir, remote debugging port 9333 via `--args --remote-debugging-port=9333`), fetch `http://127.0.0.1:9333/json/list`, evaluate over the debugger websocket that `document.querySelectorAll('button')` lists "New lesson" and "Profile" and that no exception was logged (the same method as T105), then kill only the process you started and remove the temp folder. If the app does not render, STOP and report with the evidence (the moved packages may be needed at runtime; do not guess).
+**Tests (+1)**: `runtime_dependencies_are_only_ws_and_zod`.
+**Totals**: 887 -> 888. **Commit**: `build: ad-hoc signing and only ws and zod packed`
+**Stop and report**: the check above fails; codesign verify does not print 0; the app window is blank.
 
 ### Where each milestone 8 SPEC test lives
 - theme_applies_and_persists, system_theme_follows_the_mac: T110 (App), with `the theme is saved when it is chosen` (Profile) and `the light theme has the ten colors of UI.md`
