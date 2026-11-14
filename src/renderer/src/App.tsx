@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { CliStatus, SessionSummary, SubjectSummary } from "../../shared/types";
 import { CliGate } from "./components/CliGate";
+import { GraphScreen } from "./components/GraphScreen";
 import { KnowledgeScreen } from "./components/KnowledgeScreen";
 import { LessonScreen } from "./components/LessonScreen";
 import { NewLessonForm } from "./components/NewLessonForm";
@@ -16,6 +17,7 @@ type Screen =
   | { name: "newSubject" }
   | { name: "subject"; id: string; start: boolean }
   | { name: "knowledge" }
+  | { name: "graph" }
   | { name: "profile" }
   | { name: "review" };
 
@@ -81,6 +83,8 @@ export function App() {
   let content;
   if (screen.name === "knowledge") {
     content = <KnowledgeScreen />;
+  } else if (screen.name === "graph") {
+    content = <GraphScreen />;
   } else if (screen.name === "profile") {
     content = <ProfileScreen />;
   } else if (screen.name === "review") {
@@ -170,6 +174,7 @@ export function App() {
           reload();
         }}
         onKnowledge={() => setScreen({ name: "knowledge" })}
+        onGraph={() => setScreen({ name: "graph" })}
         onProfile={() => setScreen({ name: "profile" })}
         due={due}
         onReview={() => setScreen({ name: "review" })}

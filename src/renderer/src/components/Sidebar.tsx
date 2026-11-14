@@ -10,6 +10,7 @@ export function Sidebar(props: {
   onOpen(id: string): void;
   onDelete(id: string): void;
   onKnowledge(): void;
+  onGraph(): void;
   onProfile(): void;
   due: number;
   onReview(): void;
@@ -95,6 +96,9 @@ export function Sidebar(props: {
       </div>
       <button className="btn" onClick={props.onReview}>
         {props.due > 0 ? `Review · ${props.due}` : "Review"}
+      </button>
+      <button className="btn" onClick={props.onGraph}>
+        Graph
       </button>
       <button className="btn" onClick={props.onKnowledge}>
         Knowledge

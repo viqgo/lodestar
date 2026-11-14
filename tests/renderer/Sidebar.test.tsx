@@ -40,6 +40,7 @@ function setup(over: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onProfile: vi.fn(),
     due: 0,
     onReview: vi.fn(),
+    onGraph: vi.fn(),
     newDisabled: false,
     subjects: [],
     activeSubjectId: null,
@@ -191,6 +192,16 @@ describe("Sidebar", () => {
     const follows = (a: Node, b: Node) =>
       Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
     expect(follows(screen.getByText("Lessons"), button)).toBe(true);
+    expect(follows(button, screen.getByRole("button", { name: "Knowledge" }))).toBe(true);
+  });
+  it("Sidebar opens the graph", async () => {
+    const { props, user } = setup();
+    const button = screen.getByRole("button", { name: "Graph" });
+    await user.click(button);
+    expect(props.onGraph).toHaveBeenCalledTimes(1);
+    const follows = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(screen.getByRole("button", { name: "Review" }), button)).toBe(true);
     expect(follows(button, screen.getByRole("button", { name: "Knowledge" }))).toBe(true);
   });
 });

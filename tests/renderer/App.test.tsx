@@ -271,4 +271,12 @@ describe("App", () => {
     await screen.findByText("What you have shown you understand. Later lessons start from here.");
     expect(api.practiceStop).toHaveBeenCalledTimes(1);
   });
+
+  it("App opens the graph screen", async () => {
+    const { api } = installApi();
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Graph" }));
+    expect(await screen.findByRole("heading", { name: "Graph" })).toBeInTheDocument();
+    expect(api.getGraph).toHaveBeenCalled();
+  });
 });

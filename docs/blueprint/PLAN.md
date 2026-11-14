@@ -134,7 +134,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T94 Practice run
 - [x] T95 Review screen
 - [x] T96 Graph data
-- [ ] T97 Graph screen
+- [x] T97 Graph screen
 - [ ] T98 Asides in the rules
 - [ ] T99 Aside box
 - [ ] T100 Evals and README
