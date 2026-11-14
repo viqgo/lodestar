@@ -17,6 +17,7 @@ type Props = {
   disabled: boolean;
   onSubmit(a: Answer, attachPaths: string[]): void;
   heard?: string | null;
+  practice?: boolean;
 };
 
 const LABEL: Record<Purpose, string> = { probe: "Probe", predict: "Predict", check: "Check" };
@@ -35,6 +36,7 @@ export function QuestionCard({
   disabled,
   onSubmit,
   heard,
+  practice,
 }: Props) {
   const [picked, setPicked] = useState<number | null>(null);
   const [text, setText] = useState("");
@@ -158,35 +160,37 @@ export function QuestionCard({
             maxLength={ANSWER_TEXT_MAX}
             disabled={locked}
           />
-          <div className="row">
-            {files.map((f) => {
-              const name = f.split(/[\\/]/).pop() ?? f;
-              return (
-                <span key={f} className="chip">
-                  {name}
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    aria-label={`Remove ${name}`}
-                    disabled={locked}
-                    onClick={() => {
-                      setFiles(files.filter((x) => x !== f));
-                      setFileNote(null);
-                    }}
-                  >
-                    ×
-                  </button>
-                </span>
-              );
-            })}
-            <button type="button" className="btn" disabled={locked} onClick={() => void attach()}>
-              Attach
-            </button>
-          </div>
-          {fileNote !== null && <small>{fileNote}</small>}
+          {!practice && (
+            <div className="row">
+              {files.map((f) => {
+                const name = f.split(/[\\/]/).pop() ?? f;
+                return (
+                  <span key={f} className="chip">
+                    {name}
+                    <button
+                      type="button"
+                      className="icon-btn"
+                      aria-label={`Remove ${name}`}
+                      disabled={locked}
+                      onClick={() => {
+                        setFiles(files.filter((x) => x !== f));
+                        setFileNote(null);
+                      }}
+                    >
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
+              <button type="button" className="btn" disabled={locked} onClick={() => void attach()}>
+                Attach
+              </button>
+            </div>
+          )}
+          {!practice && fileNote !== null && <small>{fileNote}</small>}
         </div>
       )}
-      {!answered && (
+      {!answered && !practice && (
         <div className="field">
           <label className="label" htmlFor={reasoningId}>
             Your thinking (optional)

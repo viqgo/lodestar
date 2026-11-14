@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "../helpers/dom";
-import { render, screen } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { QuestionCard } from "../../src/renderer/src/components/QuestionCard";
@@ -281,5 +281,18 @@ describe("QuestionCard", () => {
     expect(screen.getByLabelText("Your answer")).toHaveValue("spoken");
     rerender(<QuestionCard {...props} heard="" />);
     expect(screen.getByLabelText("Your answer")).toHaveValue("");
+  });
+
+  it("a practice card has no Attach and no thinking box", () => {
+    installApi();
+    renderCard({ question: textQ, practice: true });
+    expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
+    expect(screen.queryByLabelText("Your thinking (optional)")).toBeNull();
+    expect(screen.getByLabelText("Your answer")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit" })).toBeInTheDocument();
+    cleanup();
+    renderCard({ question: textQ });
+    expect(screen.getByRole("button", { name: "Attach" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Your thinking (optional)")).toBeInTheDocument();
   });
 });
