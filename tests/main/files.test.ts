@@ -65,4 +65,37 @@ describe("listFolder", () => {
     await listFolder(fsp, dir, 200);
     expect(await snap()).toEqual(before);
   });
+
+  it("listFolder reports an unreadable root as missing", async () => {
+    const dir = await tmp();
+    const fake = {
+      ...fsp,
+      readdir: async () => {
+        throw new Error("EACCES");
+      },
+    } as unknown as typeof fsp;
+    expect(await listFolder(fake, dir, 200)).toBeNull();
+  });
+
+  it("listFolder stops walking at 5000 files", async () => {
+    const dir = await tmp();
+    let calls = 0;
+    const fake = {
+      ...fsp,
+      readdir: async () => {
+        calls++;
+        return Array.from({ length: 6000 }, (_, i) => ({
+          name: "f" + i + ".txt",
+          isSymbolicLink: () => false,
+          isDirectory: () => false,
+          isFile: () => true,
+        }));
+      },
+      stat: async (p: string) => (p === dir ? await fsp.stat(dir) : { size: 1 }),
+    } as unknown as typeof fsp;
+    const out = await listFolder(fake, dir, 200);
+    expect(calls).toBe(1);
+    expect(out!.files.length).toBeLessThanOrEqual(200);
+    expect(out!.files.length + out!.more).toBe(5000);
+  });
 });

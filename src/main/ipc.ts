@@ -1,4 +1,4 @@
-import { basename } from "node:path";
+import { basename, isAbsolute } from "node:path";
 import { isCliId } from "../shared/clis";
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
@@ -28,13 +28,28 @@ export type IpcDeps = {
   dialogs: { pickFolder(): Promise<string | null>; pickFiles(): Promise<string[]> };
 };
 
+const chains = new Map<string, Promise<unknown>>();
+const withLock = <T>(id: string, fn: () => Promise<T>): Promise<T> => {
+  const next = (chains.get(id) ?? Promise.resolve()).then(fn, fn);
+  chains.set(
+    id,
+    next.catch(() => undefined),
+  );
+  return next;
+};
+
+const goodFolder = (folder: unknown): boolean =>
+  folder === null || (typeof folder === "string" && isAbsolute(folder));
+
 type SessionResult = { ok: true; session: Session } | { ok: false; message: string };
 
 export function registerIpc(deps: IpcDeps): void {
   const { ipcMain, adapters, store, turns, now, newId, send, dialogs } = deps;
 
   const runTurn = async (id: string): Promise<TurnResult> => {
-    const result = await turns.advance(id);
+    const result = turns.isRunning(id)
+      ? await turns.advance(id)
+      : await withLock(id, () => turns.advance(id));
     send("turn:ended", id, result);
     return result;
   };
@@ -79,6 +94,9 @@ export function registerIpc(deps: IpcDeps): void {
       if (message !== null) return { ok: false as const, message };
       const cli = input.cli;
       if (!isCliId(cli)) return { ok: false as const, message: "Choose a tutor." };
+      if (!goodFolder(input.folder ?? null)) {
+        return { ok: false as const, message: "Choose a folder." };
+      }
       const session: Session = {
         version: 1,
         id: newId("s"),
@@ -104,7 +122,12 @@ export function registerIpc(deps: IpcDeps): void {
       }
       if (attachments.length === 0) return { ok: true as const, session };
       const withFiles: Session = { ...session, attachments };
-      await store.writeSession(withFiles);
+      try {
+        await store.writeSession(withFiles);
+      } catch {
+        await store.deleteSession(session.id);
+        return { ok: false as const, message: "Could not save. Check free disk space." };
+      }
       return { ok: true as const, session: withFiles };
     },
   );
@@ -115,17 +138,20 @@ export function registerIpc(deps: IpcDeps): void {
   ): Promise<SessionResult> => {
     const busy = { ok: false as const, message: "A reply is already on the way." };
     if (turns.isRunning(id)) return busy;
-    const session = await store.readSession(id);
-    if (session === null) {
-      return { ok: false as const, message: "This lesson no longer exists." };
-    }
-    if (turns.isRunning(id)) return busy;
-    const { session: next, message } = await change(session);
-    const updated: Session = { ...next, updatedAt: now() };
-    await store.writeSession(updated);
-    send("session:updated", updated);
-    if (message !== undefined) return { ok: false as const, message };
-    return { ok: true as const, session: updated };
+    return withLock(id, async (): Promise<SessionResult> => {
+      const session = await store.readSession(id);
+      if (session === null) {
+        return { ok: false as const, message: "This lesson no longer exists." };
+      }
+      if (turns.isRunning(id)) return busy;
+      const { session: next, message } = await change(session);
+      const updated: Session = { ...next, updatedAt: now() };
+      if (turns.isRunning(id)) return busy;
+      await store.writeSession(updated);
+      send("session:updated", updated);
+      if (message !== undefined) return { ok: false as const, message };
+      return { ok: true as const, session: updated };
+    });
   };
 
   ipcMain.handle("sessions:setCli", async (_event, id: string, cli: unknown) => {
@@ -133,9 +159,10 @@ export function registerIpc(deps: IpcDeps): void {
     return mutate(id, async (s) => ({ session: { ...s, cli } }));
   });
 
-  ipcMain.handle("sessions:setFolder", (_event, id: string, folder: string | null) =>
-    mutate(id, async (s) => ({ session: { ...s, folder } })),
-  );
+  ipcMain.handle("sessions:setFolder", (_event, id: string, folder: string | null) => {
+    if (!goodFolder(folder)) return { ok: false as const, message: "Choose a folder." };
+    return mutate(id, async (s) => ({ session: { ...s, folder } }));
+  });
 
   ipcMain.handle("sessions:setWebSearch", (_event, id: string, on: boolean) =>
     mutate(id, async (s) => ({ session: { ...s, webSearch: on } })),
@@ -155,6 +182,7 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle("sessions:removeAttachment", (_event, id: string, file: string) =>
     mutate(id, async (s) => {
+      if (!s.attachments.some((a) => a.file === file)) return { session: s };
       await store.removeAttachment(id, file);
       return { session: { ...s, attachments: s.attachments.filter((a) => a.file !== file) } };
     }),
@@ -172,53 +200,59 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle(
     "lesson:answer",
     async (_event, id: string, answer: Answer, attachPaths: string[] = []) => {
-      if (turns.isRunning(id)) {
-        return {
-          ok: false as const,
-          error: { kind: "busy" as const, message: "A reply is already on the way." },
-          session: null,
-        };
-      }
-      const session = await store.readSession(id);
-      if (session === null) {
-        return {
-          ok: false as const,
-          error: { kind: "not_found" as const, message: "This lesson no longer exists." },
-          session: null,
-        };
-      }
-      const message = checkAnswer(deriveState(session.events), {
-        ...answer,
-        attachments: attachPaths.map((p) => basename(p)),
-      });
-      if (message !== null) {
-        return {
-          ok: false as const,
-          error: { kind: "invalid_answer" as const, message },
-          session,
-        };
-      }
-      const stored: string[] = [];
-      for (const [i, p] of attachPaths.entries()) {
-        const r = await store.addAttachment(id, p, i, ATTACH_PER_ANSWER);
-        if (!r.ok) {
-          for (const file of stored) await store.removeAttachment(id, file);
+      const busy = {
+        ok: false as const,
+        error: { kind: "busy" as const, message: "A reply is already on the way." },
+        session: null,
+      };
+      if (turns.isRunning(id)) return busy;
+      const outcome = await withLock(id, async () => {
+        if (turns.isRunning(id)) return busy;
+        const session = await store.readSession(id);
+        if (session === null) {
           return {
             ok: false as const,
-            error: { kind: "invalid_answer" as const, message: r.message },
+            error: { kind: "not_found" as const, message: "This lesson no longer exists." },
+            session: null,
+          };
+        }
+        const message = checkAnswer(deriveState(session.events), {
+          ...answer,
+          attachments: attachPaths.map((p) => basename(p)),
+        });
+        if (message !== null) {
+          return {
+            ok: false as const,
+            error: { kind: "invalid_answer" as const, message },
             session,
           };
         }
-        stored.push(r.attachment.file);
-      }
-      const saved: Answer = stored.length > 0 ? { ...answer, attachments: stored } : answer;
-      const updated: Session = {
-        ...session,
-        updatedAt: now(),
-        events: [...session.events, { kind: "answer", at: now(), answer: saved }],
-      };
-      await store.writeSession(updated);
-      send("session:updated", updated);
+        const stored: string[] = [];
+        for (const [i, p] of attachPaths.entries()) {
+          const r = await store.addAttachment(id, p, i, ATTACH_PER_ANSWER);
+          if (!r.ok) {
+            for (const file of stored) await store.removeAttachment(id, file);
+            return {
+              ok: false as const,
+              error: { kind: "invalid_answer" as const, message: r.message },
+              session,
+            };
+          }
+          stored.push(r.attachment.file);
+        }
+        const saved: Answer = { ...answer };
+        delete saved.attachments;
+        if (stored.length > 0) saved.attachments = stored;
+        const updated: Session = {
+          ...session,
+          updatedAt: now(),
+          events: [...session.events, { kind: "answer", at: now(), answer: saved }],
+        };
+        await store.writeSession(updated);
+        send("session:updated", updated);
+        return null;
+      });
+      if (outcome !== null) return outcome;
       return runTurn(id);
     },
   );

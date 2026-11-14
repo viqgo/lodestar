@@ -41,6 +41,9 @@ export function displayName(file: string): string {
   return file.replace(/^a\d+-/, "");
 }
 
+// eslint-disable-next-line no-control-regex
+const plain = (s: string) => s.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, "?");
+
 export function renderMaterial(input: {
   folder: string | null;
   files: FileEntry[];
@@ -50,18 +53,18 @@ export function renderMaterial(input: {
   if (input.folder === null && input.attachments.length === 0) return null;
   const lines = ["# Material"];
   if (input.folder !== null) {
-    lines.push(`Folder: ${input.folder}`);
+    lines.push(`Folder: ${plain(input.folder)}`);
     if (input.files.length === 0 && input.more === 0) {
       lines.push("(the folder is empty)");
     } else {
       lines.push("Files in the folder:");
-      for (const f of input.files) lines.push(`- ${f.path} (${f.bytes} bytes)`);
+      for (const f of input.files) lines.push(`- ${plain(f.path)} (${f.bytes} bytes)`);
       if (input.more > 0) lines.push(`- ... and ${input.more} more files`);
     }
   }
   if (input.attachments.length > 0) {
     lines.push("Attached files:");
-    for (const a of input.attachments) lines.push(`- ${a.name}: ${a.path}`);
+    for (const a of input.attachments) lines.push(`- ${plain(a.name)}: ${a.path}`);
   }
   lines.push(RULE);
   return lines.join("\n");

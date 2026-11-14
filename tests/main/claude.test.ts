@@ -98,14 +98,22 @@ describe("claude adapter", () => {
     const a = f.calls[0].args;
     expect(a[a.indexOf("--tools") + 1]).toBe("Read,Glob,Grep");
     const i = a.indexOf("--disable-slash-commands");
-    expect(a.slice(i + 1)).toEqual([
-      "--allowed-tools",
-      "Read,Glob,Grep",
-      "--add-dir",
-      "/m",
-      "--add-dir",
-      "/att",
-    ]);
+    expect(a.slice(i + 1)).toEqual(["--add-dir", "/m", "--add-dir", "/att"]);
+  });
+
+  it("claude_allowed_tools_never_include_read_tools", async () => {
+    for (const readDirs of [[], ["/m"]]) {
+      for (const webSearch of [false, true]) {
+        const { adapter, f } = make({ stdout: SAMPLE });
+        await adapter.run({ ...req(), options: { ...NO_OPTIONS, readDirs, webSearch } });
+        const a = f.calls[0].args;
+        const at = a.indexOf("--allowed-tools");
+        if (at !== -1) expect(a[at + 1]).toBe("WebSearch");
+        expect(at === -1).toBe(!webSearch);
+        const tools = a[a.indexOf("--tools") + 1].split(",").filter((t: string) => t !== "");
+        expect(tools.includes("Read")).toBe(readDirs.length > 0);
+      }
+    }
   });
 
   it("web_search_flags_per_cli (claude)", async () => {

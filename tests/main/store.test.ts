@@ -235,4 +235,58 @@ describe("store attachments", () => {
     expect(await store.readSession(SID)).toMatchObject(want);
     expect((await store.listSessions())[0]).toMatchObject(want);
   });
+
+  it("removeAttachment ignores names it did not store", async () => {
+    const { dir, store } = await mk();
+    const outside = path.join(dir, "attachments", "y");
+    await fsp.mkdir(path.join(dir, "attachments"), { recursive: true });
+    await fsp.writeFile(path.join(dir, "x"), "keep");
+    await fsp.writeFile(outside, "keep");
+    await fsp.mkdir(store.attachmentsDir(SID), { recursive: true });
+    for (const bad of ["../x", "a1-x/../../y", path.join(dir, "x"), "../../x", "a1-"]) {
+      await store.removeAttachment(SID, bad);
+    }
+    expect(await fsp.readFile(path.join(dir, "x"), "utf8")).toBe("keep");
+    expect(await fsp.readFile(outside, "utf8")).toBe("keep");
+  });
+
+  it("app_never_writes_into_material_folder_when_attaching", async () => {
+    const { store } = await mk();
+    const folder = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-mat-"));
+    await fsp.writeFile(path.join(folder, "n.txt"), "notes");
+    const snap = async () => {
+      const names = (await fsp.readdir(folder, { recursive: true })).sort();
+      const out: unknown[] = [];
+      for (const n of names) {
+        const st = await fsp.stat(path.join(folder, n));
+        out.push([n, st.mtimeMs, await fsp.readFile(path.join(folder, n), "utf8")]);
+      }
+      return out;
+    };
+    const before = await snap();
+    await store.writeSession({ ...session(), id: SID });
+    const a = await store.addAttachment(SID, path.join(folder, "n.txt"), 0, 10);
+    expect(a.ok).toBe(true);
+    await store.removeAttachment(SID, "a1-n.txt");
+    await store.deleteSession(SID);
+    expect(await snap()).toEqual(before);
+  });
+
+  it("attachment names with odd characters and long names stay safe", async () => {
+    const { store } = await mk();
+    const odd = await source("a b..c\nd.txt");
+    const r = await store.addAttachment(SID, odd, 0, 10);
+    expect(r.ok && r.attachment.file).toBe("a1-a_b..c_d.txt");
+    expect(r.ok && r.attachment.name).toBe("a b..c\nd.txt");
+    const long = await source("x".repeat(200) + ".pdf");
+    const l = await store.addAttachment(SID, long, 1, 10);
+    expect(l.ok && l.attachment.file.endsWith(".pdf")).toBe(true);
+    expect(l.ok && l.attachment.file.length).toBeLessThanOrEqual(3 + 80);
+    const one = await source("same.txt");
+    const two = await source("same.txt");
+    const a = await store.addAttachment(SID, one, 2, 10);
+    const b = await store.addAttachment(SID, two, 3, 10);
+    expect(a.ok && a.attachment.file).toBe("a1-same.txt");
+    expect(b.ok && b.attachment.file).toBe("a2-same.txt");
+  });
 });

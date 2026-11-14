@@ -506,9 +506,9 @@ describe("runOptions", () => {
     expect(runOptions(session([answer([])]), DIR, null).readDirs).toEqual([]);
   });
 
-  it("runOptions passes images of the material and of the last answer only", () => {
+  it("runOptions takes images from the latest answer that has files", () => {
     const s = {
-      ...session([answer(["a1-old.png"]), answer(["a2-new.jpg", "a3-doc.pdf"])]),
+      ...session([answer(["a1-old.png"]), answer(["a2-new.jpg", "a3-doc.pdf"]), answer([])]),
       attachments: [
         { file: "a1-m.png", name: "m.png", bytes: 1, kind: "image" as const },
         { file: "a2-m.pdf", name: "m.pdf", bytes: 1, kind: "pdf" as const },
@@ -518,5 +518,7 @@ describe("runOptions", () => {
       "/data/attachments/s1/a1-m.png",
       "/data/attachments/s1/a2-new.jpg",
     ]);
+    const t = session([answer(["a1-pic.png"]), answer([])]);
+    expect(runOptions(t, DIR, null).images).toEqual(["/data/attachments/s1/a1-pic.png"]);
   });
 });

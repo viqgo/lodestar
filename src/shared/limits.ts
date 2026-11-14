@@ -16,3 +16,4 @@ export const ATTACH_PER_LESSON = 10;
 export const ATTACH_PER_ANSWER = 3;
 export const FILE_LIST_MAX = 200;
 export const CALL_TIMEOUT_TOOLS_MS = 300_000;
+export const FILE_WALK_MAX = 5000;

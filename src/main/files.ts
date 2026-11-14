@@ -1,4 +1,5 @@
 import path from "node:path";
+import { FILE_WALK_MAX } from "../shared/limits";
 import type { FileEntry } from "../shared/types";
 
 export async function listFolder(
@@ -12,14 +13,15 @@ export async function listFolder(
     return null;
   }
   const all: FileEntry[] = [];
-  const walk = async (dir: string, rel: string): Promise<void> => {
+  const walk = async (dir: string, rel: string): Promise<boolean> => {
     let entries;
     try {
       entries = await fs.readdir(dir, { withFileTypes: true });
     } catch {
-      return;
+      return rel !== "";
     }
     for (const e of entries) {
+      if (all.length >= FILE_WALK_MAX) return true;
       if (e.name.startsWith(".") || e.isSymbolicLink()) continue;
       const childRel = rel === "" ? e.name : rel + "/" + e.name;
       if (e.isDirectory()) {
@@ -33,8 +35,9 @@ export async function listFolder(
         }
       }
     }
+    return true;
   };
-  await walk(folder, "");
+  if (!(await walk(folder, ""))) return null;
   all.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
   return { files: all.slice(0, max), more: Math.max(0, all.length - max) };
 }

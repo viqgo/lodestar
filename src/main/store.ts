@@ -85,11 +85,14 @@ export async function createStore(
     if (refusal !== null) return { ok: false, message: refusal };
     try {
       await fs.mkdir(target, { recursive: true });
-      const safe = name.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80);
+      const safe = name.replace(/[^A-Za-z0-9._-]/g, "_");
+      const dot = safe.lastIndexOf(".");
+      const ext = dot > 0 ? safe.slice(dot) : "";
+      const stem = (dot > 0 ? safe.slice(0, dot) : safe).slice(0, Math.max(1, 80 - ext.length));
       const taken = new Set(await fs.readdir(target));
       let k = 1;
-      while (taken.has("a" + k + "-" + safe)) k++;
-      const file = "a" + k + "-" + safe;
+      while (taken.has("a" + k + "-" + stem + ext)) k++;
+      const file = "a" + k + "-" + stem + ext;
       await fs.copyFile(sourcePath, path.join(target, file));
       return {
         ok: true,
@@ -101,6 +104,7 @@ export async function createStore(
   };
 
   const removeAttachment = async (sessionId: string, file: string): Promise<void> => {
+    if (!/^a\d+-[A-Za-z0-9._-]+$/.test(file)) return;
     await fs.rm(path.join(attachmentsDir(sessionId), file), { force: true });
   };
 

@@ -78,7 +78,7 @@ export function createClaudeAdapter(deps: ProcessDeps): CliAdapter {
           "--strict-mcp-config",
           "--no-session-persistence",
           "--disable-slash-commands",
-          ...(tools ? ["--allowed-tools", tools] : []),
+          ...(o.webSearch ? ["--allowed-tools", "WebSearch"] : []),
           ...o.readDirs.flatMap((d) => ["--add-dir", d]),
           ...(o.model ? ["--model", o.model] : []),
           ...(o.effort ? ["--effort", o.effort] : []),

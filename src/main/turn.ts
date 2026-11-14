@@ -23,7 +23,7 @@ import type { Store } from "./store";
 export function runOptions(session: Session, attachmentsDir: string, settings: null): RunOptions {
   void settings;
   const answers = session.events.flatMap((e) => (e.kind === "answer" ? [e.answer] : []));
-  const last = answers[answers.length - 1];
+  const last = [...answers].reverse().find((a) => (a.attachments?.length ?? 0) > 0);
   const anyAnswerFiles = answers.some((a) => (a.attachments?.length ?? 0) > 0);
   const readDirs = [
     ...(session.folder !== null ? [session.folder] : []),

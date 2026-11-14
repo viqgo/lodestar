@@ -20,4 +20,5 @@ it("limits match the spec", () => {
   expect(limits.ATTACH_PER_ANSWER).toBe(3);
   expect(limits.FILE_LIST_MAX).toBe(200);
   expect(limits.CALL_TIMEOUT_TOOLS_MS).toBe(300000);
+  expect(limits.FILE_WALK_MAX).toBe(5000);
 });

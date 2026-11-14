@@ -327,3 +327,51 @@ describe("run", () => {
     expect(empty(c.tmpRoot)).toBe(true);
   });
 });
+
+describe("tool safety", () => {
+  it("no_cli_ever_gets_write_tools_for_any_options", async () => {
+    const bad = ["Write", "Edit", "Bash", "NotebookEdit", "WebFetch"];
+    for (const readDirs of [[], ["/m"]]) {
+      for (const webSearch of [false, true]) {
+        for (const images of [[], ["/i.png"]]) {
+          for (const model of [null, "m1"]) {
+            for (const effort of [null, "high"]) {
+              const o: RunOptions = { readDirs, webSearch, images, model, effort };
+              const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-"));
+              const run = async (create: typeof createCodexAdapter, id: string, stdout: string) => {
+                const f = fakeSpawn({ stdout });
+                const adapter = create({
+                  spawn: f.spawn,
+                  env: { ["LEARN_" + id + "_PATH"]: "/fake/" + id, PATH: "" },
+                  home: "/home/x",
+                  tmpRoot,
+                  fs,
+                  detectTimeoutMs: 30,
+                });
+                await adapter.run({ ...req(), options: o });
+                return f.calls[0].args as string[];
+              };
+              const codex = await run(createCodexAdapter, "CODEX", OK);
+              expect(codex[codex.indexOf("--sandbox") + 1]).toBe("read-only");
+              expect(codex).not.toContain("danger-full-access");
+              expect(codex).not.toContain("--full-auto");
+              const claude = await run(createClaudeAdapter, "CLAUDE", "{}");
+              for (const flag of ["--tools", "--allowed-tools"]) {
+                const at = claude.indexOf(flag);
+                const list = at === -1 ? [] : claude[at + 1].split(",");
+                for (const b of bad) expect(list).not.toContain(b);
+              }
+              const gemini = await run(createGeminiAdapter, "GEMINI", "{}");
+              const am = gemini.indexOf("--approval-mode");
+              expect(am).not.toBe(-1);
+              expect(gemini[am + 1]).toBe("plan");
+              for (const t of ["run_shell_command", "write_file", "replace"]) {
+                expect(geminiExcluded(o)).toContain(t);
+              }
+            }
+          }
+        }
+      }
+    }
+  });
+});

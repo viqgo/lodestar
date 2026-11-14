@@ -4,7 +4,7 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { registerIpc } from "../../src/main/ipc";
 import { createStore } from "../../src/main/store";
-import type { KnowledgeItem, Session, TurnResult } from "../../src/shared/types";
+import type { Answer, KnowledgeItem, Session, TurnResult } from "../../src/shared/types";
 import { fakeAdapters } from "../helpers/fakes";
 import { A, act, pick, session } from "../helpers/fixtures";
 
@@ -460,6 +460,120 @@ describe("ipc material", () => {
     expect((await store.readSession(s.id))?.events).toEqual(s.events);
     expect(await fsp.readdir(store.attachmentsDir(s.id)).catch(() => [])).toEqual([]);
     expect(turns.advance).not.toHaveBeenCalled();
+  });
+
+  it("ipc removeAttachment only removes this lesson's own copies", async () => {
+    const { store, call } = await setup();
+    await store.writeSession(session());
+    await store.writeSession({ ...session(), id: ID2 });
+    const [a, b] = await makeFiles(["a.txt", "b.txt"]);
+    await call("sessions:addAttachments", ID2, [b]);
+    const mine = await call("sessions:addAttachments", session().id, [a]);
+    const trick = "../" + ID2 + "/a1-b.txt";
+    expect(await call("sessions:removeAttachment", session().id, trick)).toEqual({
+      ok: true,
+      session: mine.session,
+    });
+    const r = await call("sessions:removeAttachment", session().id, "a1-b.txt");
+    expect(r).toEqual({ ok: true, session: mine.session });
+    expect(await fsp.readdir(store.attachmentsDir(ID2))).toEqual(["a1-b.txt"]);
+    expect(await fsp.readdir(store.attachmentsDir(session().id))).toEqual(["a1-a.txt"]);
+  });
+
+  it("two answers at once store only one", async () => {
+    const { store, call } = await setup();
+    const s = session([act(A.probe())]);
+    await store.writeSession(s);
+    const answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
+    const [x, y] = await Promise.all([
+      call("lesson:answer", s.id, answer),
+      call("lesson:answer", s.id, answer),
+    ]);
+    expect((await store.readSession(s.id))!.events.filter((e) => e.kind === "answer")).toHaveLength(
+      1,
+    );
+    const kinds = [x, y].map((r) => (r.ok === false ? r.error.kind : "ok"));
+    expect(kinds.filter((k) => k === "invalid_answer")).toHaveLength(1);
+  });
+
+  it("a switch and an answer at once keep both", async () => {
+    const { store, call } = await setup();
+    const s = session([act(A.probe())]);
+    await store.writeSession(s);
+    const answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
+    await Promise.all([
+      call("sessions:setWebSearch", s.id, true),
+      call("lesson:answer", s.id, answer),
+    ]);
+    const stored = (await store.readSession(s.id))!;
+    expect(stored.events.filter((e) => e.kind === "answer")).toHaveLength(1);
+    expect(stored.webSearch).toBe(true);
+  });
+
+  it("a create that fails on its last write leaves nothing", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-ipc-"));
+    const real = await createStore(dir, fsp);
+    let writes = 0;
+    const store = {
+      ...real,
+      writeSession: async (x: Session) => {
+        if (++writes === 2) throw new Error("disk full");
+        return real.writeSession(x);
+      },
+    };
+    const handlers = new Map<string, (...a: any[]) => any>();
+    registerIpc({
+      ipcMain: { handle: (c: string, f: (...a: any[]) => any) => void handlers.set(c, f) },
+      adapters: fakeAdapters({ detect: vi.fn() } as any),
+      store,
+      turns: { advance: vi.fn(), stop: vi.fn(), isRunning: vi.fn(() => false) } as any,
+      now: () => NOW,
+      newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+      send: vi.fn(),
+      dialogs: { pickFolder: async () => null, pickFiles: async () => [] },
+    });
+    const [a] = await makeFiles(["a.txt"]);
+    const r = await handlers.get("sessions:create")!(null, {
+      topic: "Maths",
+      goal: "Limits",
+      cli: "codex",
+      attachPaths: [a],
+    });
+    expect(r).toEqual({ ok: false, message: "Could not save. Check free disk space." });
+    expect(await real.listSessions()).toEqual([]);
+    expect(await fsp.readdir(path.join(dir, "attachments"))).toEqual([]);
+  });
+
+  it("a folder must be an absolute path", async () => {
+    const { store, call } = await setup();
+    const s = session();
+    await store.writeSession(s);
+    const refusal = { ok: false, message: "Choose a folder." };
+    for (const folder of ["relative/dir", 42]) {
+      expect(
+        await call("sessions:create", { topic: "Maths", goal: "Limits", cli: "codex", folder }),
+      ).toEqual(refusal);
+      expect(await call("sessions:setFolder", s.id, folder)).toEqual(refusal);
+    }
+    expect(await store.listSessions()).toHaveLength(1);
+    expect((await store.readSession(s.id))?.folder).toBeNull();
+  });
+
+  it("an answer never keeps attachments from the window", async () => {
+    const { store, call } = await setup();
+    const s = session([act(A.probe())]);
+    await store.writeSession(s);
+    const answer = {
+      choiceIndex: 1,
+      text: null,
+      reasoning: null,
+      confidence: null,
+      attachments: ["../../etc/passwd"],
+    };
+    await call("lesson:answer", s.id, answer);
+    const stored = (await store.readSession(s.id))!;
+    const ev = stored.events[1] as { kind: "answer"; answer: Answer };
+    expect(ev.answer.attachments).toBeUndefined();
   });
 
   it("pick channels pass the dialog results through", async () => {
