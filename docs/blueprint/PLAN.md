@@ -17,7 +17,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 
 - [x] T1 Project skeleton and test runner
 - [x] T2 Electron shell that builds
-- [ ] T3 Limits and shared types
+- [x] T3 Limits and shared types
 - [ ] T4 Reply schema and parseReply
 - [ ] T5 Plan validation
 - [ ] T6 Lesson state: start, probe, plan

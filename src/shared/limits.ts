@@ -1,0 +1,12 @@
+export const MAX_PROBE = 8;
+export const PLAN_MIN = 2;
+export const PLAN_MAX = 12;
+export const MAX_FAILS = 3;
+export const CALL_TIMEOUT_MS = 180_000;
+export const DETECT_TIMEOUT_MS = 5_000;
+export const KNOWLEDGE_PROMPT_MAX = 200;
+export const FIELD_MAX = 500;
+export const ANSWER_TEXT_MAX = 4000;
+export const OPTIONS_MIN = 2;
+export const OPTIONS_MAX = 6;
+export const STDERR_MAX = 200;
