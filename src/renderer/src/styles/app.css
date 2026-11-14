@@ -516,3 +516,26 @@ body {
   border-radius: var(--radius);
   max-width: 80%;
 }
+
+.flashcard {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: var(--space-5);
+  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  width: 100%;
+}
+.box-1 {
+  color: var(--color-danger);
+}
+.box-2,
+.box-3 {
+  color: var(--color-accent);
+}
+.box-4,
+.box-5 {
+  color: var(--color-success);
+}

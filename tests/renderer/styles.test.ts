@@ -50,3 +50,10 @@ it("styles have the chat rules", () => {
   expect(/\.chat\s*\{[^}]*flex-direction: column/.test(css)).toBe(true);
   expect(/\.chat-msg\.is-owner\s*\{[^}]*align-self: flex-end/.test(css)).toBe(true);
 });
+
+it("styles have the flashcard and box rules", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
+  expect(/\.flashcard\s*\{[^}]*min-height: 160px/.test(css)).toBe(true);
+  expect(/\.box-1\s*\{[^}]*color: var\(--color-danger\)/.test(css)).toBe(true);
+  expect(/\.box-4,\s*\.box-5\s*\{[^}]*color: var\(--color-success\)/.test(css)).toBe(true);
+});
