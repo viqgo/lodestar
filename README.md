@@ -14,7 +14,7 @@ Download the file for your Mac from the Releases page, `https://github.com/viqgo
 
 ## First open
 
-lodestar is not signed with an Apple developer certificate, so macOS stops it the first time. Right-click lodestar in Applications and choose "Open", then "Open" again. On newer versions of macOS that way is gone: try to open the app once, then open System Settings, "Privacy & Security", and press "Open Anyway". If macOS says the app is damaged, run `xattr -cr /Applications/lodestar.app` in Terminal once and open it again. This is needed once.
+lodestar is ad-hoc signed, not signed with an Apple developer certificate, so macOS stops it the first time. Open it with the right-click, Open steps: right-click lodestar in Applications and choose "Open", then "Open" again. On newer versions of macOS that way is gone: try to open the app once, then open System Settings, "Privacy & Security", and press "Open Anyway". If macOS says the app is damaged, run `xattr -cr /Applications/lodestar.app` in Terminal once and open it again. This is needed once.
 
 ## Requirements
 

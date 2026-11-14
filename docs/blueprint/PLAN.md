@@ -158,7 +158,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T111 Profile sections: models and method
 - [x] T112 Header, evals, README
 - [x] T112b Gate L fixes
-- [ ] T112c Ad-hoc signing and a smaller app
+- [x] T112c Ad-hoc signing and a smaller app
 - [x] GATE L Customisation (reviewed and fixed); the owner's try-out is still to do
 
 Conventions used in every task:
