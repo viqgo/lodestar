@@ -43,7 +43,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T22 Component styles
 - [x] T23 Turning a lesson into things to draw
 - [x] T24 Stable option shuffling
-- [ ] T25 The plan as Mermaid text
+- [x] T25 The plan as Mermaid text
 - [ ] T26 Banner, ThinkingBar, ConfirmDialog
 - [ ] T27 MarkdownView with math
 - [ ] T28 QuestionCard
