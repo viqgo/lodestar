@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { deriveState, validateNewLesson } from "../../src/core/engine";
-import { A, PLAN, act, choiceQ, pick, toPlan, toTeach } from "../helpers/fixtures";
+import type { SessionEvent } from "../../src/shared/types";
+import {
+  A,
+  PLAN,
+  act,
+  choiceQ,
+  pick,
+  say,
+  textQ,
+  toCheck,
+  toPlan,
+  toTeach,
+} from "../helpers/fixtures";
 
 const MSG = "Enter a topic and a goal.";
 
@@ -68,5 +80,78 @@ describe("deriveState: probe and plan", () => {
     expect(s.teachStep).toBe("need_predict");
     expect(s.awaiting.who).toBe("model");
     expect(() => deriveState([pick(1)])).toThrow("corrupt session at event 0");
+  });
+});
+
+describe("deriveState: teaching", () => {
+  const s = (...events: SessionEvent[]) => deriveState([...toTeach, ...events]);
+
+  it("a predict question waits for the learner", () => {
+    const r = s(act(A.predict("n1")));
+    expect(r.currentNodeId).toBe("n1");
+    expect(r.awaiting).toEqual({
+      who: "learner",
+      purpose: "predict",
+      question: textQ,
+      nodeId: "n1",
+      eventIndex: 4,
+    });
+  });
+
+  it("a predict answer asks the model to explain", () => {
+    const r = s(act(A.predict("n1")), say());
+    expect(r.teachStep).toBe("need_explain");
+    expect(r.awaiting.who).toBe("model");
+  });
+
+  it("choice_check_graded_by_app", () => {
+    const r = s(...toCheck("n1"), pick(1));
+    expect(r.nodes.n1).toEqual({ status: "passed", fails: 0 });
+    expect(r.teachStep).toBe("need_predict");
+  });
+
+  it("a wrong choice check asks for a repair", () => {
+    const r = s(...toCheck("n1"), pick(0));
+    expect(r.nodes.n1).toEqual({ status: "todo", fails: 1 });
+    expect(r.teachStep).toBe("need_repair");
+    expect(r.currentNodeId).toBe("n1");
+  });
+
+  it("third_fail_marks_shaky", () => {
+    const r = s(
+      ...toCheck("n1"),
+      pick(0),
+      act(A.explain("n1")),
+      pick(0),
+      act(A.explain("n1")),
+      pick(0),
+    );
+    expect(r.nodes.n1).toEqual({ status: "shaky", fails: 3 });
+    expect(r.teachStep).toBe("need_predict");
+  });
+
+  it("a text check waits for the model's verdict", () => {
+    const r = s(...toCheck("n1", textQ), say());
+    expect(r.teachStep).toBe("need_verdict");
+    expect(r.nodes.n1!.status).toBe("todo");
+  });
+
+  it("a pass verdict settles the node", () => {
+    const r = s(...toCheck("n1", textQ), say(), act(A.predict("n2", "pass")));
+    expect(r.nodes.n1!.status).toBe("passed");
+    expect(r.currentNodeId).toBe("n2");
+  });
+
+  it("a fail verdict counts a failure", () => {
+    const r = s(...toCheck("n1", textQ), say(), act(A.explain("n1", choiceQ, "fail")));
+    expect(r.nodes.n1).toEqual({ status: "todo", fails: 1 });
+    expect(r.awaiting.who).toBe("learner");
+  });
+
+  it("lesson_done ends the lesson", () => {
+    const r = s(...toCheck("n1"), pick(1), ...toCheck("n2"), pick(1), act(A.done()));
+    expect(r.phase).toBe("done");
+    expect(r.summary).toBe("s");
+    expect(r.awaiting).toEqual({ who: "nobody" });
   });
 });

@@ -1,9 +1,29 @@
-import { FIELD_MAX } from "../shared/limits";
-import type { LessonState, SessionEvent } from "../shared/types";
+import { FIELD_MAX, MAX_FAILS } from "../shared/limits";
+import type { LessonState, SessionEvent, Verdict } from "../shared/types";
 
 export function validateNewLesson(topic: string, goal: string): string | null {
   const ok = (s: string) => s.trim().length >= 1 && s.trim().length <= FIELD_MAX;
   return ok(topic) && ok(goal) ? null : "Enter a topic and a goal.";
+}
+
+function applyVerdict(state: LessonState, verdict: Verdict): LessonState {
+  const id = state.currentNodeId;
+  if (id === null) return state;
+  const node = state.nodes[id]!;
+  if (verdict === "pass") {
+    return {
+      ...state,
+      nodes: { ...state.nodes, [id]: { ...node, status: "passed" } },
+      teachStep: "need_predict",
+    };
+  }
+  const fails = node.fails + 1;
+  const shaky = fails >= MAX_FAILS;
+  return {
+    ...state,
+    nodes: { ...state.nodes, [id]: { status: shaky ? "shaky" : node.status, fails } },
+    teachStep: shaky ? "need_predict" : "need_repair",
+  };
 }
 
 export function deriveState(events: SessionEvent[]): LessonState {
@@ -29,10 +49,29 @@ export function deriveState(events: SessionEvent[]): LessonState {
         state = { ...state, probeAnswered: state.probeAnswered + 1, awaiting: { who: "model" } };
         return;
       }
+      if (awaiting.purpose === "predict") {
+        state = { ...state, teachStep: "need_explain", awaiting: { who: "model" } };
+        return;
+      }
+      if (awaiting.purpose === "check") {
+        const q = awaiting.question;
+        if (q.kind === "choice") {
+          const ok = event.answer.choiceIndex === q.correctIndex;
+          state = applyVerdict(state, ok ? "pass" : "fail");
+        } else {
+          state = { ...state, teachStep: "need_verdict" };
+        }
+        state = { ...state, awaiting: { who: "model" } };
+        return;
+      }
       throw corrupt();
     }
     if (awaiting.who !== "model") throw corrupt();
     const action = event.action;
+    if (state.teachStep === "need_verdict") {
+      if (!("verdict" in action) || action.verdict === null) throw corrupt();
+      state = applyVerdict(state, action.verdict);
+    }
     switch (action.type) {
       case "probe":
         state = {
@@ -61,8 +100,34 @@ export function deriveState(events: SessionEvent[]): LessonState {
         };
         return;
       }
-      default:
-        throw corrupt();
+      case "predict":
+        state = {
+          ...state,
+          currentNodeId: action.nodeId,
+          awaiting: {
+            who: "learner",
+            purpose: "predict",
+            question: action.question,
+            nodeId: action.nodeId,
+            eventIndex: i,
+          },
+        };
+        return;
+      case "explain":
+        state = {
+          ...state,
+          awaiting: {
+            who: "learner",
+            purpose: "check",
+            question: action.check,
+            nodeId: action.nodeId,
+            eventIndex: i,
+          },
+        };
+        return;
+      case "lesson_done":
+        state = { ...state, phase: "done", summary: action.summary, awaiting: { who: "nobody" } };
+        return;
     }
   });
 
