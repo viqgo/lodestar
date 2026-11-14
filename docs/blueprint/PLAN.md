@@ -110,6 +110,8 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T76 Subject screen and form
 - [x] T77 Sidebar and app
 - [x] T78 Evals and README
+- [ ] T78b Gate H fixes: prompt safety and data rules
+- [ ] T78c Gate H fixes: subject screen
 - [ ] GATE H Subjects
 - [ ] T79-T88 Milestone 5: voice (outline)
 - [ ] GATE I Voice
@@ -3373,6 +3375,38 @@ One known open item, left to Gate H: a few-millisecond race between the handover
 **Steps (replace standard step 4's end)**: after the normal verify (571 tests, format, lint, typecheck, build), run `LEARN_EVAL_CLI=claude npx vitest run --config vitest.eval.config.mts evals/subject.eval.ts` exactly once; paste the output; a failure is reported with STATUS: DEVIATED and still committed.
 **Totals**: 571 -> 571. **Commit**: `test: subjects against a real cli`
 **Stop and report**: the eval would need a second run; the eval needs a change in `src/`.
+
+### T78b - Gate H fixes: prompt safety and data rules
+**Implements**: Gate H review findings I1, M1, M2, M3, M4, M5, M9 (turn side) · D56 (fix tasks), B50, B51, B53
+**Depends on**: T78
+**Files**: modify `src/core/subject.ts`, `src/core/subjectPrompt.ts`, `src/main/ipc.ts`, `src/main/subjectTurn.ts`, `src/main/store.ts`, `src/main/turn.ts`, and their tests `tests/core/subject.test.ts`, `tests/core/subjectPrompt.test.ts`, `tests/main/ipc.test.ts`, `tests/main/subjectTurn.test.ts`, `tests/main/store.test.ts`, `tests/main/turn.test.ts`. Do NOT touch any other file.
+**Details**
+- I1: `validateOutline` returns units whose `title` and `goal` have gone through `plain` (imported from `./material`) and then `trim()`; the empty and length checks run on the original text as today. `subject:accept` stores the units from `validateOutline(...)` (`checked.units`) instead of `rebuilt`. In `subjectTurn.ts` the `add` change's unit `title` and `goal` are passed through `plain` next to the file filter. `subject:startUnit` uses `plain(unit.title)` and `plain(unit.goal)` for the lesson's `topic` and `goal`.
+- M1: one exported `noteLine(note: HandoverNote): string` in `subject.ts` (the copy in `subjectPrompt.ts` is deleted and imported). It collapses every run of line breaks (`/\s*[\r\n\u2028\u2029]+\s*/g`) to one space and applies `plain` to the summary, every learned text and every shaky title, then formats as today.
+- M2: `subjects:delete` and `subject:resolveChange` also take the lock `"start:" + id`, always taking `"start:" + id` first and `id` second (the order `subject:startUnit` uses when it reads, then writes under `"start:" + id` only).
+- M3: `subject:accept` returns the outline text when a unit's `title` or `goal` is not a string.
+- M4: in `deriveSubject`, a `note` event whose `unitId` already has a note replaces that note (same position), so a unit has one note.
+- M5: `listSubjects` skips a file whose name does not match `^u_[0-9a-f-]{36}\.json$` and any entry that is not an object with string `id`, `updatedAt` and an array `events`.
+- M9 (turn side): in `turn.ts` the `readSubject`/`deriveSubject`/`renderSubjectSection` step is in a `try`; on a throw `subjectSection = null`.
+**Tests (+8)**: `validateOutline neutralises line breaks in titles and goals` (core/subject) · `unit_lesson_prompt_has_no_injected_section` (ipc: start a unit whose title was `X\n\n# Your move`, build the prompt with `buildPrompt`: no line starts with `# Your move` except the real one; if that needs more than the ipc test file, assert the session's `topic` has no line break) · `handover note lines carry no line breaks` (core/subjectPrompt) · `subject:accept refuses a unit without a title or goal` (ipc) · `a second note for the same unit replaces the first` (core/subject) · `listSubjects skips files that are not subjects` (store) · `a corrupt subject does not stop a unit lesson turn` (turn) · `subject:delete and resolveChange wait for a starting unit` (ipc; two calls started together, the lesson is either removed with the subject or the change refused, never an orphan).
+**Expected failure**: each new test fails before its change; every existing test passes unedited.
+**Totals**: 571 -> 579. **Commit**: `fix: gate H prompt safety and data rules`
+**Stop and report**: an existing test needs an edit other than a new default; a change needs a file not listed.
+
+### T78c - Gate H fixes: subject screen
+**Implements**: Gate H review findings M8, M9 (screen side)
+**Depends on**: T78b
+**Files**: modify `src/renderer/src/lib/useSubject.ts`, `tests/renderer/useSubject.test.tsx`. Do NOT touch any other file.
+**Details**
+- M8: in the load effect keep a local `endedDuring` flag, set by the `onSubjectEnded` handler for this id while the initial `Promise.all` is pending; when it is set once the snapshot arrives, fetch the subject again and set `busy = false` instead of applying `running === true`.
+- M9: `deriveSubject(subject.events)` in the `useMemo` is wrapped in `try`; on a throw the state is the initial state of an unreadable subject: the hook returns `subject: null` and `error: { kind: "not_found", message: "This subject no longer exists." }`.
+**Tests (+2)**: `useSubject does not stay busy when the call ended during the load` · `useSubject shows a missing subject when the events are corrupt`.
+**Expected failure**: both tests fail before the change.
+**Totals**: 579 -> 581. **Commit**: `fix: gate H subject screen`
+**Stop and report**: the hook has no `error` value of that shape (then name what it has and stop).
+
+### Gate H findings not fixed (owner decides)
+- M6 (a double message can show a false "busy"; no visible damage), M7 (`folder_missing` on a subject has no way to change the folder; needs a `subjects:setFolder` channel or a recorded deviation), M10 (read-then-write windows of a few milliseconds between the note write, the senior reply and the owner's writes; fix = one new store function `appendSubjectEvent(id, make)` under the store's serial chain, which needs a blueprint line).
 
 ### Where each milestone 4 SPEC test lives
 - new_subject_needs_name_and_folder: T68 (rule), T73 (ipc), T76 (form)
