@@ -67,6 +67,61 @@ describe("detectVersion", () => {
   });
 });
 
+describe("detectVersion environment", () => {
+  it("detectVersion runs with the extended PATH and a neutral folder", async () => {
+    const { deps, f, tmpRoot } = make({ stdout: "tool 1.2.3\n" }, { PATH: "/bin" });
+    await detectVersion(deps, "/fake/x");
+    const opts = f.calls[0].opts;
+    expect(opts.env.PATH.startsWith("/bin:")).toBe(true);
+    expect(opts.env.PATH).toContain("/opt/homebrew/bin");
+    expect(opts.cwd).toBe(tmpRoot);
+    expect(opts.shell).toBe(false);
+  });
+});
+
+describe("runProcess cleanup", () => {
+  it("runProcess resolves even when cleanup fails", async () => {
+    const failing = {
+      ...fs,
+      rmSync: () => {
+        throw new Error("EBUSY");
+      },
+    } as typeof fs;
+    const { deps } = make({ stdout: "x" }, { PATH: "" }, failing);
+    const r = await runProcess(deps, spec());
+    expect(r.kind).toBe("exit");
+  });
+
+  it("runProcess cleans up when preparing fails", async () => {
+    const { deps, f, tmpRoot } = make({});
+    const r = await runProcess(
+      deps,
+      spec({
+        prepare: () => {
+          throw new Error("nope");
+        },
+      }),
+    );
+    expect(r).toEqual({
+      kind: "exit",
+      code: 1,
+      stdout: "",
+      stderr: "could not prepare the working folder",
+    });
+    expect(f.calls.length).toBe(0);
+    expect(empty(tmpRoot)).toBe(true);
+  });
+
+  it("temp dir is removed after a failed exit and a spawn error", async () => {
+    const a = make({ code: 1, stderr: "x" });
+    await runProcess(a.deps, spec());
+    expect(empty(a.tmpRoot)).toBe(true);
+    const b = make({ missing: true });
+    await runProcess(b.deps, spec());
+    expect(empty(b.tmpRoot)).toBe(true);
+  });
+});
+
 describe("runProcess", () => {
   it("runProcess runs without a shell in a new empty folder", async () => {
     const { deps, f, tmpRoot } = make({});

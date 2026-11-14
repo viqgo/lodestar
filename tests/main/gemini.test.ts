@@ -66,6 +66,21 @@ describe("geminiErrorMessage", () => {
   });
 });
 
+describe("gemini parsing with extra braces", () => {
+  it("geminiErrorMessage skips earlier braces", () => {
+    expect(geminiErrorMessage("warn {not json}\n" + AUTH_ERROR + "\n")).toBe(
+      "Please set an Auth method",
+    );
+  });
+
+  it("gemini adapter reads the response when stdout has extra lines", async () => {
+    const { adapter } = make({
+      stdout: 'Loaded {config}\n{"session_id":"s","response":"{\\"action\\":1}"}\nbye\n',
+    });
+    expect(await adapter.run(req())).toEqual({ ok: true, text: '{"action":1}', usage: null });
+  });
+});
+
 describe("geminiPrompt", () => {
   it("gemini_prompt_carries_the_schema", async () => {
     const p = geminiPrompt("P", { type: "object" });

@@ -54,18 +54,32 @@ export function extractJsonObject(text: string): string | null {
   return null;
 }
 
-export function geminiErrorMessage(stderr: string): string {
-  const obj = extractJsonObject(stderr);
-  if (obj !== null) {
+function findJson<T>(
+  text: string,
+  pick: (o: Record<string, unknown>) => T | undefined,
+): T | undefined {
+  for (let i = text.indexOf("{"); i !== -1; i = text.indexOf("{", i + 1)) {
+    const obj = extractJsonObject(text.slice(i));
+    if (obj === null) continue;
     try {
-      const parsed = JSON.parse(obj) as { error?: { message?: unknown } };
-      const message = parsed?.error?.message;
-      if (typeof message === "string") return message.slice(0, STDERR_MAX);
+      const parsed: unknown = JSON.parse(obj);
+      if (typeof parsed === "object" && parsed !== null) {
+        const found = pick(parsed as Record<string, unknown>);
+        if (found !== undefined) return found;
+      }
     } catch {
-      // fall through to the last line
+      // try the next brace
     }
   }
-  return lastStderrLine(stderr);
+  return undefined;
+}
+
+export function geminiErrorMessage(stderr: string): string {
+  const message = findJson(stderr, (o) => {
+    const m = (o.error as { message?: unknown } | null | undefined)?.message;
+    return typeof m === "string" ? m.slice(0, STDERR_MAX) : undefined;
+  });
+  return message ?? lastStderrLine(stderr);
 }
 
 export function geminiPrompt(prompt: string, schema: object): string {
@@ -103,13 +117,10 @@ export function createGeminiAdapter(deps: ProcessDeps): CliAdapter {
       });
       if (r.kind !== "exit") return failureResult(r, "Gemini", req.timeoutMs);
       if (r.code !== 0) return { ok: false, kind: "failed", message: geminiErrorMessage(r.stderr) };
-      let response: unknown;
-      try {
-        response = (JSON.parse(r.stdout) as { response?: unknown })?.response;
-      } catch {
-        response = null;
-      }
-      if (typeof response !== "string") {
+      const response = findJson(r.stdout, (o) =>
+        typeof o.response === "string" ? o.response : undefined,
+      );
+      if (response === undefined) {
         return { ok: false, kind: "failed", message: "Gemini returned no message" };
       }
       return { ok: true, text: extractJsonObject(response) ?? response, usage: null };

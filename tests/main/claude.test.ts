@@ -2,6 +2,8 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { createCodexAdapter } from "../../src/main/cli/codex";
+import { createGeminiAdapter } from "../../src/main/cli/gemini";
 import { createClaudeAdapter, parseClaudeResult } from "../../src/main/cli/claude";
 import { fakeSpawn, type FakePlan } from "../helpers/fakes";
 
@@ -134,5 +136,34 @@ describe("claude adapter", () => {
     await b.adapter.run(req());
     expect(b.f.calls[0].cmd).toBe("/fake/claude");
     expect(b.adapter.retries).toBe(1);
+  });
+});
+
+describe("env markers", () => {
+  it("claude adapter drops both Claude Code env markers and the others keep them", async () => {
+    const env: NodeJS.ProcessEnv = {
+      LEARN_CLAUDE_PATH: "/fake/claude",
+      LEARN_CODEX_PATH: "/fake/codex",
+      LEARN_GEMINI_PATH: "/fake/gemini",
+      PATH: "",
+      CLAUDECODE: "1",
+      CLAUDE_CODE_ENTRYPOINT: "cli",
+    };
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-"));
+    const build = (create: typeof createClaudeAdapter, plan: FakePlan) => {
+      const f = fakeSpawn(plan);
+      const adapter = create({ spawn: f.spawn, env, home: "/home/x", tmpRoot, fs });
+      return { adapter, f };
+    };
+    const c = build(createClaudeAdapter, { stdout: SAMPLE });
+    await c.adapter.run(req());
+    expect(c.f.calls[0].opts.env.CLAUDECODE).toBeUndefined();
+    expect(c.f.calls[0].opts.env.CLAUDE_CODE_ENTRYPOINT).toBeUndefined();
+    for (const create of [createCodexAdapter, createGeminiAdapter]) {
+      const o = build(create, {});
+      await o.adapter.run(req());
+      expect(o.f.calls[0].opts.env.CLAUDECODE).toBe("1");
+      expect(o.f.calls[0].opts.env.CLAUDE_CODE_ENTRYPOINT).toBe("cli");
+    }
   });
 });

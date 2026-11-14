@@ -120,6 +120,18 @@ describe("ipc", () => {
     expect(await store.readSession(ID1)).toEqual(before);
   });
 
+  it("switch_tutor_refused_if_a_turn_starts_while_reading", async () => {
+    const { store, turns, call } = await setup();
+    const before = withId(ID1, "2026-01-01T00:00:00.000Z", []);
+    await store.writeSession(before);
+    turns.isRunning.mockReturnValueOnce(false).mockReturnValueOnce(true);
+    expect(await call("sessions:setCli", ID1, "claude")).toEqual({
+      ok: false,
+      message: "A reply is already on the way.",
+    });
+    expect((await store.readSession(ID1))?.cli).toBe(before.cli);
+  });
+
   it("sessions:list returns summaries newest first", async () => {
     const { store, call } = await setup();
     await store.writeSession(withId(ID1, "2026-01-01T00:00:00.000Z", []));

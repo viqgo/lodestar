@@ -84,6 +84,9 @@ export function registerIpc(deps: IpcDeps): void {
     if (session === null) {
       return { ok: false as const, message: "This lesson no longer exists." };
     }
+    if (turns.isRunning(id)) {
+      return { ok: false as const, message: "A reply is already on the way." };
+    }
     const updated: Session = { ...session, cli, updatedAt: now() };
     await store.writeSession(updated);
     send("session:updated", updated);

@@ -39,12 +39,25 @@ export function lastStderrLine(stderr: string): string {
   return found[found.length - 1].trim().slice(0, STDERR_MAX);
 }
 
+function childEnv(deps: ProcessDeps, drop: string[] = []): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
+    ...deps.env,
+    PATH: [deps.env.PATH ?? "", ...extraPathDirs(deps.home)].filter(Boolean).join(":"),
+  };
+  for (const name of drop) delete env[name];
+  return env;
+}
+
 export function detectVersion(deps: ProcessDeps, command: string | null): Promise<DetectResult> {
   if (!command) return Promise.resolve({ ok: false });
   return new Promise((resolve) => {
     let done = false;
     let stdout = "";
-    const child = deps.spawn(command, ["--version"], { shell: false });
+    const child = deps.spawn(command, ["--version"], {
+      shell: false,
+      cwd: deps.tmpRoot,
+      env: childEnv(deps),
+    });
     const finish = (result: DetectResult) => {
       if (done) return;
       done = true;
@@ -70,14 +83,27 @@ export function runProcess(deps: ProcessDeps, spec: ProcessSpec): Promise<Proces
   const command = spec.command;
   const root = deps.fs.mkdtempSync(path.join(deps.tmpRoot, "lh-"));
   const work = path.join(root, "work");
-  deps.fs.mkdirSync(work);
-  const dirs = { root, work };
-  spec.prepare?.(dirs);
-  const env: NodeJS.ProcessEnv = {
-    ...deps.env,
-    PATH: [deps.env.PATH ?? "", ...extraPathDirs(deps.home)].filter(Boolean).join(":"),
+  const removeRoot = () => {
+    try {
+      deps.fs.rmSync(root, { recursive: true, force: true });
+    } catch {
+      /* leave it */
+    }
   };
-  for (const name of spec.dropEnv ?? []) delete env[name];
+  const dirs = { root, work };
+  try {
+    deps.fs.mkdirSync(work);
+    spec.prepare?.(dirs);
+  } catch {
+    removeRoot();
+    return Promise.resolve({
+      kind: "exit",
+      code: 1,
+      stdout: "",
+      stderr: "could not prepare the working folder",
+    });
+  }
+  const env = childEnv(deps, spec.dropEnv);
   return new Promise((resolve) => {
     let settled = false;
     let stdout = "";
@@ -102,10 +128,10 @@ export function runProcess(deps: ProcessDeps, spec: ProcessSpec): Promise<Proces
     const finish = (result: ProcessResult) => {
       if (settled) return;
       settled = true;
-      deps.fs.rmSync(root, { recursive: true, force: true });
       clearTimeout(timer);
       spec.signal.removeEventListener("abort", onAbort);
       resolve(result);
+      removeRoot();
     };
     spec.signal.addEventListener("abort", onAbort);
     child.stdout?.on("data", (d: string) => (stdout += d));
