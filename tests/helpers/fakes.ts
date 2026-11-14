@@ -1,5 +1,7 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
+import type { Action, RunRequest, RunResult } from "../../src/shared/types";
+import type { CliAdapter } from "../../src/main/cli/adapter";
 
 export type FakePlan = {
   stdout?: string;
@@ -38,4 +40,26 @@ export function fakeSpawn(...plans: FakePlan[]) {
     return child;
   };
   return { spawn: spawn as any, calls };
+}
+
+/** Replies in order. An Action is wrapped as a good reply; a string is returned as raw text; a RunResult is returned as is. */
+export function fakeAdapter(...replies: (Action | string | RunResult)[]) {
+  const prompts: string[] = [];
+  const adapter: CliAdapter = {
+    id: "codex",
+    detect: async () => ({ ok: true, version: "0.0.0" }),
+    run: async (req: RunRequest): Promise<RunResult> => {
+      prompts.push(req.prompt);
+      const r = replies[prompts.length - 1];
+      if (r === undefined) return { ok: false, kind: "failed", message: "no more fake replies" };
+      if (typeof r === "string") return { ok: true, text: r, usage: null };
+      if ("ok" in r) return r;
+      return {
+        ok: true,
+        text: JSON.stringify({ action: r }),
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
+    },
+  };
+  return { adapter, prompts };
 }
