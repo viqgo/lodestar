@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { deriveState } from "../../src/core/engine";
 import { renderSubjectSection } from "../../src/core/subject";
-import { buildPrompt, renderAnswer, renderTranscript } from "../../src/core/prompt";
+import { DEFAULT_METHOD, buildPrompt, renderAnswer, renderTranscript } from "../../src/core/prompt";
+import { DEFAULT_SETTINGS, validateSettings } from "../../src/core/settings";
+import { METHOD_MAX } from "../../src/shared/limits";
 import type { KnowledgeItem, SessionEvent } from "../../src/shared/types";
 import {
   A,
@@ -327,5 +329,41 @@ describe("buildPrompt with an aside", () => {
 
   it("prompt without an aside is unchanged", () => {
     expect(buildPrompt({ ...base, aside: null })).toBe(buildPrompt(base));
+  });
+});
+
+describe("method text", () => {
+  const base = { session: session([]), state: deriveState([]), knowledge: [], retryNote: null };
+
+  it("method_text_override_reaches_prompt", () => {
+    const text = buildPrompt({ ...base, method: "  Ask two questions, then teach.  " });
+    expect(text).toContain(
+      "# Method\nThe learner wants to get from what they already hold as obviously true to a goal they do not hold yet.\n\nAsk two questions, then teach.\n\n# Fields\n",
+    );
+    expect(text).not.toContain("Probe. Find precisely");
+    expect(text).not.toContain("Repair. If a check fails");
+    expect(text).toContain("# Your move");
+    expect(text).toContain("Allowed action types now:");
+    const side = buildPrompt({
+      ...base,
+      method: "  Ask two questions, then teach.  ",
+      aside: "Why?",
+    });
+    expect(side).toContain("Ask two questions, then teach.");
+  });
+
+  it("method_empty_means_default", () => {
+    const plain = buildPrompt(base);
+    for (const method of [undefined, "", "  \n "]) {
+      expect(buildPrompt({ ...base, method })).toBe(plain);
+    }
+    expect(plain).toContain(DEFAULT_METHOD);
+    const parts = DEFAULT_METHOD.split("\n\n");
+    expect(parts).toHaveLength(4);
+    ["Probe. ", "Plan. ", "Teach. ", "Repair. "].forEach((w, i) =>
+      expect(parts[i]!.startsWith(w)).toBe(true),
+    );
+    expect(DEFAULT_METHOD.length).toBeLessThan(METHOD_MAX);
+    expect(validateSettings({ ...DEFAULT_SETTINGS, method: DEFAULT_METHOD })).toBeNull();
   });
 });

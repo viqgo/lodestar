@@ -48,6 +48,7 @@ export async function modelStep(
     material?: string | null;
     subject?: string | null;
     attachmentsDir?: string;
+    method?: string;
   },
   session: Session,
   state: LessonState,
@@ -69,6 +70,7 @@ export async function modelStep(
           subject: deps.subject ?? null,
           webSearch: deps.options.webSearch,
           ...(deps.attachmentsDir !== undefined ? { attachmentsDir: deps.attachmentsDir } : {}),
+          ...(deps.method !== undefined ? { method: deps.method } : {}),
         }),
       schema: REPLY_JSON_SCHEMA,
       parse: (text) => {
@@ -105,6 +107,7 @@ export function createTurnRunner(deps: {
   async function prepare(session: Session) {
     const knowledge = await deps.store.readKnowledge();
     const profile = await deps.store.readProfile();
+    const settings = await deps.store.readSettings();
     const listing = session.folder !== null ? await deps.listFolder(session.folder) : null;
     if (session.folder !== null && listing === null) {
       return {
@@ -148,6 +151,7 @@ export function createTurnRunner(deps: {
       ok: true as const,
       knowledge,
       profile,
+      method: settings.method,
       attachmentsDir,
       material,
       subjectSection,
@@ -184,6 +188,7 @@ export function createTurnRunner(deps: {
         const {
           knowledge,
           profile,
+          method,
           attachmentsDir,
           material,
           subjectSection,
@@ -201,6 +206,7 @@ export function createTurnRunner(deps: {
             material,
             subject: subjectSection,
             attachmentsDir,
+            method,
           },
           session,
           state,
@@ -284,6 +290,7 @@ export function createTurnRunner(deps: {
               webSearch: p.options.webSearch,
               attachmentsDir: p.attachmentsDir,
               aside: text,
+              method: p.method,
             }),
           schema: ASIDE_JSON_SCHEMA,
           parse: parseAside,

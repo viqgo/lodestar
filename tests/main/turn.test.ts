@@ -6,6 +6,7 @@ import { deriveState } from "../../src/core/engine";
 import type { CliAdapter } from "../../src/main/cli/adapter";
 import { createStore } from "../../src/main/store";
 import { ASIDE_JSON_SCHEMA } from "../../src/shared/schema";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
 import { NO_OPTIONS } from "../../src/shared/clis";
 import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../../src/shared/limits";
 import { createTurnRunner, modelStep, runOptions } from "../../src/main/turn";
@@ -317,6 +318,28 @@ describe("turn profile", () => {
     await runner.advance(ID);
     expect(f.prompts[1]).toContain("Be long.");
     expect(f.prompts[1]).not.toContain("Be brief.");
+  });
+});
+
+describe("turn method", () => {
+  it("the saved method text reaches every lesson call", async () => {
+    const { store, f, runner } = await setup([], A.probe(), A.probe());
+    await store.writeSettings({ ...DEFAULT_SETTINGS, method: "Ask two questions, then teach." });
+    await runner.advance(ID);
+    expect(f.prompts[0]).toContain("Ask two questions, then teach.");
+    expect(f.prompts[0]).not.toContain("Probe. Find precisely");
+    await store.writeSettings(DEFAULT_SETTINGS);
+    await store.writeSession(session([]));
+    await runner.advance(ID);
+    expect(f.prompts[1]).toContain("Probe. Find precisely");
+
+    const side = await setup([act(A.probe())], JSON.stringify({ markdown: "because" }));
+    await side.store.writeSettings({
+      ...DEFAULT_SETTINGS,
+      method: "Ask two questions, then teach.",
+    });
+    await side.runner.aside(ID, "why");
+    expect(side.f.prompts[0]).toContain("Ask two questions, then teach.");
   });
 });
 
