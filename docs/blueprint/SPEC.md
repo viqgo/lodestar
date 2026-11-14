@@ -6,7 +6,7 @@ Problem (D1): a new open-source Electron desktop app in TypeScript that runs a L
 1. Learner enters a topic and a goal.
 2. Probe: questions one at a time to find where understanding stops.
 3. Plan: a map of steps (nodes) from what is known to the goal.
-4. Teach, per node: predict (ungraded) -> explain with a check (graded) -> repair on a failed check.
+4. Teach, per node: predict (ungraded) -> teach (a full reading, then Continue) -> explain with a check (graded) -> repair on a failed check.
 5. Finish: summary; learned items for passed nodes go to the knowledge list.
 
 ## Behavior
@@ -24,7 +24,8 @@ Plan
 - B6. The plan is drawn as a map. The current node is highlighted, passed nodes are ticked, shaky nodes are marked.
 
 Teach
-- B7. Each node runs `predict`, then `explain` (which carries a check question). A `predict` is allowed only for a node whose deps are all passed or shaky, and which is not itself passed or shaky. An `explain` is allowed only for the current node, after its predict was answered.
+- B7. Each node runs `predict`, then `teach`, then `explain` (which carries a check question). A `predict` is allowed only for a node whose deps are all passed or shaky, and which is not itself passed or shaky. A `teach` is allowed only for the current node, after its predict was answered. An `explain` is allowed only for the current node, after its `teach` was continued (or, for a repair, after a failed check).
+- B21. (CR-3) `teach` is a full reading for one node: the whole idea derived step by step with at least one worked example, 500 to 1000 words, no question. The learner sees it as prose and a Continue button; Continue is the answer and is stored like any answer (all fields null). The next `explain` is then only a short bridge (under 150 words) plus the check question. A repair after a failed check is still an `explain`, not a `teach`.
 - B8. `choice` checks are graded by the app (answer index equals `correctIndex`); the app shuffles the options for display. `text` checks are not graded by the app: the answer is sent to the model, whose next action carries the verdict in `verdict` ("pass" or "fail").
 - B9. After a failed check the only allowed action is `explain` for the same node, with a new check. After 3 failed checks on a node, the node is marked shaky and the lesson moves on.
 - B10. When every node is passed or shaky, the only allowed action is `lesson_done` (summary + learned items). `lesson_done` earlier is a bad reply. Learned items whose `nodeId` is a passed node are appended to the knowledge list; others are dropped.
@@ -56,7 +57,8 @@ Model reply (exactly one per call), root `{"action": <one of>}`:
 {"type":"probe_done","known":["Slope is rise over run"],"goal":"Explain why the derivative is the limit of average slopes"}
 {"type":"plan","nodes":[{"id":"avg-rate","title":"Average rate of change","deps":[]},{"id":"limit","title":"Shrinking the interval","deps":["avg-rate"]}]}
 {"type":"predict","nodeId":"avg-rate","verdict":null,"feedback":null,"question":{"kind":"text","prompt":"What happens to the slope as the two points get closer?","options":[],"correctIndex":null}}
-{"type":"explain","nodeId":"avg-rate","verdict":null,"feedback":"Good instinct.","markdown":"The slope between two points is $\\frac{\\Delta y}{\\Delta x}$ ...","check":{"kind":"choice","prompt":"...","options":["a","b","c"],"correctIndex":1}}
+{"type":"teach","nodeId":"avg-rate","verdict":null,"feedback":"Good instinct.","markdown":"## Average rate of change\n\nA full reading ..."}
+{"type":"explain","nodeId":"avg-rate","verdict":null,"feedback":null,"markdown":"The slope between two points is $\\frac{\\Delta y}{\\Delta x}$ ...","check":{"kind":"choice","prompt":"...","options":["a","b","c"],"correctIndex":1}}
 {"type":"lesson_done","verdict":"pass","feedback":"Correct.","summary":"You can now ...","learned":[{"nodeId":"avg-rate","text":"Average rate of change is the slope between two points"}]}
 ```
 
@@ -118,11 +120,12 @@ All tests run against a fake CLI runner; none call real Codex.
 | E2 | 8 probe answers + the must-conclude note | `probe_done`, `known.length >= 1`, non-empty `goal` | structural |
 | E3 | after `probe_done` | `plan` passing B5 | structural |
 | E4 | after the plan | `predict` for a node with no unmet deps | structural |
-| E5 | predict answered | `explain` for the same node, with a check | structural |
+| E5 | predict answered | `teach` for the same node, `markdown` of at least 1500 characters | structural |
+| E5b | teach continued | `explain` for the same node, with a check | structural |
 | E6 | wrong choice answer | `explain` for the same node | structural |
 | E7 | correct answer on the last node | `lesson_done`, `learned.length >= 1` | structural |
 
-Pass bar: 6 of 7 on the first attempt, 7 of 7 allowing the single B11 retry. Budget: under 60 seconds per call; under 30,000 input tokens per call at the start of a lesson. Teaching quality is not measured.
+Pass bar: 7 of 8 on the first attempt, 8 of 8 allowing the single B11 retry. Budget: under 90 seconds per call; under 30,000 input tokens per call at the start of a lesson. Teaching quality is not measured.
 
 ## Out of scope
 - Gemini CLI and Claude Code adapters (milestone 2)

@@ -59,6 +59,11 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T37 README
 - [x] T37b Gate C fixes (CR-2)
 - [x] GATE C A full lesson in the window
+- [ ] T38 Tell text from questions (CR-3)
+- [ ] T39 The teach step: rules, schema, prompt
+- [ ] T40 Reading and Continue in the window
+- [ ] T41 Evals for the reading
+- [ ] GATE D A lesson with readings
 
 Conventions used in every task:
 - "Run tests" means `npm test`. The expected line is the vitest summary line, e.g. `Tests  9 passed (9)`.
@@ -2173,6 +2178,119 @@ The builder stops here. Nothing continues until the owner says so.
 **Explain it back**: "When you pressed Submit on a check, which functions ran, in order, from the card to the next question on screen?" (the answer is flow 2 in ARCHITECTURE.md)
 **Then decide**: milestone 2 (Gemini and Claude adapters) / raise a change request / ship as it is
 
+
+## Stage D - readings and a clearer look (CR-3, D36)
+What the owner can see at the end: tutor text and question cards look clearly different, and every plan step starts with a full reading and a Continue button before the check.
+
+### T38 - Tell text from questions
+
+**Implements**: change request CR-3 part 1 (decision D36) · UI.md "Telling text from questions"
+**Depends on**: T37b
+
+**Files**
+- Modify: `src/renderer/src/styles/app.css`, `src/renderer/src/components/ChatItemView.tsx`, `tests/renderer/styles.test.ts`, `tests/renderer/ChatItemView.test.tsx`
+- Do NOT touch any other file, text, or add dependencies. Use only existing tokens.
+
+**Steps**
+1. Add 2 tests (existing tests must keep passing):
+
+   | Test | File | Given | Expect |
+   |------|------|-------|--------|
+   | styles mark questions apart from reading text | styles.test.ts | read `app.css` | a `.card` block contains `border-left: 3px solid var(--color-accent)`; a `.card .field input` / `.card .field textarea` rule contains `background: var(--color-bg)`; a `.reading` rule exists |
+   | ChatItemView wraps tutor text as reading | ChatItemView.test.tsx | render a `text` item with markdown `hello` | `hello` is inside an element with class `reading`; a `question` item is NOT inside one |
+2. Run tests. Expected: `Tests  2 failed | 260 passed (262)`. Paste. Any other failure: stop and report.
+3. Fix: in `ChatItemView.tsx` render the `text` case as `<div className="reading"><MarkdownView markdown={item.markdown} /></div>`. In `app.css` add `.reading { color: var(--color-text); width: 100%; }`, add `border-left: 3px solid var(--color-accent);` to the existing `.card` rule, and add `.card .field input, .card .field textarea { background: var(--color-bg); border-color: var(--color-muted); }` (also cover the confidence/option rows only if they already use `.field`; do not restyle options).
+4. Run `npm test` -> `Tests  262 passed (262)`; `npm run format && npm run lint && npm run typecheck && npm run build` -> exit 0. Paste.
+5. Tick T38, stage by name, commit `style: tell tutor text from question cards`.
+
+**Stop and report if** step 2 shows other failures, or tests fail after two attempts.
+
+### T39 - The teach step: rules, schema, prompt
+
+**Implements**: CR-3 part 2 (D36) · SPEC B7, B21 · ARCHITECTURE: Data model (`Action`, `TeachStep`, `Awaiting`), `deriveState` bullets, the `allowedActions` table, `moveNotes`, `checkAnswer`, schema, "LLM calls" prompt
+**Depends on**: T38
+
+**Files**
+- Modify: `src/shared/types.ts`, `src/shared/schema.ts`, `src/core/engine.ts`, `src/core/prompt.ts`, `tests/helpers/fixtures.ts`, `tests/core/engine.test.ts`, `tests/core/prompt.test.ts`, `tests/shared/schema.test.ts`, plus any existing test file under `tests/` that builds a predict-then-explain event list by hand (find them with `grep -rn "A.explain\|A.predict" tests evals`; they only need the new `A.teach(...)`, `cont()` events inserted, nothing else changed)
+- Do NOT touch renderer components, `view.ts` or `evals/` (T40 and T41). Do NOT add dependencies.
+
+**Context**: read ARCHITECTURE.md sections named above first; they are the spec. Changes in short:
+- `types.ts`: add the `teach` action `{ type: "teach"; nodeId; verdict; feedback; markdown }`; add `"need_teach"` to `TeachStep`; add the `read` variant to `Awaiting` (question `null`, `nodeId: string`, `eventIndex`).
+- `schema.ts`: `teach` in `ActionSchema` (`markdown: z.string()`) and in `REPLY_JSON_SCHEMA` (seven variants; all fields in `required`).
+- `engine.ts`: `predict` answered -> `need_teach`; `teach` action -> awaiting learner `read`; its answer -> `need_explain`; allowed/check rules, `moveNotes` lines and `checkAnswer` read rule exactly as in ARCHITECTURE; the verdict handling (`need_verdict`) is unchanged and `teach` is NOT allowed in `need_verdict` or `need_repair`.
+- `prompt.ts`: the two prompt strings changed in ARCHITECTURE "LLM calls" (Teach paragraph, Markdown/LaTeX line) copied character for character.
+- `fixtures.ts`: add `A.teach(nodeId = "n1", verdict = null)` (markdown `"reading"`, feedback null) and `export const cont = () => ans()`; change `toCheck` to `[act(A.predict(nodeId)), say(), act(A.teach(nodeId)), cont(), act(A.explain(nodeId, check))]`. Add `toRead = (nodeId = "n1"): SessionEvent[] => [act(A.predict(nodeId)), say(), act(A.teach(nodeId))]`.
+
+**Steps**
+1. Add 11 tests (names exactly):
+
+   | Test | File | Expect |
+   |------|------|--------|
+   | predict answer leads to need_teach | engine.test.ts | `deriveState([...toTeach, act(A.predict()), say()])`: `teachStep` `"need_teach"`, awaiting model |
+   | teach asks the learner to read | engine.test.ts | `deriveState([...toTeach, ...toRead()])`: awaiting `{ who: "learner", purpose: "read", question: null, nodeId: "n1" }` |
+   | continue after teach leads to need_explain | engine.test.ts | `[...toTeach, ...toRead(), cont()]`: `teachStep` `"need_explain"`, awaiting model |
+   | teach is allowed only after a predict | engine.test.ts | `allowedActions` in `need_teach` is `["teach"]`; `checkAction` of an `explain` there returns `"explain is not allowed now"`; of a `teach` in `need_predict` returns `"teach is not allowed now"` |
+   | teach must be for the current node | engine.test.ts | `checkAction(state, A.teach("n2"))` in `need_teach` for n1 returns `"teach must be for node n1"` |
+   | teach needs a non-empty reading | engine.test.ts | `markdown: "  "` returns `"reading is empty"` |
+   | checkAnswer accepts continue for a reading | engine.test.ts | all-null answer -> `null`; an answer with `text: "x"` or `choiceIndex: 0` -> `"Press Continue."` |
+   | moveNotes asks for a reading in need_teach | engine.test.ts | the exact line from ARCHITECTURE with `n1` |
+   | parseReply accepts a teach action | schema.test.ts | a valid teach reply parses `ok: true`; one with an extra field fails |
+   | reply JSON schema lists seven variants | schema.test.ts | `anyOf` length is 7 and one variant has `type` enum `["teach"]` |
+   | prompt asks for a reading before the check | prompt.test.ts | the built prompt contains `Then teach: a full reading` and, for a `need_teach` state, `Write the reading for node n1` |
+2. Run tests. Expected: the 11 new tests fail; existing tests that build predict -> explain by hand also fail (corrupt session / not allowed). Paste the failing run. Fix those existing tests only by inserting `act(A.teach(id)), cont()` between the predict answer and the `explain` (use `toCheck` where it fits). If an existing test needs any other change, stop and report.
+3. Implement the source changes listed in Context.
+4. Run `npm test` -> `Tests  273 passed (273)`; `npm run format && npm run lint && npm run typecheck && npm run build` -> exit 0. Paste. (`typecheck` will fail in the renderer until you handle the new `Action`/`Awaiting` variants in `src/renderer/src/lib/view.ts` and `QuestionCard`/`ChatItemView` call sites. Make the smallest possible type-only fix: in `view.ts` skip `teach` like `plan` is skipped for the verdict logic is NOT allowed; instead add `case "teach": break;` and where `awaiting.question` is read, guard `awaiting.purpose === "read"`. Report exactly what you touched under NOT IN THE PLAN; T40 replaces it.)
+5. Tick T39, stage by name, commit `feat: teach step rules, schema and prompt`.
+
+**Stop and report if** more than the listed existing tests break, the typecheck fix needs more than the lines described, or tests fail after two attempts.
+
+### T40 - Reading and Continue in the window
+
+**Implements**: CR-3 part 2 (D36) · SPEC B21 · UI.md (Reading component, copy "Continue")
+**Depends on**: T39
+
+**Files**
+- Modify: `src/renderer/src/lib/view.ts`, `src/renderer/src/components/ChatItemView.tsx`, `src/renderer/src/lib/useLesson.ts` (only if needed), `tests/renderer/view.test.ts`, `tests/renderer/ChatItemView.test.tsx`
+- Do NOT touch other files, add dependencies, or change other copy.
+
+**Steps**
+1. Add 6 tests:
+
+   | Test | File | Expect |
+   |------|------|--------|
+   | view shows a teach reading as an item | view.test.ts | session `[...toTeach, ...toRead()]` -> last item `{ kind: "reading", markdown: "reading", answered: false }` (plus its `key`, `eventIndex`) |
+   | view marks a reading answered after continue | view.test.ts | add `cont()` -> same item has `answered: true`; no `question` item is produced for it |
+   | view keeps teach feedback | view.test.ts | a teach with `feedback: "Nice."` puts a `text` item with `Nice.` before the reading |
+   | a pending reading shows Continue | ChatItemView.test.tsx | `reading` item, `answered: false` -> button `Continue` |
+   | Continue sends an empty answer | ChatItemView.test.tsx | click -> `onSubmit` called once with `{ choiceIndex: null, text: null, reasoning: null, confidence: null }` |
+   | an answered reading has no Continue / Continue is disabled while busy | split into two tests with exactly these names: `an answered reading has no Continue`, `Continue is disabled while busy` | no button / button disabled when `disabled` |
+   (That is 3 + 4 = 7 rows counting the split; add all seven tests: expected total 280 = 273 + 7.)
+2. Run tests: the seven new tests fail only. Paste.
+3. Implement: `ChatItem` gains `{ kind: "reading"; key; eventIndex: number; markdown: string; answered: boolean }`. In `buildItems`, `teach` pushes its feedback (existing logic) then a reading item (`key: e${i}-rd`) and remembers it as pending-read; the next answer event sets `answered = true` on it (a pending-read answer is not a question answer). `ChatItemView` renders a reading as `<div className="reading"><MarkdownView/>…</div>` with, when not answered, `<button className="btn is-primary" disabled={disabled} onClick={...}>Continue</button>`. Remove the T39 stop-gap in `view.ts`.
+4. Run `npm test` -> `Tests  280 passed (280)`; format, lint, typecheck, build exit 0. Paste.
+5. Tick T40, stage by name, commit `feat: reading with Continue in the lesson`.
+
+**Stop and report if** an existing test breaks and needs an unlisted file, or tests fail after two attempts.
+
+### T41 - Evals for the reading (real Codex, costs quota)
+
+**Implements**: SPEC evals E5, E5b · CR-3
+**Depends on**: T40
+
+**Files**: Modify: `evals/loop.eval.ts` only.
+
+**Steps**
+1. Update the existing eval walkthrough so the teach node flow is predict -> teach -> explain: after the predict answer expect `teach` for the same node with `markdown.length >= 1500` (E5); then answer with a null-field Answer and expect `explain` for the same node with a check (E5b); E6 and E7 keep their meaning with `teach` + Continue inserted before the wrong/correct check answers.
+2. Run `npm run lint && npm run typecheck`: exit 0. Then run `npm run eval` once. Paste the full output (it uses the owner's Codex quota: one run only; if it fails, paste, do not rerun).
+3. Tick T41, stage `evals/loop.eval.ts` and `PLAN.md`, commit `test: evals for the teach step`.
+
+**Stop and report if** E5 fails because the reading is shorter than 1500 characters (report the length and the text, do not change the prompt), or any eval fails twice.
+
+### GATE D - A lesson with readings
+
+**Run**: `npm test` -> `Tests  280 passed (280)`; lint, typecheck, build exit 0; eval report pasted.
+**Try it yourself**: `npm run dev`; start a lesson; after the probe and plan expect per step: a predict card, then a long reading with Continue, then a short bridge with a check card. Tutor text should read as plain prose; only questions are boxed. Judge whether the readings are the right length and depth.
+**Then decide**: tune the prompt (reading length, tone) / milestone 2 (Gemini and Claude adapters) / ship.
 
 ## Milestone 2 - Gemini CLI and Claude Code (outline)
 Planned after Gate C. Each adapter implements `CliAdapter` (`detect`, `run`) and returns the same JSON reply.

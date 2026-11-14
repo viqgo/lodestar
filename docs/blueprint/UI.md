@@ -39,6 +39,7 @@ The template is `ui-template.html` (open it in a browser). Styling is plain CSS:
 | Question card (`QuestionCard`) | pending choice, pending text, answered, answered-pass, answered-fail; option: default, hover, selected, correct, wrong | label shows the purpose; confidence buttons on probe only; Submit disabled until an option is picked or text typed |
 | Lesson row (`Sidebar`) | default, hover (shows ×), active | topic, then phase and relative time |
 | Plan map (`PlanPanel`) | node: todo, current, passed, shaky | Mermaid graph; plain list fallback |
+| Reading (`ChatItemView`) | pending (with Continue), continued | CR-3: the tutor's full text as plain prose in the column, no box; Continue is the one primary button; once continued the button is gone |
 | Probe summary (`ChatItemView`) | one | known list + goal |
 | Lesson summary (`ChatItemView`) | one | summary + counts line |
 | Confirm dialog (`ConfirmDialog`) | one | centered over a dimmed window |
@@ -91,7 +92,7 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 | Card labels | "Probe", "Predict", "Check" |
 | Card fields | "Your answer" (placeholder for predict: "Take a guess. This is not graded."; for probe and check: "Type your answer"); "Your thinking (optional)" (placeholder "Why do you think so?") |
 | Confidence | "Sure", "Unsure", "Guessing" |
-| Card button | "Submit" |
+| Card button | "Submit"; on a reading: "Continue" |
 | Grades | "Correct", "Not yet" |
 | Probe summary | "What you already know", "Your goal" |
 | Plan notice | "Your path: <n> steps" |
@@ -104,6 +105,11 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 | Lesson summary | the summary text is shown as normal prose above a block that holds the label "Lesson complete" and (D31);  "<n> items added to your knowledge list." and, when any step is shaky, " <m> step is still shaky." / " <m> steps are still shaky." |
 | Delete lesson | "Delete this lesson? This cannot be undone."; "Cancel", "Delete" |
 | Knowledge | title "Knowledge"; "What you have shown you understand. Later lessons start from here."; "Deleted lesson" when the source is gone; empty text above |
+
+## Telling text from questions (CR-3)
+- Tutor text (readings, bridges, feedback, summaries) is plain prose in the reading column: no border, no background, `color-text`.
+- Questions are the only boxed things: `.card` with a 3px `color-accent` left border, and the answer inputs inside a card use `color-bg` as their background with a `color-muted` border, so they read as fill-in fields against the `color-surface` card.
+- No new colors, sizes or components beyond the tokens above.
 
 ## Behavior
 - Keyboard: Cmd+Enter submits the pending card. Enter in the Topic field moves focus to Goal. Escape cancels the confirm dialog. Tab order follows the visual order.

@@ -114,6 +114,7 @@ export type Action =
   | { type: "probe_done"; known: string[]; goal: string }
   | { type: "plan"; nodes: PlanNode[] }
   | { type: "predict"; nodeId: string; verdict: Verdict | null; feedback: string | null; question: Question }
+  | { type: "teach"; nodeId: string; verdict: Verdict | null; feedback: string | null; markdown: string }   // CR-3: a full reading, no question
   | { type: "explain"; nodeId: string; verdict: Verdict | null; feedback: string | null; markdown: string; check: Question }
   | { type: "lesson_done"; verdict: Verdict | null; feedback: string | null; summary: string;
       learned: { nodeId: string; text: string }[] };
@@ -149,11 +150,12 @@ export type KnowledgeView = KnowledgeItem & { lessonTopic: string | null };  // 
 
 export type Phase = "probe" | "plan" | "teach" | "done";
 export type NodeState = { status: "todo" | "passed" | "shaky"; fails: number };
-export type TeachStep = "need_predict" | "need_explain" | "need_repair" | "need_verdict";
+export type TeachStep = "need_predict" | "need_teach" | "need_explain" | "need_repair" | "need_verdict";
 export type Awaiting =
   | { who: "model" }
   | { who: "learner"; purpose: "probe" | "predict" | "check"; question: Question;
       nodeId: string | null; eventIndex: number }
+  | { who: "learner"; purpose: "read"; question: null; nodeId: string; eventIndex: number }   // CR-3: answered by Continue (an Answer with every field null)
   | { who: "nobody" };
 
 export type LessonState = {
@@ -201,7 +203,8 @@ How `deriveState` reads the event list (the lesson rules, D-numbers in SPEC B3-B
 - `probe_done` -> `known`, `sharpGoal` set; phase `plan`; awaiting model.
 - `plan` -> `plan` set, every node `{status:"todo", fails:0}`; phase `teach`; `teachStep = "need_predict"`; awaiting model.
 - Before applying any action while `teachStep` is `need_verdict`: apply its `verdict` to `currentNodeId` (`pass` -> status `passed`; `fail` -> `fails + 1`, and status `shaky` if `fails` reaches 3).
-- `predict` -> `currentNodeId = nodeId`; awaiting learner (purpose `predict`). Its answer -> `teachStep = "need_explain"`, awaiting model.
+- `predict` -> `currentNodeId = nodeId`; awaiting learner (purpose `predict`). Its answer -> `teachStep = "need_teach"`, awaiting model.
+- `teach` (CR-3) -> awaiting learner (purpose `read`). Its answer (Continue) -> `teachStep = "need_explain"`, awaiting model.
 - `explain` -> awaiting learner (purpose `check`). Its answer:
   - `choice` check: correct -> node `passed`, `teachStep = "need_predict"`; wrong -> `fails + 1`; if `fails` is 3 -> node `shaky`, `teachStep = "need_predict"`; else `teachStep = "need_repair"`.
   - `text` check: `teachStep = "need_verdict"`.
@@ -217,7 +220,7 @@ Constants only: `MAX_PROBE = 8`, `PLAN_MIN = 2`, `PLAN_MAX = 12`, `MAX_FAILS = 3
 | Signature | Purpose | On failure | Called by | Task |
 |-----------|---------|------------|-----------|------|
 | `export const ReplySchema: z.ZodType<{ action: Action }>` | zod schema for a reply, including the Question rules (choice: 2-6 options, `correctIndex` null or inside options; text: `options` empty and `correctIndex` null) | - | parseReply | |
-| `export const REPLY_JSON_SCHEMA: object` | hand-written JSON Schema sent to Codex: root object with one property `action` = `anyOf` of the six variants; every object has `additionalProperties:false` and lists every property in `required`; nullable fields use `["string","null"]` / `["integer","null"]` | - | turn.ts | |
+| `export const REPLY_JSON_SCHEMA: object` | hand-written JSON Schema sent to Codex: root object with one property `action` = `anyOf` of the seven variants; every object has `additionalProperties:false` and lists every property in `required`; nullable fields use `["string","null"]` / `["integer","null"]` | - | turn.ts | |
 | `parseReply(text: string): { ok: true; action: Action } \| { ok: false; reason: string }` | `JSON.parse` then `ReplySchema.safeParse` | `reason` is `"not valid JSON"` or `"does not match the schema: <first zod issue path and message>"` | turn.ts | |
 
 ### src/core/plan.ts
@@ -234,7 +237,7 @@ Constants only: `MAX_PROBE = 8`, `PLAN_MIN = 2`, `PLAN_MAX = 12`, `MAX_FAILS = 3
 | `deriveState(events: SessionEvent[]): LessonState` | folds the event list into the current state, by the rules under Data model | never throws for event lists the app wrote; throws `Error("corrupt session at event <i>")` for an answer event when not awaiting the learner, an action event when not awaiting the model, or a null verdict while `need_verdict` | turn.ts, ipc.ts, view.ts, prompt.ts | |
 | `allowedActions(state: LessonState): ActionType[]` | which action types may come next (table below) | returns `[]` when not awaiting model | checkAction, prompt.ts | |
 | `checkAction(state: LessonState, action: Action): string \| null` | full legality check (table below) | returns the reason string; `null` when allowed | turn.ts | |
-| `checkAnswer(state: LessonState, answer: Answer): string \| null` | awaiting learner; choice: `choiceIndex` inside options and `text` null; text: trimmed `text` 1-4000 chars and `choiceIndex` null | returns `"No question is waiting for an answer."` or `"Pick an option."` or `"Write an answer."` | ipc.ts | |
+| `checkAnswer(state: LessonState, answer: Answer): string \| null` | awaiting learner; choice: `choiceIndex` inside options and `text` null; text: trimmed `text` 1-4000 chars and `choiceIndex` null; read (CR-3): `choiceIndex` and `text` both null | returns `"No question is waiting for an answer."` or `"Pick an option."` or `"Write an answer."` or `"Press Continue."` (read with a choice or text) | ipc.ts | |
 | `learnedToSave(state: LessonState, action: Extract<Action, {type:"lesson_done"}>): { nodeId: string; text: string }[]` | keeps learned items whose node is `passed` in `state` (state computed after the action) and whose text is non-empty | returns `[]` | turn.ts | |
 | `moveNotes(state: LessonState): string[]` | the exact instruction lines for the prompt's "Your move" section (table below) | returns `[]` | prompt.ts | |
 
@@ -247,6 +250,7 @@ Constants only: `MAX_PROBE = 8`, `PLAN_MIN = 2`, `PLAN_MAX = 12`, `MAX_FAILS = 3
 | phase `plan` | `plan` | `validatePlan` reason |
 | teach, `need_predict`, nodes remain | `predict` | `nodeId` in `eligibleNodes` (`"node <id> cannot start now"`) |
 | teach, `need_predict`, all settled | `lesson_done` | - |
+| teach, `need_teach` | `teach` | `nodeId === currentNodeId` (`"teach must be for node <id>"`); `markdown` non-empty after trimming (`"reading is empty"`) |
 | teach, `need_explain` | `explain` | `nodeId === currentNodeId` (`"explain must be for node <id>"`); `check.kind` any; a choice check needs non-null `correctIndex` (`"check needs a correctIndex"`) |
 | teach, `need_repair` | `explain` | same as above |
 | teach, `need_verdict` | `explain`, `predict`, `lesson_done` | `verdict` non-null (`"verdict is required"`); then apply the verdict to a copy of the state and re-check the action against the resulting state (`need_repair` if failed with fails < 3, else `need_predict`) |
@@ -262,7 +266,8 @@ A type not in the allowed list always fails with `"<type> is not allowed now"`. 
 | plan | `Return the plan: 2 to 12 nodes, each one idea, deps listing the nodes it builds on.` |
 | `need_predict`, nodes remain | `Start the next node with a predict question. Nodes that can start now: <ids joined by ", ">.` |
 | `need_predict`, all settled | `Every node is passed or shaky. Return lesson_done.` |
-| `need_explain` | `Explain node <id> and include a check question.` |
+| `need_teach` | `Write the reading for node <id>: the whole idea derived step by step from what the learner holds, with at least one worked example, 500 to 1000 words. Do not ask a question yet.` |
+| `need_explain` | `Add a short bridge (under 150 words) for node <id> that fills what the reading left open, and include a check question.` |
 | `need_repair` | `The learner failed the check on node <id> (failure <fails> of 3). Explain node <id> again from a different angle that targets their mistake, with a new check question.` |
 | `need_verdict`, `fails < 2` | `The learner's last answer is a free-text check on node <id>. Set verdict. If pass, continue with the next step. If fail, explain node <id> again from a different angle with a new check question.` |
 | `need_verdict`, `fails === 2` | `The learner's last answer is a free-text check on node <id>, and it was their last attempt. Set verdict, then move on: predict for another node, or lesson_done if none remain.` |
@@ -457,7 +462,7 @@ Probe. Find precisely where their understanding stops for the things the goal de
 
 Plan. Find the smallest set of steps that leads from what they hold to the goal. Leave out anything they already hold and anything the goal does not need. Each node is one idea. "deps" lists the nodes it builds on. Use short lowercase ids with hyphens.
 
-Teach. Go one reasoning step at a time, each attached to something they already hold. For each node, first ask them to predict (a question they can attempt before being taught). Then explain: short plain prose that derives the idea from what they hold; state a fact outright only when it cannot be derived. No headings, no labelled sections, no commentary about the lesson itself. Every explanation carries one check question that only someone who followed the step can answer.
+Teach. Go one node at a time, each attached to something they already hold. For each node, first ask them to predict (a question they can attempt before being taught). Then teach: a full reading of the whole idea, written for this learner's level as you found it in the probe, derived step by step from what they hold, with at least one worked example; state a fact outright only when it cannot be derived. 500 to 1000 words of prose. Section headings are allowed in a reading; no commentary about the lesson itself, and no question in a reading. Then explain: a short bridge (under 150 words) that fills what the reading left open, carrying one check question that only someone who followed the reading can answer.
 
 Repair. If a check fails, explain the same node again from a different angle that targets the mistake in their answer, with a new check question.
 
@@ -466,7 +471,7 @@ Repair. If a check fails, explain the same node again from a different angle tha
 - verdict: "pass" or "fail" only when the learner's last answer was a free-text check; otherwise null.
 - choice questions: 2 to 6 options; correctIndex is the 0-based index of the right option (it may be null only for probe and predict questions with no single right answer). text questions: options [] and correctIndex null.
 - learned (lesson_done only): one short sentence per node, stating the idea as a fact, with that node's id.
-- Markdown and LaTeX ($...$ and $$...$$) are allowed in markdown, feedback, summary and question prompts.
+- Markdown and LaTeX ($...$ and $$...$$ on their own lines) are allowed in markdown, feedback, summary and question prompts.
 
 # Lesson
 Topic: {session.topic}
