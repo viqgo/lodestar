@@ -29,4 +29,7 @@ it("limits match the spec", () => {
   expect(limits.VOICE_SAY_MAX).toBe(4000);
   expect(limits.VOICE_CHUNK_MAX).toBe(8192);
   expect(limits.KEY_MAX).toBe(200);
+  expect(limits.BOX_DAYS).toEqual([1, 3, 7, 14, 30]);
+  expect(limits.PRACTICE_MAX).toBe(10);
+  expect(limits.CARD_BATCH).toBe(20);
 });

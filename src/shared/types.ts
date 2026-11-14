@@ -299,3 +299,11 @@ export type UnitStatus = {
 export type SubjectSummary = { id: string; name: string; updatedAt: string };
 export type SubjectResult =
   { ok: true; subject: Subject } | { ok: false; error: TurnError; subject: Subject | null };
+export type Review = {
+  itemId: string;
+  box: 1 | 2 | 3 | 4 | 5;
+  due: string;
+  front: string | null;
+};
+export type ReviewFilter = { subjectId: string | null; sessionId: string | null };
+export type DueItem = { item: KnowledgeItem; review: Review };

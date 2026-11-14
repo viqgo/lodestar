@@ -1,9 +1,12 @@
 import type {
   Action,
   Answer,
+  DueItem,
+  KnowledgeItem,
   OutlineChange,
   PlanNode,
   Question,
+  Review,
   Session,
   SessionEvent,
   Subject,
@@ -148,3 +151,22 @@ export const SE = {
   }),
 };
 export const readySubject: SubjectEvent[] = [SE.outline(), SE.accepted()];
+export const K = (n: number, over: Partial<KnowledgeItem> = {}): KnowledgeItem => ({
+  id: "k_" + String(n).padStart(8, "0") + "-0000-0000-0000-000000000000",
+  text: "t" + n,
+  sessionId: session().id,
+  nodeId: "n" + n,
+  createdAt: AT,
+  ...over,
+});
+export const review = (n: number, over: Partial<Review> = {}): Review => ({
+  itemId: K(n).id,
+  box: 1,
+  due: AT,
+  front: null,
+  ...over,
+});
+export const dueItem = (n: number, over: Partial<Review> = {}): DueItem => ({
+  item: K(n),
+  review: review(n, over),
+});

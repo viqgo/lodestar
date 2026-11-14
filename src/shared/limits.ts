@@ -25,3 +25,6 @@ export const SPEAK_TIMEOUT_MS = 15000;
 export const VOICE_SAY_MAX = 4000;
 export const VOICE_CHUNK_MAX = 8192;
 export const KEY_MAX = 200;
+export const BOX_DAYS = [1, 3, 7, 14, 30];
+export const PRACTICE_MAX = 10;
+export const CARD_BATCH = 20;

@@ -126,7 +126,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T88b Gate I fixes: main process
 - [x] T88c Gate I fixes: call logic in the window
 - [ ] GATE I Voice
-- [ ] T89 The schedule
+- [x] T89 The schedule
 - [ ] T90 Review storage
 - [ ] T91 Practice prompts and schemas
 - [ ] T92 Practice service
