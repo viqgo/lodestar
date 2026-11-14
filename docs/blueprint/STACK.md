@@ -100,3 +100,5 @@ Unverified:
 
 Owner setup: milestone 5 needs a Deepgram account and API key. Milestone 7 needs nothing (unsigned).
 Running cost: voice only, about $0.29 per hour of speech plus $0.03 per 1,000 characters read aloud.
+
+Verified 2026-11-14 (Gate G): Claude Code with `--allowed-tools Read,Glob,Grep` read a file OUTSIDE the `--add-dir` folder; without `--allowed-tools` for the read tools the outside read was refused and reads inside the folder still worked. Codex `-i <image>` placed before the `-` stdin marker works.
