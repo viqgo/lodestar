@@ -50,6 +50,34 @@ describe("practice service", () => {
     expect(f.prompts).toHaveLength(3);
   });
 
+  it("fronts and record never lose each other's change", async () => {
+    const f = await setup(2, frontsReply([K(1).id, K(2).id]));
+    let stale: Awaited<ReturnType<typeof f.store.readReviews>> | null = null;
+    const store = {
+      ...f.store,
+      readReviews: async () => {
+        if (stale !== null) return stale;
+        stale = await f.store.readReviews();
+        await f.store.updateReviews((rs) =>
+          rs.map((r) => (r.itemId === K(1).id ? { ...r, box: 4 } : r)),
+        );
+        return stale;
+      },
+    };
+    const practice = createPractice({
+      adapters: fakeAdapters(f.adapter),
+      store,
+      now: () => NOW,
+    });
+    expect(await practice.fronts("codex", [K(1).id, K(2).id])).toEqual({ ok: true });
+    const after = await f.store.readReviews();
+    expect(after.find((r) => r.itemId === K(1).id)).toMatchObject({
+      box: 4,
+      front: expect.any(String),
+    });
+    expect(after.find((r) => r.itemId === K(2).id)?.front).toBe("Q " + K(2).id);
+  });
+
   it("fronts skips items that have a front, unknown ids and repeats", async () => {
     const f = await setup(3, frontsReply([K(1).id, K(3).id]));
     const reviews = await f.store.readReviews();

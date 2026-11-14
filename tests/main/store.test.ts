@@ -430,6 +430,30 @@ describe("store reviews", () => {
     expect(await store.readReviews()).toEqual([good]);
   });
 
+  it("a review with an unreadable date counts as box 1", async () => {
+    const { dir, store } = await mk();
+    await fsp.writeFile(
+      path.join(dir, "reviews.json"),
+      JSON.stringify([review(1), { ...review(2), due: "soon" }]),
+      "utf8",
+    );
+    expect(await store.readReviews()).toEqual([review(1)]);
+  });
+
+  it("updateReviews drops reviews of deleted items and serialises with record", async () => {
+    const { store } = await mk();
+    await store.addKnowledge([K(1), K(2)]);
+    await store.writeReviews([...(await store.readReviews()), review(9)]);
+    await Promise.all([
+      store.updateReviews((rs) => rs.map((r) => (r.itemId === K(1).id ? { ...r, box: 3 } : r))),
+      store.updateReviews((rs) => rs.map((r) => (r.itemId === K(2).id ? { ...r, front: "Q" } : r))),
+    ]);
+    const after = await store.readReviews();
+    expect(after.map((r) => r.itemId)).toEqual([K(1).id, K(2).id]);
+    expect(after.find((r) => r.itemId === K(1).id)?.box).toBe(3);
+    expect(after.find((r) => r.itemId === K(2).id)?.front).toBe("Q");
+  });
+
   it("a new knowledge item gets a review in box one", async () => {
     const { store } = await mk();
     await store.addKnowledge([K(1), K(2)]);

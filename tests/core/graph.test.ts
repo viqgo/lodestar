@@ -93,6 +93,11 @@ describe("graph", () => {
     );
   });
 
+  it("graph labels cannot carry a directive or an entity", () => {
+    const d = knowledgeGraph([K(1, { text: "a%%b #lt; c" })], [], sessions, []);
+    expect(graphToMermaid(d)).toContain('k0["1 · a#37;#37;b #35;lt; c"]:::box1');
+  });
+
   it("graphToMermaid keeps every label on one line", () => {
     const d = knowledgeGraph([K(1, { text: 'a"b\nc' })], [], sessions, []);
     const text = graphToMermaid(d);

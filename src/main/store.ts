@@ -34,6 +34,7 @@ export type Store = {
   deleteKnowledge(id: string): Promise<void>;
   readReviews(): Promise<Review[]>;
   writeReviews(reviews: Review[]): Promise<void>;
+  updateReviews(change: (reviews: Review[]) => Review[]): Promise<void>;
   readProfile(): Promise<string>;
   writeProfile(text: string): Promise<void>;
   readSettings(): Promise<Settings>;
@@ -236,6 +237,7 @@ export async function createStore(
           typeof o.itemId === "string" &&
           (o.box === 1 || o.box === 2 || o.box === 3 || o.box === 4 || o.box === 5) &&
           typeof o.due === "string" &&
+          !Number.isNaN(Date.parse(o.due)) &&
           (typeof o.front === "string" || o.front === null)
         );
       });
@@ -246,6 +248,16 @@ export async function createStore(
 
   const writeReviews = (reviews: Review[]): Promise<void> =>
     serial(reviewsFile, () => writeJsonAtomic(reviewsFile, reviews));
+
+  const updateReviews = (change: (reviews: Review[]) => Review[]): Promise<void> =>
+    serial(reviewsFile, async () => {
+      const have = await readReviews();
+      const known = new Set((await readAllKnowledge()).map((k) => k.id));
+      await writeJsonAtomic(
+        reviewsFile,
+        change(have).filter((r) => known.has(r.itemId)),
+      );
+    });
 
   const readKnowledge = async (): Promise<KnowledgeItem[]> =>
     (await readAllKnowledge()).sort((a, b) =>
@@ -349,6 +361,7 @@ export async function createStore(
     deleteKnowledge,
     readReviews,
     writeReviews,
+    updateReviews,
     readProfile,
     writeProfile,
   };

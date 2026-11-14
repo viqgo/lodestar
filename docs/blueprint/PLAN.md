@@ -138,6 +138,8 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T98 Asides in the rules
 - [x] T99 Aside box
 - [x] T100 Evals and README
+- [x] T100b Gate J fixes: data and main process
+- [ ] T100c Gate J fixes: window and the aside end signal
 - [ ] GATE J Learning modes
 - [ ] T101 Policy and paths
 - [ ] T102 Deferred fixes: CLI and lesson files
@@ -148,7 +150,12 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [ ] T105 Build and check
 - [ ] T106 User README
 - [ ] GATE K Packaging
-- [ ] T107-T112 Milestone 8: customisation (outline)
+- [ ] T107 Settings grow
+- [ ] T108 Method text
+- [ ] T109 Model and effort reach the CLI
+- [ ] T110 Theme
+- [ ] T111 Profile sections: models and method
+- [ ] T112 Header, evals, README
 - [ ] GATE L Customisation, then the owner's try-out
 
 Conventions used in every task:
@@ -2986,7 +2993,7 @@ The builder stops here.
 ## Stages G-L - milestones 3 to 8 (D52-D56)
 
 How these stages are run (D56):
-- Stage G (milestone 3) is written in full below. Stage L is a task outline (Stages H, I, J and K are written in full): scope, files, tests by name. At the start of each of those stages a Fable planner expands its outlines into full tasks against the code as it then is, without making decisions: every behavior, name, signature and text comes from SPEC (B35-B86), ARCHITECTURE "Milestones 3-8" and UI.md. Anything that would need a decision stops the stage and goes to the owner.
+- Stage G (milestone 3) is written in full below. Stages H to L began as task outlines (scope, files, tests by name) and are now all written in full, Stage L last (D68). At the start of each of those stages a Fable planner expands its outlines into full tasks against the code as it then is, without making decisions: every behavior, name, signature and text comes from SPEC (B35-B86), ARCHITECTURE "Milestones 3-8" and UI.md. Anything that would need a decision stops the stage and goes to the owner.
 - A stage is built task by task by a Sonnet builder, then reviewed by a fresh Fable reviewer. The planner fixes Important findings and cheap Minor ones through fix tasks without asking, and lists them for the owner. Then the stage waits for the owner to say "check". The owner tries the app once, after stage L.
 - Test counts are relative: each task says how many tests it adds. Before starting a task the builder notes the current total from `npm test`; after the task the total must be that number plus the task's count.
 
@@ -4144,6 +4151,39 @@ Known gap, not planned here: the fronts of a batch are stored with a read of `re
 **Tests**: none (the eval is not part of `npm test`).
 **Totals**: 803 -> 803. **Commit**: `test: learning modes against a real cli`
 **Stop and report**: a README fact above contradicts the code as built (name it; do not change the code); the eval needs a file under `src/` to change.
+
+### T100b - Gate J fixes: data and main process
+**Implements**: Gate J findings M1, M2, M3, M8 · D56, D64
+**Depends on**: T100
+**Files**: modify `src/core/graph.ts`, `src/core/review.ts`, `src/main/store.ts`, `src/main/practice.ts`, `src/main/ipc.ts`, `tests/core/graph.test.ts`, `tests/core/review.test.ts`, `tests/main/store.test.ts`, `tests/main/practice.test.ts`, `tests/main/ipc.test.ts`. Do NOT touch any other file. Fakes of `Store` in those tests gain `updateReviews`.
+**Details**
+- M1: in `graph.ts`, `esc` first replaces `#` with `#35;` and `%` with `#37;`, then does what it does today.
+- M2: `readReviews` (store) also requires `!Number.isNaN(Date.parse(o.due))`, otherwise the entry counts as missing (box 1); `dueItems` (review.ts) treats a review whose `due` does not parse as due now (`!(Date.parse(due) > at)`).
+- M3: `Store` gains `updateReviews(change: (reviews: Review[]) => Review[]): Promise<void>`: inside one `serial(reviewsFile)` step it reads the reviews and the knowledge items, calls `change`, drops every review whose item is not in the knowledge list, and writes. `review:record` and the fronts storing in `practice.ts` use it instead of read-then-write (the ipc `withLock("reviews")` stays). `addKnowledge` and `deleteKnowledge` keep their behavior.
+- M8: `practice:grade` refuses (returns the existing refusal for a bad question) when `question.prompt.length > CHAT_TEXT_MAX`.
+**Tests (+6)**: `graph labels cannot carry a directive or an entity` · `a review with an unreadable date counts as box 1` · `an unreadable due date is due now` · `updateReviews drops reviews of deleted items and serialises with record` (two concurrent calls, both changes kept) · `fronts and record never lose each other's change` (practice.test with a fake store whose updateReviews is real-ish) · `practice:grade refuses an over-long question`.
+**Expected failure**: each new test fails before its change.
+**Totals**: 803 -> 809. **Commit**: `fix: gate J data and main process fixes`
+**Stop and report**: an existing test needs an edit beyond adding `updateReviews` to a Store fake.
+
+### T100c - Gate J fixes: window and the aside end signal
+**Implements**: Gate J findings I1, I2, M4, M5, M6, M7
+**Depends on**: T100b
+**Files**: modify `src/shared/types.ts` (`Api.onAsideEnded`), `src/main/ipc.ts`, `src/preload/index.ts`, `src/renderer/src/lib/useLesson.ts`, `src/renderer/src/components/GraphScreen.tsx`, `src/renderer/src/components/ReviewScreen.tsx`, `tests/main/ipc.test.ts`, `tests/preload/index.test.ts`, `tests/helpers/dom.ts`, `tests/renderer/useLesson.test.tsx`, `tests/renderer/GraphScreen.test.tsx`, `tests/renderer/ReviewScreen.test.tsx`. Do NOT touch any other file. Check first: `grep -rn "registerIpc(\|onTurnEnded" src tests` and name every site that needs the new default.
+**Details**
+- I1: `lesson:aside` sends `aside:ended` with the lesson id on every outcome (success, failure, stop); preload exposes `onAsideEnded(cb: (id: string) => void): () => void` like `onTurnEnded` (the key list and call count of the preload test grow by one; `dom.ts` gets a default and an `emitAsideEnded` helper). `useLesson` subscribes for its lesson id and on it sets `busy` false and re-reads the session with `getSession`.
+- I2: in `GraphScreen`, when the mermaid text is longer than 50000 characters, skip drawing (`svg = null`) so the list fallback shows.
+- M4: filter and tutor picker in `ReviewScreen` are `disabled={active || busy}`.
+- M5: `startPractice` clears `error`; the Retry banner is hidden while a run is active.
+- M6: the flashcard run's last `recordReview` uses `.finally` (or `.then(done, done)`) so the run always ends.
+- M7: an effect in `ReviewScreen` resets the filter to all when its lesson or subject id is no longer in `sessions`/`subjects`.
+**Tests (+7)**: `lesson:aside tells the window when it ends, also on failure and stop` (ipc) · `useLesson stops being busy when an aside ends` · `GraphScreen shows the list when the map text is too large` · `the filter is disabled while flashcards load` · `starting practice clears a stale Retry banner` · `a flashcard run ends when the last record fails` · `the filter resets when its lesson is deleted`. The preload test edits are mechanical, not new tests.
+**Expected failure**: each new test fails before its change.
+**Totals**: 809 -> 816. **Commit**: `fix: gate J window fixes`
+**Stop and report**: a `registerIpc` or Api fake exists that this task does not list.
+
+### Gate J findings not fixed
+N1 (no keyboard selection on the drawn map; the list below it works), N2 (graph merges two subjects with the same name; needs a subject id in `GraphGroup`), N3 (an aside writes back the session it read before the call, so a lesson deleted during an aside is recreated; same class as the deferred delete mark in T102, which should cover `aside` too), N4 (a practice item deleted mid-run offers only Retry; not reachable from the UI).
 
 ### Where each milestone 6 SPEC test lives
 - new_item_is_box_one_due_now, correct_moves_up_and_sets_due, wrong_resets_to_box_one_tomorrow, box_five_stays_at_five: T89

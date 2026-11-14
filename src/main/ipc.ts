@@ -353,13 +353,15 @@ export function registerIpc(deps: IpcDeps): void {
       if (typeof itemId !== "string" || typeof correct !== "boolean") return;
       const item = (await store.readKnowledge()).find((k) => k.id === itemId);
       if (!item) return;
-      const reviews = await store.readReviews();
-      const current = reviews.find((r) => r.itemId === itemId) ?? newReview(itemId, item.createdAt);
       try {
-        await store.writeReviews([
-          ...reviews.filter((r) => r.itemId !== itemId),
-          nextReview(current, correct, now()),
-        ]);
+        await store.updateReviews((reviews) => {
+          const current =
+            reviews.find((r) => r.itemId === itemId) ?? newReview(itemId, item.createdAt);
+          return [
+            ...reviews.filter((r) => r.itemId !== itemId),
+            nextReview(current, correct, now()),
+          ];
+        });
       } catch {
         // nothing changes
       }
@@ -704,6 +706,7 @@ export function registerIpc(deps: IpcDeps): void {
         typeof itemId !== "string" ||
         !q.ok ||
         q.value.question.kind !== "text" ||
+        q.value.question.prompt.length > CHAT_TEXT_MAX ||
         typeof text !== "string" ||
         text.trim().length < 1 ||
         text.trim().length > ANSWER_TEXT_MAX

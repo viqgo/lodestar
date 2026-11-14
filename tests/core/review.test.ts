@@ -76,6 +76,11 @@ describe("review schedule", () => {
     expect(ids({ subjectId: "nobody", sessionId: null })).toEqual([]);
   });
 
+  it("an unreadable due date is due now", () => {
+    const list = dueItems([K(1)], [review(1, { due: "soon" })], NOW, all, []);
+    expect(list.map((d) => d.item.id)).toEqual([K(1).id]);
+  });
+
   it("dueItems counts an item without a review as box one, due since it was created", () => {
     const list = dueItems([K(1)], [], NOW, all, []);
     expect(list).toHaveLength(1);

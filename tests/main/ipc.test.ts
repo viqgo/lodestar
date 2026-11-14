@@ -1314,7 +1314,7 @@ describe("ipc review", () => {
     expect(await call("review:record", 42, true)).toBe(undefined);
     expect(await call("review:record", K(1).id, "yes")).toBe(undefined);
     expect(await store.readReviews()).toEqual(before);
-    const failing = { ...store, writeReviews: vi.fn(async () => Promise.reject(new Error("x"))) };
+    const failing = { ...store, updateReviews: vi.fn(async () => Promise.reject(new Error("x"))) };
     const ctx = await setup();
     await ctx.store.addKnowledge([K(1)]);
     const handlers = new Map<string, (...a: any[]) => any>();
@@ -1324,7 +1324,7 @@ describe("ipc review", () => {
         on: vi.fn(),
       } as any,
       adapters: fakeAdapters({ detect: vi.fn() } as any),
-      store: { ...ctx.store, writeReviews: failing.writeReviews },
+      store: { ...ctx.store, updateReviews: failing.updateReviews },
       turns: { advance: vi.fn(), stop: vi.fn(), isRunning: vi.fn() } as any,
       subjects: { outline: vi.fn(), reply: vi.fn(), stop: vi.fn(), isRunning: vi.fn() } as any,
       now: () => NOW,
@@ -1336,7 +1336,7 @@ describe("ipc review", () => {
       practice: { fronts: vi.fn(), ask: vi.fn(), grade: vi.fn(), stop: vi.fn() } as any,
     });
     expect(await handlers.get("review:record")!(null, K(1).id, true)).toBe(undefined);
-    expect(failing.writeReviews).toHaveBeenCalled();
+    expect(failing.updateReviews).toHaveBeenCalled();
   });
 
   it("delete_item_removes_card_and_schedule (ipc)", async () => {
@@ -1377,6 +1377,15 @@ describe("ipc practice", () => {
       feedback: "f",
     });
     expect(practice.grade).toHaveBeenCalledWith("claude", "k", textQ, "words");
+  });
+
+  it("practice:grade refuses an over-long question", async () => {
+    const { call, practice } = await setup();
+    const answer = { ok: false, error: { kind: "invalid_answer", message: "Write an answer." } };
+    expect(
+      await call("practice:grade", "k", { ...textQ, prompt: "x".repeat(4001) }, "words", "claude"),
+    ).toEqual(answer);
+    expect(practice.grade).not.toHaveBeenCalled();
   });
 
   it("practice channels refuse an unknown tutor, a bad question and a bad answer", async () => {

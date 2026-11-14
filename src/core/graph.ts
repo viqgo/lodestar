@@ -66,7 +66,12 @@ export function knowledgeGraph(
 }
 
 const esc = (s: string): string =>
-  plain(s).replace(/"/g, "#quot;").replace(/</g, "#lt;").replace(/>/g, "#gt;");
+  plain(s)
+    .replace(/#/g, "#35;")
+    .replace(/%/g, "#37;")
+    .replace(/"/g, "#quot;")
+    .replace(/</g, "#lt;")
+    .replace(/>/g, "#gt;");
 
 export function graphToMermaid(data: GraphData): string {
   const ids = new Map<string, string>();

@@ -37,7 +37,7 @@ export function dueItems(
       item,
       review: reviews.find((r) => r.itemId === item.id) ?? newReview(item.id, item.createdAt),
     }))
-    .filter((d) => Date.parse(d.review.due) <= at)
+    .filter((d) => !(Date.parse(d.review.due) > at))
     .sort((a, b) => Date.parse(a.review.due) - Date.parse(b.review.due));
 }
 

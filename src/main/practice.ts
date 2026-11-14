@@ -84,18 +84,20 @@ export function createPractice(deps: {
           },
         );
         if (!result.ok) return { ok: false, error: result.error };
-        const current = await deps.store.readReviews();
-        for (const front of result.value.fronts) {
-          const item = batch.find((b) => b.id === front.itemId)!;
-          const index = current.findIndex((r) => r.itemId === item.id);
-          const next = {
-            ...(index >= 0 ? current[index]! : newReview(item.id, item.createdAt)),
-            front: front.front.trim(),
-          };
-          if (index >= 0) current[index] = next;
-          else current.push(next);
-        }
-        await deps.store.writeReviews(current);
+        await deps.store.updateReviews((reviews) => {
+          const current = [...reviews];
+          for (const front of result.value.fronts) {
+            const item = batch.find((b) => b.id === front.itemId)!;
+            const index = current.findIndex((r) => r.itemId === item.id);
+            const next = {
+              ...(index >= 0 ? current[index]! : newReview(item.id, item.createdAt)),
+              front: front.front.trim(),
+            };
+            if (index >= 0) current[index] = next;
+            else current.push(next);
+          }
+          return current;
+        });
       }
       return { ok: true };
     } finally {
