@@ -40,7 +40,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] GATE B A lesson runs headless against real Codex
 - [x] T20 IPC handlers
 - [x] T21 Preload bridge and main wiring
-- [ ] T22 Component styles
+- [x] T22 Component styles
 - [ ] T23 Turning a lesson into things to draw
 - [ ] T24 Stable option shuffling
 - [ ] T25 The plan as Mermaid text
