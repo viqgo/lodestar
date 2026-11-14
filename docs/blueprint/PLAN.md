@@ -84,7 +84,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [ ] GATE F Three CLIs
 - [ ] OWNER TASK Gemini live run
 - [x] T56 Material rules and types
-- [ ] T57 Listing a folder and storing attachments
+- [x] T57 Listing a folder and storing attachments
 - [ ] T58 Adapters turn options into flags
 - [ ] T59 The prompt and the answer rule
 - [ ] T60 The turn passes material to the tutor

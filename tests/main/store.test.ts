@@ -156,3 +156,83 @@ describe("store profile", () => {
     expect((await fsp.readdir(dir)).filter((n) => n.endsWith(".tmp"))).toEqual([]);
   });
 });
+
+const SID = "s_00000001-0000-0000-0000-000000000000";
+
+describe("store attachments", () => {
+  const source = async (name: string, content = "hello") => {
+    const d = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-src-"));
+    const p = path.join(d, name);
+    await fsp.writeFile(p, content);
+    return p;
+  };
+
+  it("attach_copies_into_lesson_folder", async () => {
+    const { dir, store } = await mk();
+    const a = await store.addAttachment(SID, await source("my notes.md"), 0, 10);
+    expect(a).toEqual({
+      ok: true,
+      attachment: { file: "a1-my_notes.md", name: "my notes.md", bytes: 5, kind: "text" },
+    });
+    const stored = path.join(dir, "attachments", SID, "a1-my_notes.md");
+    expect(await fsp.readFile(stored, "utf8")).toBe("hello");
+    expect(store.attachmentsDir(SID)).toBe(path.join(dir, "attachments", SID));
+    const b = await store.addAttachment(SID, await source("my notes.md"), 1, 10);
+    expect(b.ok && b.attachment.file).toBe("a2-my_notes.md");
+    await expect(fsp.access(path.join(dir, "attachments", SID, "a2-my_notes.md"))).resolves.toBe(
+      undefined,
+    );
+  });
+
+  it("addAttachment refuses by type, size and count and copies nothing", async () => {
+    const { dir, store } = await mk();
+    expect(await store.addAttachment(SID, await source("x.exe"), 0, 10)).toEqual({
+      ok: false,
+      message: "That file type is not supported.",
+    });
+    const big = await source("big.pdf");
+    await fsp.truncate(big, 20 * 1024 * 1024 + 1);
+    expect(await store.addAttachment(SID, big, 0, 10)).toEqual({
+      ok: false,
+      message: "That file is larger than 20 MB.",
+    });
+    expect(await store.addAttachment(SID, await source("a.txt"), 10, 10)).toEqual({
+      ok: false,
+      message: "A lesson can hold at most 10 files.",
+    });
+    await expect(fsp.access(path.join(dir, "attachments", SID))).rejects.toThrow();
+  });
+
+  it("addAttachment reports an unreadable file", async () => {
+    const { store } = await mk();
+    expect(await store.addAttachment(SID, "/no/such/file.txt", 0, 10)).toEqual({
+      ok: false,
+      message: "That file could not be read.",
+    });
+  });
+
+  it("delete_lesson_removes_attachments", async () => {
+    const { store } = await mk();
+    await store.writeSession({ ...session(), id: SID });
+    const a = await store.addAttachment(SID, await source("a.txt"), 0, 10);
+    expect(a.ok).toBe(true);
+    await store.removeAttachment(SID, "a1-a.txt");
+    await expect(fsp.access(path.join(store.attachmentsDir(SID), "a1-a.txt"))).rejects.toThrow();
+    await store.removeAttachment(SID, "a1-a.txt");
+    await store.addAttachment(SID, await source("b.txt"), 0, 10);
+    await store.deleteSession(SID);
+    await expect(fsp.access(store.attachmentsDir(SID))).rejects.toThrow();
+  });
+
+  it("old session files get the new defaults", async () => {
+    const { dir, store } = await mk();
+    const old: Record<string, unknown> = { ...session(), id: SID };
+    delete old.folder;
+    delete old.attachments;
+    delete old.webSearch;
+    await fsp.writeFile(path.join(dir, "sessions", SID + ".json"), JSON.stringify(old), "utf8");
+    const want = { folder: null, attachments: [], webSearch: false };
+    expect(await store.readSession(SID)).toMatchObject(want);
+    expect((await store.listSessions())[0]).toMatchObject(want);
+  });
+});

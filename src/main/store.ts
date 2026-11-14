@@ -1,5 +1,6 @@
 import path from "node:path";
-import type { KnowledgeItem, Session } from "../shared/types";
+import { attachmentKind, checkAttachment } from "../core/material";
+import type { Attachment, KnowledgeItem, Session } from "../shared/types";
 
 export type Store = {
   writeJsonAtomic(file: string, data: unknown): Promise<void>;
@@ -7,6 +8,14 @@ export type Store = {
   readSession(id: string): Promise<Session | null>;
   writeSession(session: Session): Promise<void>;
   deleteSession(id: string): Promise<void>;
+  attachmentsDir(sessionId: string): string;
+  addAttachment(
+    sessionId: string,
+    sourcePath: string,
+    countBefore: number,
+    limit: number,
+  ): Promise<{ ok: true; attachment: Attachment } | { ok: false; message: string }>;
+  removeAttachment(sessionId: string, file: string): Promise<void>;
   readKnowledge(): Promise<KnowledgeItem[]>;
   addKnowledge(items: KnowledgeItem[]): Promise<void>;
   deleteKnowledge(id: string): Promise<void>;
@@ -46,10 +55,59 @@ export async function createStore(
     }
   };
 
+  const withDefaults = (s: Session): Session => ({
+    ...s,
+    folder: s.folder ?? null,
+    attachments: s.attachments ?? [],
+    webSearch: s.webSearch ?? false,
+  });
+
+  const attachmentsDir = (id: string): string => {
+    if (!ID.test(id)) throw new Error("bad id");
+    return path.join(dir, "attachments", id);
+  };
+
+  const addAttachment = async (
+    sessionId: string,
+    sourcePath: string,
+    countBefore: number,
+    limit: number,
+  ): Promise<{ ok: true; attachment: Attachment } | { ok: false; message: string }> => {
+    const target = attachmentsDir(sessionId);
+    let bytes: number;
+    try {
+      bytes = (await fs.stat(sourcePath)).size;
+    } catch {
+      return { ok: false, message: "That file could not be read." };
+    }
+    const name = path.basename(sourcePath);
+    const refusal = checkAttachment(name, bytes, countBefore, limit);
+    if (refusal !== null) return { ok: false, message: refusal };
+    try {
+      await fs.mkdir(target, { recursive: true });
+      const safe = name.replace(/[^A-Za-z0-9._-]/g, "_").slice(0, 80);
+      const taken = new Set(await fs.readdir(target));
+      let k = 1;
+      while (taken.has("a" + k + "-" + safe)) k++;
+      const file = "a" + k + "-" + safe;
+      await fs.copyFile(sourcePath, path.join(target, file));
+      return {
+        ok: true,
+        attachment: { file, name, bytes, kind: attachmentKind(name) ?? "text" },
+      };
+    } catch {
+      return { ok: false, message: "Could not save. Check free disk space." };
+    }
+  };
+
+  const removeAttachment = async (sessionId: string, file: string): Promise<void> => {
+    await fs.rm(path.join(attachmentsDir(sessionId), file), { force: true });
+  };
+
   const readSession = async (id: string): Promise<Session | null> => {
     if (!ID.test(id)) return null;
     try {
-      return JSON.parse(await fs.readFile(fileFor(id), "utf8")) as Session;
+      return withDefaults(JSON.parse(await fs.readFile(fileFor(id), "utf8")) as Session);
     } catch {
       return null;
     }
@@ -61,7 +119,9 @@ export async function createStore(
     for (const name of names) {
       try {
         sessions.push(
-          JSON.parse(await fs.readFile(path.join(sessionsDir, name), "utf8")) as Session,
+          withDefaults(
+            JSON.parse(await fs.readFile(path.join(sessionsDir, name), "utf8")) as Session,
+          ),
         );
       } catch {
         // skip unparsable files
@@ -77,6 +137,7 @@ export async function createStore(
   const deleteSession = async (id: string): Promise<void> => {
     if (!ID.test(id)) return;
     await fs.rm(fileFor(id), { force: true });
+    await fs.rm(attachmentsDir(id), { recursive: true, force: true });
   };
 
   const knowledgeFile = path.join(dir, "knowledge.json");
@@ -144,6 +205,9 @@ export async function createStore(
     readSession,
     writeSession,
     deleteSession,
+    attachmentsDir,
+    addAttachment,
+    removeAttachment,
     readKnowledge,
     addKnowledge,
     deleteKnowledge,
