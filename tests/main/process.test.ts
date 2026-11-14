@@ -232,6 +232,27 @@ describe("runProcess", () => {
   });
 });
 
+describe("finder PATH", () => {
+  it("finder_path_finds_homebrew_clis", async () => {
+    const finderPath = "/usr/bin:/bin:/usr/sbin:/sbin";
+    for (const p of [
+      "/opt/homebrew/bin/claude",
+      "/usr/local/bin/claude",
+      "/home/x/.local/bin/claude",
+      "/home/x/.npm-global/bin/claude",
+    ]) {
+      const fsDep = { ...fs, existsSync: (q: string) => q === p } as typeof fs;
+      const { deps, f } = make({ stdout: "2.1.322 (Claude Code)\n" }, { PATH: finderPath }, fsDep);
+      expect(findCommand(deps, "claude", "LEARN_CLAUDE_PATH")).toBe(p);
+      expect(await detectVersion(deps, p)).toEqual({ ok: true, version: "2.1.322" });
+      expect(f.calls[0].cmd).toBe(p);
+      expect(f.calls[0].opts.env.PATH).toBe(
+        "/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/home/x/.local/bin:/home/x/.npm-global/bin",
+      );
+    }
+  });
+});
+
 describe("failureResult", () => {
   it("failureResult maps the three kinds", () => {
     expect(failureResult({ kind: "missing" }, "Claude Code", 180000)).toEqual({

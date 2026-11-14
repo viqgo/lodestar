@@ -141,7 +141,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T100b Gate J fixes: data and main process
 - [x] T100c Gate J fixes: window and the aside end signal
 - [ ] GATE J Learning modes
-- [ ] T101 Policy and paths
+- [x] T101 Policy and paths
 - [ ] T102 Deferred fixes: CLI and lesson files
 - [ ] T102b Deferred fixes: subject writes and folder
 - [ ] T103 Deferred fixes: window

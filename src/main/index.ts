@@ -7,6 +7,7 @@ import os from "node:os";
 import { join } from "node:path";
 import { FILE_LIST_MAX } from "../shared/limits";
 import { createAdapters } from "./cli/registry";
+import { CSP } from "./csp";
 import { registerIpc } from "./ipc";
 import { createPractice } from "./practice";
 import { listFolder } from "./files";
@@ -130,9 +131,7 @@ async function main(): Promise<void> {
       callback({
         responseHeaders: {
           ...details.responseHeaders,
-          "Content-Security-Policy": [
-            "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:",
-          ],
+          "Content-Security-Policy": [CSP],
         },
       });
     });
