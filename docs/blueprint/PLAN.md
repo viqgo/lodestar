@@ -69,7 +69,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T44 The Profile screen
 - [ ] GATE E Tutor profile in the window
 - [x] T45 CLI names and defaults (milestone 2)
-- [ ] T46 Shared process runner
+- [x] T46 Shared process runner
 - [ ] T47 Codex adapter on the shared runner
 - [ ] T48 Claude Code adapter
 - [ ] T49 Gemini adapter (experimental)
