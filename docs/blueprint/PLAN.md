@@ -2385,6 +2385,7 @@ What the owner can see at the end: a Profile screen where their instructions are
 **Then decide**: streaming spike / milestone 2 (Gemini and Claude adapters) / tune.
 
 ## Backlog (owner requests after Gate D, not yet planned)
+- Spike result (2026-11-14): `codex exec --json` sends NO partial text: only `thread.started`, `turn.started`, then one `item.completed` with the whole reply, then `turn.completed`. A 400-word reading took 43.8 s at the default reasoning effort (1444 of 1949 output tokens were reasoning) and 19.6 s with `-c model_reasoning_effort=low` (one sample each). Claude Code has `--output-format stream-json --include-partial-messages`; Gemini CLI is unchecked. So real streaming is possible only with the Claude/Gemini adapters.
 - Faster feel: streaming of the reply. First a spike: does `codex exec --json` emit partial text of the final message, or only the whole message at the end? Other ideas: write the bridge and check while the learner reads (the Continue answer carries no information).
 
 ## Milestone 2 - Gemini CLI and Claude Code (outline)
