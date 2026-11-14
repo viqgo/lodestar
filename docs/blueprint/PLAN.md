@@ -63,7 +63,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T39 The teach step: rules, schema, prompt
 - [x] T40 Reading and Continue in the window
 - [x] T41 Evals for the reading
-- [ ] GATE D A lesson with readings
+- [x] GATE D A lesson with readings
 
 Conventions used in every task:
 - "Run tests" means `npm test`. The expected line is the vitest summary line, e.g. `Tests  9 passed (9)`.
@@ -2291,6 +2291,10 @@ What the owner can see at the end: tutor text and question cards look clearly di
 **Run**: `npm test` -> `Tests  280 passed (280)`; lint, typecheck, build exit 0; eval report pasted.
 **Try it yourself**: `npm run dev`; start a lesson; after the probe and plan expect per step: a predict card, then a long reading with Continue, then a short bridge with a check card. Tutor text should read as plain prose; only questions are boxed. Judge whether the readings are the right length and depth.
 **Then decide**: tune the prompt (reading length, tone) / milestone 2 (Gemini and Claude adapters) / ship.
+
+## Backlog (owner requests after Gate D, not yet planned)
+- Faster feel: streaming of the reply. First a spike: does `codex exec --json` emit partial text of the final message, or only the whole message at the end? Other ideas: write the bridge and check while the learner reads (the Continue answer carries no information).
+- Profile tab: the owner writes standing instructions for the tutor (tone, depth, length, examples); stored locally, added to every prompt, cannot override the JSON rules.
 
 ## Milestone 2 - Gemini CLI and Claude Code (outline)
 Planned after Gate C. Each adapter implements `CliAdapter` (`detect`, `run`) and returns the same JSON reply.
