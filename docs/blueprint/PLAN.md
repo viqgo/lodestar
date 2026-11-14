@@ -2522,14 +2522,14 @@ export function failureResult(
 
    | Test | Expect |
    |------|--------|
-   | findCommand prefers the env override | env `{ X_PATH: "/fake/x", PATH: "" }` -> `"/fake/x"`; without it and with an `existsSync` that is true only for `/opt/homebrew/bin/x` -> that path; nothing found -> `null` |
+   | path_overrides_are_used | env `{ X_PATH: "/fake/x", PATH: "" }` -> `"/fake/x"`; without it and with an `existsSync` that is true only for `/opt/homebrew/bin/x` -> that path; nothing found -> `null` |
    | detectVersion returns the version | stdout `tool 1.2.3\n`, code 0 -> `{ ok: true, version: "1.2.3" }` |
    | detectVersion fails on a missing command, a non-zero exit and a timeout | `null` command; `{ missing: true }`; `{ code: 1 }`; `{ hang: true }` with `detectTimeoutMs: 20` -> each `{ ok: false }` |
    | runProcess runs without a shell in a new empty folder | `opts.shell` is `false`; `opts.cwd` ends with `/work`, is inside `tmpRoot`, and was an empty directory at spawn time (check inside a custom `args` or with `fs.readdirSync` captured in `prepare`) |
    | runProcess calls prepare before spawning and passes dirs to args | `prepare` writes `root/x.txt`; `args: (d) => ["--file", path.join(d.root, "x.txt")]`; the spawn call's args equal that and `prepare` ran before `args` |
    | runProcess writes stdin and returns stdout, stderr and the exit code | plan `{ stdout: "out", stderr: "err", code: 3 }`, stdin `"PROMPT"` -> `{ kind: "exit", code: 3, stdout: "out", stderr: "err" }` and the call's `stdin` is `"PROMPT"` |
    | temp_dir_removed_for_every_cli | after a normal exit, after an abort (`AbortController.abort()` on a `{ hang: true }` plan) and after a timeout (`timeoutMs: 20`), `tmpRoot` contains no entry |
-   | runProcess reports missing, aborted and timeout | `command: null` -> `missing` and no spawn; `{ missing: true }` -> `missing`; already-aborted signal -> `aborted`, no spawn, no folder; hang + abort -> `aborted` and the call was killed; hang + `timeoutMs: 20` -> `timeout` and killed |
+   | timeout_and_stop_work_for_every_cli | `command: null` -> `missing` and no spawn; `{ missing: true }` -> `missing`; already-aborted signal -> `aborted`, no spawn, no folder; hang + abort -> `aborted` and the call was killed; hang + `timeoutMs: 20` -> `timeout` and killed |
    | runProcess drops the named env variables and extends PATH | env `{ A: "1", B: "2", PATH: "/bin" }`, `dropEnv: ["A"]` -> spawn env has no `A`, has `B`, and `PATH` starts with `/bin:` and contains `/opt/homebrew/bin` |
    | failureResult maps the three kinds | `missing` -> failed `"Claude Code CLI not found"` (label `"Claude Code"`); `aborted` -> aborted `"stopped"`; `timeout` with 180000 -> timeout `"no reply after 180 seconds"` |
 2. Run tests, paste the failing run. Implement `process.ts`.
@@ -2568,7 +2568,7 @@ export function failureResult(
 
 **Context**: real stdout of `claude -p --output-format json` is one JSON object, for example
 `{"type":"result","is_error":false,"result":"{\"action\":{\"type\":\"probe\"}}","structured_output":{"action":{"type":"probe"}},"usage":{"input_tokens":2,"cache_creation_input_tokens":7317,"cache_read_input_tokens":0,"output_tokens":207}}`.
-Arguments, in this order: `["-p", "--output-format", "json", "--json-schema", JSON.stringify(req.schema), "--tools", "", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--disable-slash-commands"]`. `dropEnv: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]`. Command: `findCommand(deps, "claude", "LEARN_CLAUDE_PATH")`. `id: "claude"`, `label: "Claude Code"`, `retries: 1`.
+Arguments, in this order: `["-p", "--output-format", "json", "--json-schema", JSON.stringify(req.schema), "--tools", "", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--disable-slash-commands"]`. `dropEnv: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]`. Command: `findCommand(deps, "claude", "LEARN_CLAUDE_PATH")`. `id: "claude"`, `label: "Claude Code"`, `retries: 1`. Exports: `parseClaudeResult` and `createClaudeAdapter(deps: ProcessDeps): CliAdapter` (`detect` = `detectVersion(deps, <command>)`).
 
 `parseClaudeResult(stdout)`: `JSON.parse` in try/catch; not an object -> `{ text: null, usage: null, error: "unreadable output" }`. `is_error === true` -> `error` = `String(result ?? "error").slice(0, STDERR_MAX)`. `text` = `JSON.stringify(structured_output)` when `structured_output` is a non-null object, else `result` when it is a string, else `null`. `usage` = `{ inputTokens: input_tokens + cache_creation_input_tokens + cache_read_input_tokens (missing fields count as 0), outputTokens: output_tokens }` when `usage` is an object, else `null`.
 
@@ -2603,7 +2603,7 @@ Arguments, in this order: `["-p", "--output-format", "json", "--json-schema", JS
 - Do NOT touch any other file.
 
 **Context**: Gemini has no schema flag. Success stdout: `{"session_id":"s","response":"<text>","stats":{}}`. Failure: non-zero exit and on stderr `{"session_id":"s","error":{"type":"Error","message":"Please set an Auth method","code":41}}` (possibly with other lines around it).
-- Arguments: `["-p", "", "-o", "json", "--approval-mode", "plan", "--skip-trust"]`. Command: `findCommand(deps, "gemini", "LEARN_GEMINI_PATH")`. `id: "gemini"`, `label: "Gemini"`, `retries: 2`.
+- Arguments: `["-p", "", "-o", "json", "--approval-mode", "plan", "--skip-trust"]`. Command: `findCommand(deps, "gemini", "LEARN_GEMINI_PATH")`. `id: "gemini"`, `label: "Gemini"`, `retries: 2`. Exports: `GEMINI_EXCLUDED_TOOLS`, `extractJsonObject`, `geminiErrorMessage`, `geminiPrompt` and `createGeminiAdapter(deps: ProcessDeps): CliAdapter` (`detect` = `detectVersion(deps, <command>)`).
 - `prepare`: `deps.fs.mkdirSync(path.join(d.work, ".gemini"))` then write `path.join(d.work, ".gemini", "settings.json")` with `JSON.stringify({ tools: { exclude: GEMINI_EXCLUDED_TOOLS } })`.
 - `GEMINI_EXCLUDED_TOOLS` = `["run_shell_command", "replace", "write_file", "read_file", "read_many_files", "glob", "grep_search", "list_directory", "web_fetch", "google_web_search", "invoke_agent", "activate_skill", "ask_user", "write_todos", "list_mcp_resources", "read_mcp_resource"]`.
 - `geminiPrompt(prompt, schema)` = `prompt + "\n# Reply format\nReply with exactly one JSON object and nothing else: no code fence, no text before or after it. It must match this JSON Schema:\n" + JSON.stringify(schema) + "\n"`. This is the stdin.
@@ -2876,4 +2876,17 @@ The builder stops here.
 | knowledge_listed_newest_first_with_source | T16, T20, T35 |
 | knowledge_item_deleted | T16, T35 |
 | prober_prompt_includes_newest_200 | T10 |
+| detect_checks_all_three_clis | T50 |
+| no_cli_shows_install_banner | T53 |
+| picker_lists_three_and_greys_missing | T52 |
+| picker_defaults_to_last_used_then_first_installed | T45 (rule), T53 |
+| lesson_keeps_its_cli, old_lessons_stay_on_codex | T50 |
+| lesson_header_names_the_tutor, missing_cli_blocks_lesson_with_banner | T54 |
+| switch_tutor_asks_then_stores | T51 (ipc), T54 |
+| switch_tutor_refused_while_running | T51 |
+| claude_spawn_uses_safe_flags, claude_reads_structured_output, claude_error_names_the_cli | T48 |
+| gemini_spawn_uses_safe_flags, gemini_writes_tool_exclusion_settings, gemini_prompt_carries_the_schema, gemini_reads_fenced_or_plain_json, gemini_error_uses_json_message | T49 |
+| gemini_gets_two_retries_others_one | T50 |
+| temp_dir_removed_for_every_cli, timeout_and_stop_work_for_every_cli | T46 |
+| path_overrides_are_used | T46, T48, T49 |
 | codex_spawn_uses_safe_flags, temp_dir_removed_after_call | T14 |
