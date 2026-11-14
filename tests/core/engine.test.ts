@@ -320,3 +320,73 @@ describe("checkAnswer, learnedToSave and moveNotes", () => {
     ]);
   });
 });
+
+describe("hardening: rules without a test before", () => {
+  const st = (...events: SessionEvent[]) => deriveState([...toTeach, ...events]);
+
+  it("moveNotes asks for the plan", () => {
+    expect(moveNotes(deriveState(toPlan))).toEqual([
+      "Return the plan: 2 to 12 nodes, each one idea, deps listing the nodes it builds on.",
+    ]);
+  });
+
+  it("moveNotes says to finish when every node is settled", () => {
+    expect(moveNotes(st(...toCheck("n1"), pick(1), ...toCheck("n2"), pick(1)))).toEqual([
+      "Every node is passed or shaky. Return lesson_done.",
+    ]);
+  });
+
+  it("moveNotes asks for an explanation after a predict", () => {
+    expect(moveNotes(st(act(A.predict("n1")), say()))).toEqual([
+      "Explain node n1 and include a check question.",
+    ]);
+  });
+
+  it("moveNotes asks for a verdict on the first text check", () => {
+    expect(moveNotes(st(...toCheck("n1", textQ), say()))).toEqual([
+      "The learner's last answer is a free-text check on node n1. Set verdict. If pass, continue with the next step. If fail, explain node n1 again from a different angle with a new check question.",
+    ]);
+  });
+
+  it("checkAction rejects an empty goal", () => {
+    expect(
+      checkAction(deriveState([act(A.probe()), pick(1)]), { ...A.probeDone(), goal: "  " } as any),
+    ).toBe("goal is empty");
+  });
+
+  it("checkAction rejects a predict for a node that is already passed", () => {
+    expect(checkAction(st(...toCheck("n1"), pick(1)), A.predict("n1"))).toBe(
+      "node n1 cannot start now",
+    );
+  });
+
+  it("a text check on the last node allows lesson_done with a verdict", () => {
+    const state = st(...toCheck("n1"), pick(1), ...toCheck("n2", textQ), say());
+    expect(checkAction(state, A.done("pass"))).toBeNull();
+    expect(checkAction(state, A.done(null))).toBe("verdict is required");
+  });
+
+  it("deriveState throws on an action while the learner is meant to answer", () => {
+    expect(() => deriveState([act(A.probe()), act(A.probe())])).toThrow(
+      "corrupt session at event 1",
+    );
+  });
+
+  it("deriveState throws on a null verdict after a text check", () => {
+    expect(() =>
+      deriveState([...toTeach, ...toCheck("n1", textQ), say(), act(A.predict("n2"))]),
+    ).toThrow("corrupt session at event 8");
+  });
+
+  it("learnedToSave drops items with empty text", () => {
+    const state = st(...toCheck("n1"), pick(1));
+    const action = {
+      ...A.done(),
+      learned: [
+        { nodeId: "n1", text: "  " },
+        { nodeId: "n1", text: "ok" },
+      ],
+    } as Extract<ReturnType<typeof A.done>, { type: "lesson_done" }>;
+    expect(learnedToSave(state, action)).toEqual([{ nodeId: "n1", text: "ok" }]);
+  });
+});

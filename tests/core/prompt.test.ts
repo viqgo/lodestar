@@ -90,3 +90,18 @@ describe("prompt", () => {
     expect(p([], [], note).trimEnd().endsWith(note)).toBe(true);
   });
 });
+
+describe("renderTranscript grading", () => {
+  it("renderTranscript grades choice checks", () => {
+    const lines = renderTranscript([
+      ...toTeach,
+      ...toCheck("n1"),
+      pick(1),
+      act(A.explain("n1")),
+      pick(0),
+    ]).split("\n");
+    expect(lines[7]).toContain('"graded":"pass"');
+    expect(lines[9]).toContain('"graded":"fail"');
+    expect(lines[5]).toContain('"graded":null');
+  });
+});

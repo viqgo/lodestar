@@ -25,7 +25,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T8 What the model may do next
 - [x] T9 Answer checks, learned items, move notes
 - [x] T10 The prompt
-- [ ] T10b Hardening fixes after the Gate A review
+- [x] T10b Hardening fixes after the Gate A review
 - [ ] GATE A The lesson rules work from the test suite
 - [ ] T11 Finding the CLI on disk
 - [ ] T12 Reading Codex output

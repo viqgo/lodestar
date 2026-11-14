@@ -27,6 +27,19 @@ describe("validatePlan", () => {
     expect(validatePlan([n("a"), { id: "b", title: "", deps: [] }])).toBe("empty id or title");
   });
 
+  it("rejects a whitespace-only id or title", () => {
+    expect(validatePlan([n("a"), { id: " ", title: "X", deps: [] }])).toBe("empty id or title");
+    expect(validatePlan([n("a"), { id: "b", title: "  ", deps: [] }])).toBe("empty id or title");
+  });
+
+  it("rejects ids that are not lowercase hyphenated", () => {
+    expect(validatePlan([n("a"), n("__proto__")])).toBe("invalid node id: __proto__");
+    expect(validatePlan([n("a"), n("Big")])).toBe("invalid node id: Big");
+    expect(validatePlan([n("a"), n("-x")])).toBe("invalid node id: -x");
+    expect(validatePlan([n("a"), n("x".repeat(41))])).toBe("invalid node id: " + "x".repeat(41));
+    expect(validatePlan([n("a1"), n("b-2", ["a1"])])).toBeNull();
+  });
+
   it("plan_rejects_unknown_dep", () => {
     expect(validatePlan([n("a"), n("b", ["zz"])])).toBe("unknown dep: zz");
   });

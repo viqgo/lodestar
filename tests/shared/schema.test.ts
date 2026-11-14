@@ -59,3 +59,17 @@ describe("REPLY_JSON_SCHEMA", () => {
     expect(objects).toBeGreaterThanOrEqual(9);
   });
 });
+
+describe("parseReply strictness", () => {
+  it("parseReply rejects an extra property", () => {
+    expect(parseReply('{"action":{"type":"probe_done","known":[],"goal":"g","extra":1}}').ok).toBe(
+      false,
+    );
+  });
+
+  it("parseReply rejects an empty question prompt", () => {
+    expect(parseReply(JSON.stringify({ action: A.probe({ ...choiceQ, prompt: "" }) })).ok).toBe(
+      false,
+    );
+  });
+});

@@ -5,7 +5,10 @@ export function validatePlan(nodes: PlanNode[]): string | null {
   if (nodes.length < PLAN_MIN || nodes.length > PLAN_MAX) {
     return `plan must have ${PLAN_MIN} to ${PLAN_MAX} nodes`;
   }
-  if (nodes.some((x) => x.id === "" || x.title === "")) return "empty id or title";
+  if (nodes.some((x) => x.id.trim() === "" || x.title.trim() === "")) return "empty id or title";
+  for (const x of nodes) {
+    if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(x.id)) return `invalid node id: ${x.id}`;
+  }
   const ids = new Set<string>();
   for (const x of nodes) {
     if (ids.has(x.id)) return "duplicate node id: " + x.id;
