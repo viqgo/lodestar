@@ -1,6 +1,6 @@
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import type { Action, RunRequest, RunResult } from "../../src/shared/types";
+import type { Action, CliId, RunRequest, RunResult } from "../../src/shared/types";
 import type { CliAdapter } from "../../src/main/cli/adapter";
 
 export type FakePlan = {
@@ -71,4 +71,11 @@ export function fakeAdapter(...replies: (Action | string | RunResult)[]) {
     },
   };
   return { adapter, prompts };
+}
+
+export function fakeAdapters(
+  codex: CliAdapter,
+  others: Partial<Record<CliId, CliAdapter>> = {},
+): Record<CliId, CliAdapter> {
+  return { codex, claude: others.claude ?? codex, gemini: others.gemini ?? codex };
 }

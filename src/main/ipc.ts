@@ -1,13 +1,20 @@
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
-import type { Answer, KnowledgeView, Session, SessionSummary, TurnResult } from "../shared/types";
+import type {
+  Answer,
+  CliId,
+  KnowledgeView,
+  Session,
+  SessionSummary,
+  TurnResult,
+} from "../shared/types";
 import type { CliAdapter } from "./cli/adapter";
 import type { Store } from "./store";
 import type { TurnRunner } from "./turn";
 
 export type IpcDeps = {
   ipcMain: Pick<IpcMain, "handle">;
-  adapter: CliAdapter;
+  adapters: Record<CliId, CliAdapter>;
   store: Store;
   turns: TurnRunner;
   now: () => string;
@@ -16,7 +23,7 @@ export type IpcDeps = {
 };
 
 export function registerIpc(deps: IpcDeps): void {
-  const { ipcMain, adapter, store, turns, now, newId, send } = deps;
+  const { ipcMain, adapters, store, turns, now, newId, send } = deps;
 
   const runTurn = async (id: string): Promise<TurnResult> => {
     const result = await turns.advance(id);
@@ -24,7 +31,7 @@ export function registerIpc(deps: IpcDeps): void {
     return result;
   };
 
-  ipcMain.handle("cli:detect", () => adapter.detect());
+  ipcMain.handle("cli:detect", () => adapters.codex.detect());
 
   ipcMain.handle("sessions:list", async (): Promise<SessionSummary[]> => {
     const out: SessionSummary[] = [];

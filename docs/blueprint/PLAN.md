@@ -73,7 +73,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T47 Codex adapter on the shared runner
 - [x] T48 Claude Code adapter
 - [x] T49 Gemini adapter (experimental)
-- [ ] T50 A registry, and one adapter per lesson
+- [x] T50 A registry, and one adapter per lesson
 - [ ] T51 Channels for the CLI list, the choice and the switch
 - [ ] T52 The tutor picker
 - [ ] T53 Pick a tutor for a new lesson

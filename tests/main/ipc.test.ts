@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import { registerIpc } from "../../src/main/ipc";
 import { createStore } from "../../src/main/store";
 import type { KnowledgeItem, Session, TurnResult } from "../../src/shared/types";
+import { fakeAdapters } from "../helpers/fakes";
 import { A, act, pick, session } from "../helpers/fixtures";
 
 const NOW = "2026-03-03T00:00:00.000Z";
@@ -31,7 +32,7 @@ const setup = async (isRunning = false) => {
   let n = 0;
   registerIpc({
     ipcMain,
-    adapter: adapter as any,
+    adapters: fakeAdapters(adapter as any),
     store,
     turns,
     now: () => NOW,

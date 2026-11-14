@@ -7,7 +7,7 @@ import type { CliAdapter } from "../../src/main/cli/adapter";
 import { createStore } from "../../src/main/store";
 import { createTurnRunner, modelStep } from "../../src/main/turn";
 import type { RunResult, Session, SessionEvent } from "../../src/shared/types";
-import { fakeAdapter } from "../helpers/fakes";
+import { fakeAdapter, fakeAdapters } from "../helpers/fakes";
 import { A, act, pick, session, toCheck, toTeach } from "../helpers/fixtures";
 
 const step = async (events: SessionEvent[], ...replies: Parameters<typeof fakeAdapter>) => {
@@ -78,7 +78,7 @@ const setup = async (events: SessionEvent[], ...replies: Parameters<typeof fakeA
   const notified: Session[] = [];
   let n = 0;
   const runner = createTurnRunner({
-    adapter: f.adapter,
+    adapters: fakeAdapters(f.adapter),
     store,
     now: () => NOW,
     newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000",
@@ -100,7 +100,7 @@ const withAdapter = async (adapter: CliAdapter) => {
   const store = await createStore(dir, fsp);
   await store.writeSession(session([]));
   const runner = createTurnRunner({
-    adapter,
+    adapters: fakeAdapters(adapter),
     store,
     now: () => NOW,
     newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
@@ -139,7 +139,7 @@ const setupFailing = async () => {
   const f = fakeAdapter(A.done(), A.done());
   let n = 0;
   const runner = createTurnRunner({
-    adapter: f.adapter,
+    adapters: fakeAdapters(f.adapter),
     store,
     now: () => NOW,
     newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000",
@@ -294,5 +294,82 @@ describe("turn profile", () => {
     await runner.advance(ID);
     expect(f.prompts[1]).toContain("Be long.");
     expect(f.prompts[1]).not.toContain("Be brief.");
+  });
+});
+
+describe("turn per-lesson cli", () => {
+  const withCli = async (cli: string, adapters: ReturnType<typeof fakeAdapters>) => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+    const store = await createStore(dir, fsp);
+    await store.writeSession({ ...session([]), cli } as any);
+    return createTurnRunner({
+      adapters,
+      store,
+      now: () => NOW,
+      newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+      notify: () => {},
+    });
+  };
+
+  it("lesson_keeps_its_cli", async () => {
+    const codexFake = fakeAdapter(A.probe());
+    const claudeFake = fakeAdapter(A.probe());
+    const runner = await withCli(
+      "claude",
+      fakeAdapters(codexFake.adapter, { claude: claudeFake.adapter }),
+    );
+    await runner.advance(ID);
+    expect(claudeFake.prompts).toHaveLength(1);
+    expect(codexFake.prompts).toHaveLength(0);
+  });
+
+  it("old_lessons_stay_on_codex", async () => {
+    for (const cli of ["codex", "mystery"]) {
+      const codexFake = fakeAdapter(A.probe());
+      const claudeFake = fakeAdapter(A.probe());
+      const runner = await withCli(
+        cli,
+        fakeAdapters(codexFake.adapter, { claude: claudeFake.adapter }),
+      );
+      await runner.advance(ID);
+      expect(codexFake.prompts).toHaveLength(1);
+      expect(claudeFake.prompts).toHaveLength(0);
+    }
+  });
+
+  it("gemini_gets_two_retries_others_one", async () => {
+    const run = async (retries: number, ...replies: string[]) => {
+      const f = fakeAdapter(...replies);
+      const result = await modelStep(
+        { adapter: { ...f.adapter, retries }, knowledge: [], profile: "" },
+        session([]),
+        deriveState([]),
+        new AbortController().signal,
+      );
+      return { f, result };
+    };
+    const good = JSON.stringify({ action: A.probe() });
+    const three = await run(2, "x", "x", "x");
+    expect(three.f.prompts).toHaveLength(3);
+    expect(three.result).toMatchObject({ ok: false, error: { kind: "bad_reply" } });
+    const ok = await run(2, "x", "x", good);
+    expect(ok.result).toMatchObject({ ok: true, calls: 3 });
+    const one = await run(1, "x", "x");
+    expect(one.f.prompts).toHaveLength(2);
+    expect(one.result).toMatchObject({ ok: false, error: { kind: "bad_reply" } });
+  });
+
+  it("a failed call names the CLI", async () => {
+    const f = fakeAdapter({ ok: false, kind: "failed", message: "boom" });
+    const result = await modelStep(
+      { adapter: { ...f.adapter, label: "Claude Code" }, knowledge: [], profile: "" },
+      session([]),
+      deriveState([]),
+      new AbortController().signal,
+    );
+    expect(result).toEqual({
+      ok: false,
+      error: { kind: "cli", message: "Claude Code failed: boom" },
+    });
   });
 });

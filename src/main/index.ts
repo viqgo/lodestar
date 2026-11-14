@@ -5,7 +5,7 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import os from "node:os";
 import { join } from "node:path";
-import { createCodexAdapter } from "./cli/codex";
+import { createAdapters } from "./cli/registry";
 import { registerIpc } from "./ipc";
 import { createStore } from "./store";
 import { createTurnRunner } from "./turn";
@@ -39,7 +39,7 @@ async function main(): Promise<void> {
   await app.whenReady();
   const dataDir = process.env.LEARN_DATA_DIR ?? app.getPath("userData");
   const store = await createStore(dataDir, fsp);
-  const adapter = createCodexAdapter({
+  const adapters = createAdapters({
     spawn,
     env: process.env,
     home: os.homedir(),
@@ -53,13 +53,13 @@ async function main(): Promise<void> {
   const now = (): string => new Date().toISOString();
   const newId = (prefix: "s" | "k"): string => prefix + "_" + randomUUID();
   const turns = createTurnRunner({
-    adapter,
+    adapters,
     store,
     now,
     newId,
     notify: (s) => send("session:updated", s),
   });
-  registerIpc({ ipcMain, adapter, store, turns, now, newId, send });
+  registerIpc({ ipcMain, adapters, store, turns, now, newId, send });
   if (!process.env.ELECTRON_RENDERER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({

@@ -4,6 +4,7 @@ import { CALL_TIMEOUT_MS } from "../shared/limits";
 import { REPLY_JSON_SCHEMA, parseReply } from "../shared/schema";
 import type {
   Action,
+  CliId,
   KnowledgeItem,
   LessonState,
   Session,
@@ -24,7 +25,7 @@ export async function modelStep(
   { ok: true; action: Action; usage: Usage | null; calls: number } | { ok: false; error: TurnError }
 > {
   let retryNote: string | null = null;
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= deps.adapter.retries + 1; attempt++) {
     const prompt = buildPrompt({
       session,
       state,
@@ -41,7 +42,10 @@ export async function modelStep(
     if (!run.ok) {
       if (run.kind === "aborted")
         return { ok: false, error: { kind: "stopped", message: "Stopped." } };
-      return { ok: false, error: { kind: "cli", message: "Codex failed: " + run.message } };
+      return {
+        ok: false,
+        error: { kind: "cli", message: deps.adapter.label + " failed: " + run.message },
+      };
     }
     const parsed = parseReply(run.text);
     const reason = parsed.ok ? checkAction(state, parsed.action) : parsed.reason;
@@ -63,7 +67,7 @@ export type TurnRunner = {
 };
 
 export function createTurnRunner(deps: {
-  adapter: CliAdapter;
+  adapters: Record<CliId, CliAdapter>;
   store: Store;
   now: () => string;
   newId: (prefix: "s" | "k") => string;
@@ -95,8 +99,9 @@ export function createTurnRunner(deps: {
         if (state.awaiting.who !== "model") return { ok: true, session };
         const knowledge = await deps.store.readKnowledge();
         const profile = await deps.store.readProfile();
+        const adapter = deps.adapters[session.cli] ?? deps.adapters.codex;
         const step = await modelStep(
-          { adapter: deps.adapter, knowledge, profile },
+          { adapter, knowledge, profile },
           session,
           state,
           controller.signal,
