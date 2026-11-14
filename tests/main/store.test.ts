@@ -3,6 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createStore } from "../../src/main/store";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
+import type { Settings } from "../../src/shared/types";
 import { newReview } from "../../src/core/review";
 import { K, review, session, subject } from "../helpers/fixtures";
 
@@ -505,7 +507,17 @@ describe("store subjects", () => {
 describe("store settings", () => {
   it("settings_file_round_trips", async () => {
     const { dir, store } = await mk();
-    const value = { voice: { language: "de", voice: "aura-2-x" } };
+    const value: Settings = {
+      voice: { language: "de", voice: "aura-2-x" },
+      theme: "light",
+      method: "Probe briefly.",
+      instructions: "Be brief.",
+      clis: {
+        codex: { model: "", effort: "low" },
+        claude: { model: "sonnet", effort: "medium" },
+        gemini: { model: "gemini-x", effort: "" },
+      },
+    };
     await store.writeSettings(value);
     expect(await store.readSettings()).toEqual(value);
     await expect(fsp.access(path.join(dir, "settings.json"))).resolves.toBeUndefined();
@@ -513,12 +525,58 @@ describe("store settings", () => {
 
   it("settings are the defaults for a missing or broken file", async () => {
     const { dir, store } = await mk();
-    const defaults = { voice: { language: "en", voice: "aura-2-thalia-en" } };
+    const defaults = DEFAULT_SETTINGS;
     expect(await store.readSettings()).toEqual(defaults);
     await fsp.writeFile(path.join(dir, "settings.json"), "not json", "utf8");
     expect(await store.readSettings()).toEqual(defaults);
     await fsp.writeFile(path.join(dir, "settings.json"), "[1]", "utf8");
     expect(await store.readSettings()).toEqual(defaults);
+  });
+
+  it("old_profile_json_is_migrated", async () => {
+    const { dir, store } = await mk();
+    const profile = path.join(dir, "profile.json");
+    await fsp.writeFile(profile, '{"instructions":"Be brief."}', "utf8");
+    const before = await fsp.readFile(profile);
+    expect(await store.readSettings()).toEqual({ ...DEFAULT_SETTINGS, instructions: "Be brief." });
+    expect(await store.readProfile()).toBe("Be brief.");
+    await expect(fsp.access(path.join(dir, "settings.json"))).rejects.toThrow();
+    await fsp.writeFile(
+      path.join(dir, "settings.json"),
+      '{"voice":{"language":"de","voice":"aura-2-x"}}',
+      "utf8",
+    );
+    const read = await store.readSettings();
+    expect(read.voice).toEqual({ language: "de", voice: "aura-2-x" });
+    expect(read.instructions).toBe("Be brief.");
+    await store.writeSettings({ ...(await store.readSettings()), instructions: "" });
+    expect(await store.readProfile()).toBe("");
+    expect(await fsp.readFile(profile)).toEqual(before);
+  });
+
+  it("writeProfile keeps the other settings", async () => {
+    const { dir, store } = await mk();
+    const value: Settings = {
+      voice: { language: "de", voice: "aura-2-x" },
+      theme: "light",
+      method: "Probe briefly.",
+      instructions: "Be brief.",
+      clis: {
+        codex: { model: "", effort: "low" },
+        claude: { model: "sonnet", effort: "medium" },
+        gemini: { model: "gemini-x", effort: "" },
+      },
+    };
+    await store.writeSettings(value);
+    await store.writeProfile("New.");
+    expect(await store.readSettings()).toEqual({ ...value, instructions: "New." });
+    await expect(fsp.access(path.join(dir, "profile.json"))).rejects.toThrow();
+    const a = store.writeProfile("A");
+    const b = store.writeSettings({ ...DEFAULT_SETTINGS, theme: "light" });
+    await Promise.all([a, b]);
+    const text = await fsp.readFile(path.join(dir, "settings.json"), "utf8");
+    expect(() => JSON.parse(text)).not.toThrow();
+    expect((await store.readSettings()).theme).toBe("light");
   });
 });
 

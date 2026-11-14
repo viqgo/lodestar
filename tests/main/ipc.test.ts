@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { registerIpc } from "../../src/main/ipc";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
 import { createStore } from "../../src/main/store";
 import type {
   Answer,
@@ -748,12 +749,12 @@ describe("ipc profile", () => {
 });
 
 describe("ipc settings", () => {
-  const DEFAULTS = { voice: { language: "en", voice: "aura-2-thalia-en" } };
+  const DEFAULTS = DEFAULT_SETTINGS;
 
   it("settings channels read and save", async () => {
     const { call } = await setup();
     expect(await call("settings:get")).toEqual(DEFAULTS);
-    const next = { voice: { language: "de", voice: "aura-2-x" } };
+    const next = { ...DEFAULT_SETTINGS, voice: { language: "de", voice: "aura-2-x" } };
     expect(await call("settings:save", next)).toEqual({ ok: true });
     expect(await call("settings:get")).toEqual(next);
   });
@@ -771,6 +772,44 @@ describe("ipc settings", () => {
     expect(await call("settings:save", DEFAULTS)).toEqual({
       ok: false,
       message: "Could not save. Check free disk space.",
+    });
+  });
+
+  it("method_over_6000_refused (ipc)", async () => {
+    const { call } = await setup();
+    expect(await call("settings:save", { ...DEFAULT_SETTINGS, method: "x".repeat(6001) })).toEqual({
+      ok: false,
+      message: "Keep it under 6000 characters.",
+    });
+    expect(await call("settings:get")).toEqual(DEFAULT_SETTINGS);
+    const long = { ...DEFAULT_SETTINGS, method: "x".repeat(6000) };
+    expect(await call("settings:save", long)).toEqual({ ok: true });
+    expect(await call("settings:get")).toEqual(long);
+  });
+
+  it("the profile channels read and write the settings file", async () => {
+    const { call } = await setup();
+    expect(await call("profile:save", "Be brief.")).toEqual({ ok: true });
+    expect(await call("settings:get")).toEqual({ ...DEFAULT_SETTINGS, instructions: "Be brief." });
+    expect(
+      await call("settings:save", { ...DEFAULT_SETTINGS, instructions: "Via settings." }),
+    ).toEqual({ ok: true });
+    expect(await call("profile:get")).toBe("Via settings.");
+    expect(
+      await call("settings:save", { ...DEFAULT_SETTINGS, instructions: "x".repeat(2001) }),
+    ).toEqual({ ok: false, message: "Keep it under 2000 characters." });
+    const bad = {
+      ...DEFAULT_SETTINGS,
+      clis: { ...DEFAULT_SETTINGS.clis, gemini: { model: "--yolo", effort: "" } },
+    };
+    expect(await call("settings:save", bad)).toEqual({
+      ok: false,
+      message: "Enter a model name without spaces.",
+    });
+    expect(await call("profile:get")).toBe("Via settings.");
+    expect(await call("settings:get")).toEqual({
+      ...DEFAULT_SETTINGS,
+      instructions: "Via settings.",
     });
   });
 });

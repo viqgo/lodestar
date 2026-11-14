@@ -157,7 +157,13 @@ export type TurnResult =
 
 export type CallState = "off" | "listening" | "thinking" | "speaking";
 
-export type Settings = { voice: { language: string; voice: string } };
+export type Settings = {
+  voice: { language: string; voice: string };
+  theme: "dark" | "light" | "system";
+  method: string;
+  instructions: string;
+  clis: Record<CliId, { model: string; effort: string }>;
+};
 
 export type Api = {
   detectClis(): Promise<CliStatus[]>;

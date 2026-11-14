@@ -13,6 +13,8 @@ it("limits match the spec", () => {
   expect(limits.FIELD_MAX).toBe(500);
   expect(limits.ANSWER_TEXT_MAX).toBe(4000);
   expect(limits.PROFILE_MAX).toBe(2000);
+  expect(limits.METHOD_MAX).toBe(6000);
+  expect(limits.MODEL_MAX).toBe(100);
   expect(limits.OPTIONS_MIN).toBe(2);
   expect(limits.OPTIONS_MAX).toBe(6);
   expect(limits.STDERR_MAX).toBe(200);

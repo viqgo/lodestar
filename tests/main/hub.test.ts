@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { createVoiceHub } from "../../src/main/voice/hub";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
 import type { ListenerEvents } from "../../src/main/voice/deepgram";
 
 const KEY = "dg_test_key_123";
@@ -14,7 +15,10 @@ type Speak = (
 
 const setup = (key: string | null = KEY) => {
   const secrets = { get: vi.fn(async () => key) };
-  const settings = vi.fn(async () => ({ voice: { language: "de", voice: "aura-2-x" } }));
+  const settings = vi.fn(async () => ({
+    ...DEFAULT_SETTINGS,
+    voice: { language: "de", voice: "aura-2-x" },
+  }));
   const listeners: { key: string; language: string; on: ListenerEvents; send: any; close: any }[] =
     [];
   const listen = vi.fn((k: string, language: string, on: ListenerEvents) => {

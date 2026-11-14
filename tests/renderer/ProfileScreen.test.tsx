@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ProfileScreen } from "../../src/renderer/src/components/ProfileScreen";
 import { installApi } from "../helpers/dom";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
 
 const NOTE =
   "Tell your tutor how you want to be taught. It is added to every lesson from the next reply on.";
@@ -70,7 +71,10 @@ const voiceSave = () => screen.getAllByRole("button", { name: "Save" })[1];
 describe("ProfileScreen voice", () => {
   it("the voice section shows the saved language and voice", async () => {
     installApi({
-      getSettings: vi.fn(async () => ({ voice: { language: "de", voice: "aura-2-x" } })),
+      getSettings: vi.fn(async () => ({
+        ...DEFAULT_SETTINGS,
+        voice: { language: "de", voice: "aura-2-x" },
+      })),
     });
     render(<ProfileScreen />);
     await vi.waitFor(() => expect(screen.getByLabelText("Speech language")).toHaveValue("de"));
@@ -124,6 +128,7 @@ describe("ProfileScreen voice", () => {
     await userEvent.type(lang, "de");
     await userEvent.click(voiceSave());
     expect(api.saveSettings).toHaveBeenCalledWith({
+      ...DEFAULT_SETTINGS,
       voice: { language: "de", voice: "aura-2-thalia-en" },
     });
     expect(await screen.findByText("Saved.")).toBeInTheDocument();

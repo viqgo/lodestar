@@ -1,6 +1,7 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+import { mergeSettings } from "../../src/core/settings";
 import type {
   Api,
   CallState,
@@ -71,7 +72,7 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     practiceStop: vi.fn(async () => undefined),
     aside: vi.fn(async () => busy),
     getGraph: vi.fn(async () => ({ groups: [], edges: [] })),
-    getSettings: vi.fn(async () => ({ voice: { language: "en", voice: "aura-2-thalia-en" } })),
+    getSettings: vi.fn(async () => mergeSettings(null)),
     saveSettings: vi.fn(async () => ({ ok: true })),
     voiceHasKey: vi.fn(async () => false),
     voiceSetKey: vi.fn(async () => ({ ok: true })),

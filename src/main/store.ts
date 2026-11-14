@@ -363,7 +363,7 @@ export async function createStore(
 
   const profileFile = path.join(dir, "profile.json");
 
-  const readProfile = async (): Promise<string> => {
+  const legacyProfile = async (): Promise<string> => {
     try {
       const parsed: unknown = JSON.parse(await fs.readFile(profileFile, "utf8"));
       const text =
@@ -376,18 +376,32 @@ export async function createStore(
     }
   };
 
-  const writeProfile = (text: string): Promise<void> =>
-    serial(profileFile, () => writeJsonAtomic(profileFile, { instructions: text }));
-
   const settingsFile = path.join(dir, "settings.json");
 
   const readSettings = async (): Promise<Settings> => {
+    let raw: unknown;
     try {
-      return mergeSettings(JSON.parse(await fs.readFile(settingsFile, "utf8")));
+      raw = JSON.parse(await fs.readFile(settingsFile, "utf8"));
     } catch {
-      return mergeSettings(null);
+      raw = null;
     }
+    const merged = mergeSettings(raw);
+    if (
+      typeof raw === "object" &&
+      raw !== null &&
+      typeof (raw as { instructions?: unknown }).instructions === "string"
+    ) {
+      return merged;
+    }
+    return { ...merged, instructions: await legacyProfile() };
   };
+
+  const readProfile = async (): Promise<string> => (await readSettings()).instructions;
+
+  const writeProfile = (text: string): Promise<void> =>
+    serial(settingsFile, async () =>
+      writeJsonAtomic(settingsFile, { ...(await readSettings()), instructions: text }),
+    );
 
   const writeSettings = (settings: Settings): Promise<void> =>
     serial(settingsFile, () => writeJsonAtomic(settingsFile, settings));
