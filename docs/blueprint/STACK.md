@@ -76,3 +76,27 @@ Unverified:
 Other picks: each CLI uses its own default model (no model flag). Detection: `claude --version`, `gemini --version`, 5-second limit. Path overrides: `LEARN_CLAUDE_PATH`, `LEARN_GEMINI_PATH` (like `LEARN_CODEX_PATH`). Evals: `LEARN_EVAL_CLI=codex|claude|gemini npm run eval` (default `codex`).
 
 Owner setup for milestone 2: Claude Code installed and signed in (done). Gemini: a paid account is expected in a few days; the live run is a separate owner task after the milestone.
+
+## Milestones 3-8 additions (approved 2026-11-14, D53)
+
+New packages: `ws` 8.23.0 (dependency, milestone 5: the Deepgram connection needs an `Authorization` header) and `electron-builder` 26.18.0 (dev dependency, milestone 7). No PDF library: each CLI reads files with its own read-only tools.
+
+Verified by real calls (2026-11-14):
+- Read-only folder. Codex `--sandbox read-only`: reads a text file, a PDF (through `pdftotext`, which must be installed) and an image inside the folder, cannot write, but CAN read a file outside the folder. Claude Code with `--tools "Read,Glob,Grep" --add-dir <folder>`, run from an empty temporary cwd, with `--json-schema`: reads text, PDF and image inside the folder, is refused outside it, cannot write, and leaves no file in either folder.
+- Web search. Codex: `codex --search exec ...` (the flag goes before `exec`). Claude Code: `--tools "...,WebSearch" --allowed-tools "WebSearch"` (without `--allowed-tools` the search is refused).
+- Model and effort. Claude Code: `--model sonnet --effort low` ran on `claude-sonnet-5-5`; efforts `low, medium, high, xhigh, max`. Codex: `-m <model>` and `-c model_reasoning_effort=low` (a 400-word reading: 19.6 s against 43.8 s at the default).
+- Codex images: `-i <file>` (from `codex exec --help`, not run).
+
+Deepgram (read from its documentation 2026-11-14, not run: no key):
+- Speech to text: `wss://api.deepgram.com/v1/listen?model=nova-3&language=<lang>&encoding=linear16&sample_rate=16000&channels=1&interim_results=true&smart_format=true&endpointing=300&utterance_end_ms=1200&vad_events=true`, header `Authorization: Token <key>`. Binary frames are audio; control messages `{"type":"KeepAlive"}`, `{"type":"Finalize"}`, `{"type":"CloseStream"}`. Server messages: `Results` (`is_final`, `speech_final`, `channel.alternatives[0].transcript`), `UtteranceEnd`, `SpeechStarted`, `Metadata`.
+- Text to speech: `POST https://api.deepgram.com/v1/speak?model=aura-2-thalia-en`, headers `Authorization: Token <key>`, `Content-Type: application/json`, body `{"text":"..."}`, MP3 back, at most 2,000 characters per request.
+- Prices: Nova-3 streaming $0.0048 per minute (promotional), Aura-2 $0.030 per 1,000 characters, $200 free credit.
+
+Unverified:
+- Gemini: `--include-directories`, reading PDFs and images, `google_web_search`, `-m`.
+- Codex reading a PDF on a Mac without `pdftotext`.
+- Everything about Deepgram in practice, including languages other than English.
+- Microphone permission in the packaged app (`NSMicrophoneUsageDescription`), and Mermaid and KaTeX under the strict Content-Security-Policy.
+
+Owner setup: milestone 5 needs a Deepgram account and API key. Milestone 7 needs nothing (unsigned).
+Running cost: voice only, about $0.29 per hour of speech plus $0.03 per 1,000 characters read aloud.
