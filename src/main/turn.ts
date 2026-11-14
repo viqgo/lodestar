@@ -101,11 +101,14 @@ export function createTurnRunner(deps: {
           action: step.action,
           usage: step.usage,
         };
-        session = { ...session, updatedAt: deps.now(), events: [...session.events, event] };
-        await deps.store.writeSession(session);
+        const next: Session = {
+          ...session,
+          updatedAt: deps.now(),
+          events: [...session.events, event],
+        };
         if (step.action.type === "lesson_done") {
-          const items = learnedToSave(deriveState(session.events), step.action);
-          const sessionId = session.id;
+          const items = learnedToSave(deriveState(next.events), step.action);
+          const sessionId = next.id;
           await deps.store.addKnowledge(
             items.map((it) => ({
               id: deps.newId("k"),
@@ -116,6 +119,8 @@ export function createTurnRunner(deps: {
             })),
           );
         }
+        await deps.store.writeSession(next);
+        session = next;
         deps.notify(session);
       }
     } finally {

@@ -114,6 +114,25 @@ const OK = SAMPLE;
 const empty = (dir: string) => fs.readdirSync(dir).length === 0;
 
 describe("run", () => {
+  it("run survives a write error on stdin", async () => {
+    const { adapter } = make({ stdinError: true, code: 1, stderr: "not signed in\n" });
+    expect(await adapter.run(req())).toEqual({
+      ok: false,
+      kind: "failed",
+      message: "not signed in",
+    });
+  });
+
+  it("run decodes characters split across output chunks", async () => {
+    const full = Buffer.from(
+      JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "café ✓" } }) +
+        "\n",
+    );
+    const cut = full.indexOf(0xc3) + 1;
+    const { adapter } = make({ stdoutChunks: [full.subarray(0, cut), full.subarray(cut)] });
+    expect(await adapter.run(req())).toEqual({ ok: true, text: "café ✓", usage: null });
+  });
+
   it("codex_spawn_uses_safe_flags", async () => {
     const { adapter, f } = make({ stdout: OK });
     await adapter.run(req());

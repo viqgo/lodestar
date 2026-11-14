@@ -95,6 +95,30 @@ describe("store knowledge", () => {
     expect((await store.readKnowledge()).map((k) => k.text)).toEqual(["t2", "t1"]);
   });
 
+  it("concurrent knowledge writes keep every item", async () => {
+    const { store } = await mk();
+    await Promise.all([
+      store.addKnowledge([ki(1, "2026-01-01T00:00:00.000Z")]),
+      store.addKnowledge([ki(2, "2026-01-02T00:00:00.000Z")]),
+      store.addKnowledge([ki(3, "2026-01-03T00:00:00.000Z")]),
+    ]);
+    expect(await store.readKnowledge()).toHaveLength(3);
+  });
+
+  it("adding the same knowledge item twice stores it once", async () => {
+    const { store } = await mk();
+    const a = ki(1, "2026-01-01T00:00:00.000Z");
+    const b = {
+      ...ki(1, "2026-01-02T00:00:00.000Z"),
+      id: "k_00000009-0000-0000-0000-000000000000",
+    };
+    await store.addKnowledge([a]);
+    await store.addKnowledge([b]);
+    const all = await store.readKnowledge();
+    expect(all).toHaveLength(1);
+    expect(all[0]!.id).toBe(a.id);
+  });
+
   it("knowledge_item_deleted", async () => {
     const { dir, store } = await mk();
     await store.addKnowledge([ki(1, "2026-01-01T00:00:00.000Z")]);

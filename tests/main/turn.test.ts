@@ -107,6 +107,45 @@ const withAdapter = async (adapter: CliAdapter) => {
   return { runner };
 };
 
+const doneEvents = (): SessionEvent[] => [
+  ...toTeach,
+  ...toCheck("n1"),
+  pick(1),
+  ...toCheck("n2"),
+  pick(0),
+  act(A.explain("n2")),
+  pick(0),
+  act(A.explain("n2")),
+  pick(0),
+];
+
+const setupFailing = async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+  const real = await createStore(dir, fsp);
+  await real.writeSession(session(doneEvents()));
+  let failed = false;
+  const store: typeof real = {
+    ...real,
+    addKnowledge: async (items) => {
+      if (!failed) {
+        failed = true;
+        throw new Error("disk");
+      }
+      return real.addKnowledge(items);
+    },
+  };
+  const f = fakeAdapter(A.done(), A.done());
+  let n = 0;
+  const runner = createTurnRunner({
+    adapter: f.adapter,
+    store,
+    now: () => NOW,
+    newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000",
+    notify: () => {},
+  });
+  return { store: real, runner };
+};
+
 describe("createTurnRunner", () => {
   it("advance keeps going until the learner must answer", async () => {
     const { store, f, notified, runner } = await setup(
@@ -145,8 +184,11 @@ describe("createTurnRunner", () => {
       release = resolve;
     });
     let calls = 0;
+    let reached!: () => void;
+    const reachedP = new Promise<void>((r) => (reached = r));
     const { runner } = await withAdapter(
       slowAdapter(async () => {
+        reached();
         calls++;
         await gate;
         return { ok: false, kind: "failed", message: "x" };
@@ -158,17 +200,20 @@ describe("createTurnRunner", () => {
     if (!second.ok) {
       expect(second.error).toEqual({ kind: "busy", message: "A reply is already on the way." });
     }
-    await new Promise((r) => setTimeout(r, 20));
+    await reachedP;
     expect(calls).toBe(1);
     release();
     await first;
   });
 
   it("stop ends the running call", async () => {
+    let reached!: () => void;
+    const reachedP = new Promise<void>((r) => (reached = r));
     const { runner } = await withAdapter(
       slowAdapter(
         (req) =>
           new Promise<RunResult>((resolve) => {
+            reached();
             req.signal.addEventListener("abort", () =>
               resolve({ ok: false, kind: "aborted", message: "stopped" }),
             );
@@ -176,7 +221,7 @@ describe("createTurnRunner", () => {
       ),
     );
     const pending = runner.advance(ID);
-    await new Promise((r) => setTimeout(r, 20));
+    await reachedP;
     expect(runner.isRunning(ID)).toBe(true);
     runner.stop(ID);
     const result = await pending;
@@ -219,5 +264,19 @@ describe("createTurnRunner", () => {
         createdAt: NOW,
       },
     ]);
+  });
+
+  it("a failed knowledge save does not finish the lesson", async () => {
+    const { store, runner } = await setupFailing();
+    await expect(runner.advance(ID)).rejects.toThrow("disk");
+    const stored = await store.readSession(ID);
+    expect(deriveState(stored!.events).phase).toBe("teach");
+    const second = await runner.advance(ID);
+    expect(second.ok).toBe(true);
+    const after = await store.readSession(ID);
+    expect(deriveState(after!.events).phase).toBe("done");
+    const k = await store.readKnowledge();
+    expect(k).toHaveLength(1);
+    expect(k[0]!.text).toBe("t1");
   });
 });

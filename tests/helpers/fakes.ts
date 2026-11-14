@@ -9,6 +9,8 @@ export type FakePlan = {
   code?: number;
   hang?: boolean;
   missing?: boolean;
+  stdoutChunks?: Buffer[];
+  stdinError?: boolean;
 };
 export type FakeCall = { cmd: string; args: string[]; opts: any; stdin: string; killed: boolean };
 
@@ -33,7 +35,12 @@ export function fakeSpawn(...plans: FakePlan[]) {
       if (plan.missing)
         return child.emit("error", Object.assign(new Error("spawn ENOENT"), { code: "ENOENT" }));
       if (plan.hang) return;
-      child.stdout.end(plan.stdout ?? "");
+      if (plan.stdinError)
+        child.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }));
+      if (plan.stdoutChunks) {
+        for (const c of plan.stdoutChunks) child.stdout.write(c);
+        child.stdout.end();
+      } else child.stdout.end(plan.stdout ?? "");
       child.stderr.end(plan.stderr ?? "");
       setImmediate(() => child.emit("close", plan.code ?? 0));
     });

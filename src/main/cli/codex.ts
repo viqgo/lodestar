@@ -121,6 +121,9 @@ export function createCodexAdapter(deps: {
             },
           },
         );
+        child.stdin?.on("error", () => {});
+        child.stdout?.setEncoding("utf8");
+        child.stderr?.setEncoding("utf8");
         const onAbort = () => {
           child.kill("SIGKILL");
           finish({ ok: false, kind: "aborted", message: "stopped" });
@@ -142,8 +145,8 @@ export function createCodexAdapter(deps: {
           resolve(result);
         };
         req.signal.addEventListener("abort", onAbort);
-        child.stdout?.on("data", (d: Buffer) => (stdout += d.toString()));
-        child.stderr?.on("data", (d: Buffer) => (stderr += d.toString()));
+        child.stdout?.on("data", (d: string) => (stdout += d));
+        child.stderr?.on("data", (d: string) => (stderr += d));
         child.on("error", () =>
           finish({ ok: false, kind: "failed", message: "Codex CLI not found" }),
         );

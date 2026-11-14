@@ -22,9 +22,26 @@ export async function createStore(
   await fs.mkdir(sessionsDir, { recursive: true });
   const fileFor = (id: string) => path.join(sessionsDir, id + ".json");
 
+  const tails = new Map<string, Promise<unknown>>();
+  const serial = <T>(key: string, fn: () => Promise<T>): Promise<T> => {
+    const result = (tails.get(key) ?? Promise.resolve()).then(fn, fn);
+    tails.set(
+      key,
+      result.catch(() => undefined),
+    );
+    return result;
+  };
+  let tmpCounter = 0;
+
   const writeJsonAtomic = async (file: string, data: unknown): Promise<void> => {
-    await fs.writeFile(file + ".tmp", JSON.stringify(data, null, 2), "utf8");
-    await fs.rename(file + ".tmp", file);
+    const tmp = file + "." + process.pid + "." + tmpCounter++ + ".tmp";
+    try {
+      await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
+      await fs.rename(tmp, file);
+    } catch (err) {
+      await fs.rm(tmp, { force: true });
+      throw err;
+    }
   };
 
   const readSession = async (id: string): Promise<Session | null> => {
@@ -76,18 +93,30 @@ export async function createStore(
       a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
     );
 
-  const addKnowledge = async (items: KnowledgeItem[]): Promise<void> => {
-    if (items.length === 0) return;
-    await writeJsonAtomic(knowledgeFile, [...(await readAllKnowledge()), ...items]);
-  };
+  const addKnowledge = (items: KnowledgeItem[]): Promise<void> =>
+    serial(knowledgeFile, async () => {
+      if (items.length === 0) return;
+      const existing = await readAllKnowledge();
+      const seen = new Set(existing.map((k) => JSON.stringify([k.sessionId, k.nodeId, k.text])));
+      const fresh: KnowledgeItem[] = [];
+      for (const it of items) {
+        const key = JSON.stringify([it.sessionId, it.nodeId, it.text]);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        fresh.push(it);
+      }
+      if (fresh.length === 0) return;
+      await writeJsonAtomic(knowledgeFile, [...existing, ...fresh]);
+    });
 
-  const deleteKnowledge = async (id: string): Promise<void> => {
-    const all = await readAllKnowledge();
-    await writeJsonAtomic(
-      knowledgeFile,
-      all.filter((k) => k.id !== id),
-    );
-  };
+  const deleteKnowledge = (id: string): Promise<void> =>
+    serial(knowledgeFile, async () => {
+      const all = await readAllKnowledge();
+      await writeJsonAtomic(
+        knowledgeFile,
+        all.filter((k) => k.id !== id),
+      );
+    });
 
   return {
     writeJsonAtomic,
