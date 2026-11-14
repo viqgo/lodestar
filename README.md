@@ -29,6 +29,8 @@ Lessons are JSON files under the app's data folder. On macOS this is `~/Library/
 
 If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PATH` or `LEARN_GEMINI_PATH` to its path.
 
+`settings.json` (voice settings) and `deepgram.key` (the encrypted key) live in the same folder.
+
 ## What goes to the model
 
 Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far and the tutor instructions from the Profile screen are sent. Nothing else is sent.
@@ -50,6 +52,18 @@ A subject is a course folder. The senior tutor reads the folder and proposes an 
 - Codex: "Codex cannot change your files, but it is able to read other files on this Mac."
 - Claude Code: "Claude Code can only read inside this folder."
 - Gemini: "Gemini is experimental: what it can read has not been verified."
+
+## Voice
+
+"Start call" in a lesson header starts a spoken lesson. Your answers are heard and sent after a pause of 1.2 seconds. A choice is picked by its letter, its position ("the second one") or its words. A reading is read aloud when you say "read it" and passed when you say "continue" or "next". The tutor's feedback and questions are read aloud. "Skip" or the Space key stops the tutor, "Start over" clears what was heard, and "End call" or leaving the lesson ends the call.
+
+Voice needs your own Deepgram API key: make an account at deepgram.com (a new account comes with free credit) and enter the key under Profile, "Voice". It is stored encrypted with the macOS keychain in `deepgram.key` in the data folder. The app shows only "Key saved", and you can remove the key there. "Speech language" (default `en`) and "Voice" (default `aura-2-thalia-en`) are set in the same place and kept in `settings.json`.
+
+During a call the microphone audio (16 kHz, mono) and the text that is read aloud go to Deepgram (`api.deepgram.com`), and only there. Nothing is sent while the tutor speaks, and no audio is written to disk. The lesson itself still goes only to the lesson's CLI.
+
+Cost: listening is about $0.29 per hour of speech and reading aloud is $0.03 per 1,000 characters, billed by Deepgram to your key.
+
+Limits: voice is tested against a stand-in for Deepgram only until the first live run. Formulas are spoken as "a formula on screen". You cannot talk over the tutor.
 
 ## Development
 

@@ -122,7 +122,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T85 The call logic
 - [x] T86 Call bar
 - [x] T87 Voice settings
-- [ ] T88 README
+- [x] T88 README
 - [ ] GATE I Voice
 - [ ] T89-T100 Milestone 6: learning modes (outline)
 - [ ] GATE J Learning modes
