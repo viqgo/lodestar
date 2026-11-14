@@ -56,12 +56,16 @@ export type SessionEvent =
   | { kind: "action"; at: string; action: Action; usage: Usage | null }
   | { kind: "answer"; at: string; answer: Answer };
 
+export type CliId = "codex" | "claude" | "gemini";
+
+export type CliStatus = { id: CliId; installed: boolean; version: string | null };
+
 export type Session = {
   version: 1;
   id: string; // "s_" + crypto.randomUUID()
   topic: string;
   goal: string;
-  cli: "codex";
+  cli: CliId;
   createdAt: string; // ISO 8601 UTC
   updatedAt: string;
   events: SessionEvent[];
