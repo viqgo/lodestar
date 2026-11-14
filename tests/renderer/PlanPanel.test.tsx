@@ -63,4 +63,19 @@ describe("PlanPanel", () => {
     await waitFor(() => expect(screen.getByText("✓ One")).toBeInTheDocument());
     expect(screen.queryByText("→ One")).toBeNull();
   });
+
+  it("PlanPanel keeps Mermaid quiet on errors", async () => {
+    vi.resetModules();
+    const fresh = await import("mermaid");
+    vi.mocked(fresh.default.render).mockResolvedValue({
+      svg: '<svg data-testid="map"></svg>',
+      diagramType: "flowchart",
+    });
+    const { PlanPanel: Fresh } = await import("../../src/renderer/src/components/PlanPanel");
+    render(<Fresh plan={PLAN} nodes={nodes} currentNodeId="n2" />);
+    await screen.findByTestId("map");
+    expect(vi.mocked(fresh.default.initialize)).toHaveBeenCalledWith(
+      expect.objectContaining({ suppressErrorRendering: true }),
+    );
+  });
 });

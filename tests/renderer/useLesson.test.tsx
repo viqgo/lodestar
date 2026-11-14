@@ -102,4 +102,21 @@ describe("useLesson", () => {
     unmount();
     expect(listenerCounts()).toEqual({ updated: 0, ended: 0 });
   });
+
+  it("useLesson clears busy when an answer is refused", async () => {
+    const s = S([act(A.probe())]);
+    installApi({
+      getSession: async () => s,
+      answer: vi.fn(async () => ({
+        ok: false,
+        error: { kind: "invalid_answer", message: "Write an answer." },
+        session: s,
+      })),
+    });
+    const { result } = renderHook(() => useLesson("s_1", false));
+    await waitFor(() => expect(result.current.session).toEqual(s));
+    rtlAct(() => result.current.submit(ANSWER));
+    await waitFor(() => expect(result.current.busy).toBe(false));
+    expect(result.current.error?.message).toBe("Write an answer.");
+  });
 });

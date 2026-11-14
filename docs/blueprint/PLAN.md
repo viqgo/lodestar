@@ -57,7 +57,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T36 App wiring
 - [x] T36b Keyboard access, double-click guard, map fallback symbol
 - [x] T37 README
-- [ ] T37b Gate C fixes (CR-2)
+- [x] T37b Gate C fixes (CR-2)
 - [ ] GATE C A full lesson in the window
 
 Conventions used in every task:

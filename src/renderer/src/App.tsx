@@ -47,7 +47,6 @@ export function App() {
   } else {
     content = (
       <div className="content">
-        <CliGate cli={cli} onRetry={retry} />
         <NewLessonForm
           disabled={disabled}
           onCreated={(s) => {
@@ -74,7 +73,10 @@ export function App() {
         }}
         onKnowledge={() => setScreen({ name: "knowledge" })}
       />
-      {content}
+      <div className="main">
+        <CliGate cli={cli} onRetry={retry} />
+        {content}
+      </div>
     </div>
   );
 }

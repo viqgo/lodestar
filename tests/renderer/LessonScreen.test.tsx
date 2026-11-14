@@ -142,4 +142,12 @@ describe("LessonScreen", () => {
     expect(screen.getByText(/1 step is still shaky\./)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Submit" })).not.toBeInTheDocument();
   });
+
+  it("reopening a lesson with no events offers Retry", async () => {
+    const { api } = installApi({ getSession: vi.fn(async () => S([])) });
+    render(<LessonScreen id={ID} start={false} />);
+    expect(await screen.findByText("The last reply did not arrive.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(api.advance).not.toHaveBeenCalled();
+  });
 });

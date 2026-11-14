@@ -18,6 +18,8 @@ export function NewLessonForm(props: { disabled: boolean; onCreated(session: Ses
       const result = await window.api.createSession({ topic, goal });
       if (result.ok) props.onCreated(result.session);
       else setError(result.message);
+    } catch {
+      setError("Could not save. Check free disk space.");
     } finally {
       busy.current = false;
     }

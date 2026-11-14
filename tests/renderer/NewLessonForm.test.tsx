@@ -75,4 +75,19 @@ describe("NewLessonForm", () => {
     resolve({ ok: true, session: S });
     await vi.waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
   });
+
+  it("NewLessonForm reports a failed save", async () => {
+    const { api } = installApi({
+      createSession: vi.fn(async () => {
+        throw new Error("disk");
+      }),
+    });
+    const onCreated = vi.fn();
+    render(<NewLessonForm disabled={false} onCreated={onCreated} />);
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(await screen.findByText("Could not save. Check free disk space.")).toBeInTheDocument();
+    expect(onCreated).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(api.createSession).toHaveBeenCalledTimes(2);
+  });
 });

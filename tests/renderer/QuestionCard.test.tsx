@@ -162,4 +162,9 @@ describe("QuestionCard", () => {
     for (const t of screen.getAllByRole("textbox")) expect(t).toBeDisabled();
     expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
   });
+
+  it("QuestionCard limits a text answer to 4000 characters", () => {
+    renderCard({ question: textQ });
+    expect(screen.getByLabelText("Your answer")).toHaveAttribute("maxlength", "4000");
+  });
 });

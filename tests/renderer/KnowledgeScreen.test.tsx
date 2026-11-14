@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { KnowledgeScreen } from "../../src/renderer/src/components/KnowledgeScreen";
 import type { KnowledgeView } from "../../src/shared/types";
 import { installApi } from "../helpers/dom";
+import { session } from "../helpers/fixtures";
 
 const NOW = new Date("2026-03-03T12:00:00.000Z");
 const TWO_HOURS_AGO = "2026-03-03T10:00:00.000Z";
@@ -89,5 +90,13 @@ describe("KnowledgeScreen", () => {
     expect(api.listKnowledge).toHaveBeenCalledTimes(2);
     expect(container).not.toHaveTextContent("First point");
     expect(container).toHaveTextContent("Second point");
+  });
+
+  it("KnowledgeScreen refreshes when a turn ends", async () => {
+    const { api, emitEnded } = installApi({ listKnowledge: vi.fn(async () => []) });
+    render(<KnowledgeScreen />);
+    await waitFor(() => expect(api.listKnowledge).toHaveBeenCalledTimes(1));
+    emitEnded("s_1", { ok: true, session: session() });
+    await waitFor(() => expect(api.listKnowledge).toHaveBeenCalledTimes(2));
   });
 });

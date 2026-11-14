@@ -17,7 +17,7 @@ export function LessonScreen(props: { id: string; start: boolean }) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
-  }, [items.length]);
+  }, [items.length, busy, error]);
 
   let banner: React.ReactNode = null;
   if (error) {
@@ -28,13 +28,7 @@ export function LessonScreen(props: { id: string; start: boolean }) {
     } else {
       banner = <Banner kind="error" message={error.message} actionLabel="Retry" onAction={retry} />;
     }
-  } else if (
-    !busy &&
-    session &&
-    state &&
-    state.awaiting.who === "model" &&
-    session.events.length > 0
-  ) {
+  } else if (!busy && session && state && state.awaiting.who === "model") {
     banner = (
       <Banner
         kind="info"

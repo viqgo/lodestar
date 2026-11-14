@@ -18,6 +18,8 @@ export function KnowledgeScreen() {
     reload();
   }, []);
 
+  useEffect(() => window.api.onTurnEnded(() => reload()), []);
+
   const nowIso = new Date().toISOString();
   return (
     <div className="content">

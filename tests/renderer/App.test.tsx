@@ -106,4 +106,15 @@ describe("App", () => {
     expect(api.deleteSession).toHaveBeenCalledWith(ID);
     expect(await screen.findByText("What do you want to learn?")).toBeInTheDocument();
   });
+
+  it("App shows the Codex banner on every screen", async () => {
+    installApi({ detectCli: vi.fn(async () => ({ ok: false })) });
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Knowledge" }));
+    await screen.findByText("What you have shown you understand. Later lessons start from here.");
+    expect(
+      screen.getByText("Codex CLI not found. Install it and sign in, then press Retry."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
 });

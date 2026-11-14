@@ -28,6 +28,7 @@ export function PlanPanel(props: {
         initialized = true;
         mermaid.initialize({
           startOnLoad: false,
+          suppressErrorRendering: true,
           securityLevel: "strict",
           theme: "base",
           themeVariables: {

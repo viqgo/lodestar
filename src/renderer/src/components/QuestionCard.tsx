@@ -1,6 +1,7 @@
 import { useId, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { Answer, Confidence, Question, Verdict } from "../../../shared/types";
+import { ANSWER_TEXT_MAX } from "../../../shared/limits";
 import { shuffledOrder } from "../lib/shuffle";
 import { MarkdownView } from "./MarkdownView";
 
@@ -77,7 +78,7 @@ export function QuestionCard({
         <MarkdownView markdown={question.prompt} />
       </div>
       {isChoice ? (
-        <div role="radiogroup">
+        <div role="radiogroup" className="options">
           {shuffledOrder(seed, question.options.length).map((i) => (
             <label key={i} className={optionClass(i)}>
               <input
@@ -106,6 +107,7 @@ export function QuestionCard({
             placeholder={
               purpose === "predict" ? "Take a guess. This is not graded." : "Type your answer"
             }
+            maxLength={ANSWER_TEXT_MAX}
             disabled={locked}
           />
         </div>
