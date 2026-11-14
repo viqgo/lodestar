@@ -58,6 +58,10 @@ export function deriveState(events: SessionEvent[]): LessonState {
         return;
       }
       if (awaiting.purpose === "predict") {
+        state = { ...state, teachStep: "need_teach", awaiting: { who: "model" } };
+        return;
+      }
+      if (awaiting.purpose === "read") {
         state = { ...state, teachStep: "need_explain", awaiting: { who: "model" } };
         return;
       }
@@ -121,6 +125,18 @@ export function deriveState(events: SessionEvent[]): LessonState {
           },
         };
         return;
+      case "teach":
+        state = {
+          ...state,
+          awaiting: {
+            who: "learner",
+            purpose: "read",
+            question: null,
+            nodeId: action.nodeId,
+            eventIndex: i,
+          },
+        };
+        return;
       case "explain":
         state = {
           ...state,
@@ -152,6 +168,8 @@ export function allowedActions(state: LessonState): ActionType[] {
     switch (state.teachStep) {
       case "need_predict":
         return allNodesSettled(state.nodes) ? ["lesson_done"] : ["predict"];
+      case "need_teach":
+        return ["teach"];
       case "need_explain":
       case "need_repair":
         return ["explain"];
@@ -177,6 +195,11 @@ export function checkAction(state: LessonState, action: Action): string | null {
       return eligibleNodes(state.plan!, state.nodes).includes(action.nodeId)
         ? null
         : `node ${action.nodeId} cannot start now`;
+    case "teach":
+      if (action.nodeId !== state.currentNodeId) {
+        return `teach must be for node ${state.currentNodeId}`;
+      }
+      return action.markdown.trim().length === 0 ? "reading is empty" : null;
     case "explain":
       if (action.nodeId !== state.currentNodeId) {
         return `explain must be for node ${state.currentNodeId}`;
@@ -193,6 +216,9 @@ export function checkAction(state: LessonState, action: Action): string | null {
 export function checkAnswer(state: LessonState, answer: Answer): string | null {
   const awaiting = state.awaiting;
   if (awaiting.who !== "learner") return "No question is waiting for an answer.";
+  if (awaiting.question === null) {
+    return answer.choiceIndex === null && answer.text === null ? null : "Press Continue.";
+  }
   if (awaiting.question.kind === "choice") {
     const i = answer.choiceIndex;
     const valid =
@@ -238,8 +264,14 @@ export function moveNotes(state: LessonState): string[] {
         : [
             `Start the next node with a predict question. Nodes that can start now: ${eligibleNodes(state.plan!, state.nodes).join(", ")}.`,
           ];
+    case "need_teach":
+      return [
+        `Write the reading for node ${id}: the whole idea derived step by step from what the learner holds, with at least one worked example, 500 to 1000 words. Do not ask a question yet.`,
+      ];
     case "need_explain":
-      return [`Explain node ${id} and include a check question.`];
+      return [
+        `Add a short bridge (under 150 words) for node ${id} that fills what the reading left open, and include a check question.`,
+      ];
     case "need_repair":
       return [
         `The learner failed the check on node ${id} (failure ${fails} of 3). Explain node ${id} again from a different angle that targets their mistake, with a new check question.`,

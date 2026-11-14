@@ -100,8 +100,15 @@ describe("renderTranscript grading", () => {
       act(A.explain("n1")),
       pick(0),
     ]).split("\n");
-    expect(lines[7]).toContain('"graded":"pass"');
-    expect(lines[9]).toContain('"graded":"fail"');
-    expect(lines[5]).toContain('"graded":null');
+    expect(lines[9]).toContain('"graded":"pass"');
+    expect(lines[11]).toContain('"graded":"fail"');
+    expect(lines[7]).toContain('"graded":null');
+  });
+});
+
+describe("prompt: the teach step", () => {
+  it("prompt asks for a reading before the check", () => {
+    expect(p(toTeach)).toContain("Then teach: a full reading");
+    expect(p([...toTeach, act(A.predict("n1")), say()])).toContain("Write the reading for node n1");
   });
 });

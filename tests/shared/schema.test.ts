@@ -7,7 +7,15 @@ const reply = (a: Action) => JSON.stringify({ action: a });
 
 describe("parseReply", () => {
   it("parseReply accepts every action type", () => {
-    for (const a of [A.probe(), A.probeDone(), A.plan(), A.predict(), A.explain(), A.done()]) {
+    for (const a of [
+      A.probe(),
+      A.probeDone(),
+      A.plan(),
+      A.predict(),
+      A.teach(),
+      A.explain(),
+      A.done(),
+    ]) {
       expect(parseReply(reply(a))).toEqual({ ok: true, action: a });
     }
   });
@@ -71,5 +79,19 @@ describe("parseReply strictness", () => {
     expect(parseReply(JSON.stringify({ action: A.probe({ ...choiceQ, prompt: "" }) })).ok).toBe(
       false,
     );
+  });
+});
+
+describe("the teach action", () => {
+  it("parseReply accepts a teach action", () => {
+    expect(parseReply(reply(A.teach())).ok).toBe(true);
+    const extra = JSON.stringify({ action: { ...A.teach(), extra: 1 } });
+    expect(parseReply(extra).ok).toBe(false);
+  });
+
+  it("reply JSON schema lists seven variants", () => {
+    const variants = (REPLY_JSON_SCHEMA as any).properties.action.anyOf as any[];
+    expect(variants.length).toBe(7);
+    expect(variants.some((v) => JSON.stringify(v.properties.type.enum) === '["teach"]')).toBe(true);
   });
 });

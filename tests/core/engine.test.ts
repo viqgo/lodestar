@@ -8,16 +8,18 @@ import {
   moveNotes,
   validateNewLesson,
 } from "../../src/core/engine";
-import type { Answer, SessionEvent } from "../../src/shared/types";
+import type { Action, Answer, SessionEvent } from "../../src/shared/types";
 import {
   A,
   PLAN,
   act,
   choiceQ,
+  cont,
   pick,
   say,
   textQ,
   toCheck,
+  toRead,
   toPlan,
   toTeach,
 } from "../helpers/fixtures";
@@ -107,7 +109,7 @@ describe("deriveState: teaching", () => {
   });
 
   it("a predict answer asks the model to explain", () => {
-    const r = s(act(A.predict("n1")), say());
+    const r = s(...toRead(), cont());
     expect(r.teachStep).toBe("need_explain");
     expect(r.awaiting.who).toBe("model");
   });
@@ -196,17 +198,14 @@ describe("allowedActions and checkAction", () => {
   });
 
   it("explain must be for the current node", () => {
-    expect(checkAction(st(act(A.predict("n1")), say()), A.explain("n2"))).toBe(
+    expect(checkAction(st(...toRead(), cont()), A.explain("n2"))).toBe(
       "explain must be for node n1",
     );
   });
 
   it("a choice check needs a correctIndex", () => {
     expect(
-      checkAction(
-        st(act(A.predict("n1")), say()),
-        A.explain("n1", { ...choiceQ, correctIndex: null }),
-      ),
+      checkAction(st(...toRead(), cont()), A.explain("n1", { ...choiceQ, correctIndex: null })),
     ).toBe("check needs a correctIndex");
   });
 
@@ -337,8 +336,8 @@ describe("hardening: rules without a test before", () => {
   });
 
   it("moveNotes asks for an explanation after a predict", () => {
-    expect(moveNotes(st(act(A.predict("n1")), say()))).toEqual([
-      "Explain node n1 and include a check question.",
+    expect(moveNotes(st(...toRead(), cont()))).toEqual([
+      "Add a short bridge (under 150 words) for node n1 that fills what the reading left open, and include a check question.",
     ]);
   });
 
@@ -375,7 +374,7 @@ describe("hardening: rules without a test before", () => {
   it("deriveState throws on a null verdict after a text check", () => {
     expect(() =>
       deriveState([...toTeach, ...toCheck("n1", textQ), say(), act(A.predict("n2"))]),
-    ).toThrow("corrupt session at event 8");
+    ).toThrow("corrupt session at event 10");
   });
 
   it("learnedToSave drops items with empty text", () => {
@@ -388,5 +387,67 @@ describe("hardening: rules without a test before", () => {
       ],
     } as Extract<ReturnType<typeof A.done>, { type: "lesson_done" }>;
     expect(learnedToSave(state, action)).toEqual([{ nodeId: "n1", text: "ok" }]);
+  });
+});
+
+describe("deriveState and rules: the teach step", () => {
+  const st = (...events: SessionEvent[]) => deriveState([...toTeach, ...events]);
+  const answerOf = (e: SessionEvent): Answer => {
+    if (e.kind !== "answer") throw new Error("not an answer");
+    return e.answer;
+  };
+
+  it("predict answer leads to need_teach", () => {
+    const r = deriveState([...toTeach, act(A.predict()), say()]);
+    expect(r.teachStep).toBe("need_teach");
+    expect(r.awaiting).toEqual({ who: "model" });
+  });
+
+  it("teach asks the learner to read", () => {
+    const r = deriveState([...toTeach, ...toRead()]);
+    expect(r.awaiting).toMatchObject({
+      who: "learner",
+      purpose: "read",
+      question: null,
+      nodeId: "n1",
+    });
+  });
+
+  it("continue after teach leads to need_explain", () => {
+    const r = deriveState([...toTeach, ...toRead(), cont()]);
+    expect(r.teachStep).toBe("need_explain");
+    expect(r.awaiting).toEqual({ who: "model" });
+  });
+
+  it("teach is allowed only after a predict", () => {
+    const state = st(act(A.predict("n1")), say());
+    expect(allowedActions(state)).toEqual(["teach"]);
+    expect(checkAction(state, A.explain("n1"))).toBe("explain is not allowed now");
+    expect(checkAction(st(), A.teach("n1"))).toBe("teach is not allowed now");
+  });
+
+  it("teach must be for the current node", () => {
+    const state = st(act(A.predict("n1")), say());
+    expect(checkAction(state, A.teach("n2"))).toBe("teach must be for node n1");
+  });
+
+  it("teach needs a non-empty reading", () => {
+    const state = st(act(A.predict("n1")), say());
+    expect(checkAction(state, { ...A.teach("n1"), markdown: "  " } as Action)).toBe(
+      "reading is empty",
+    );
+  });
+
+  it("checkAnswer accepts continue for a reading", () => {
+    const state = st(...toRead());
+    expect(checkAnswer(state, answerOf(cont()))).toBeNull();
+    expect(checkAnswer(state, answerOf(say("x")))).toBe("Press Continue.");
+    expect(checkAnswer(state, answerOf(pick(0)))).toBe("Press Continue.");
+  });
+
+  it("moveNotes asks for a reading in need_teach", () => {
+    expect(moveNotes(st(act(A.predict("n1")), say()))).toEqual([
+      "Write the reading for node n1: the whole idea derived step by step from what the learner holds, with at least one worked example, 500 to 1000 words. Do not ask a question yet.",
+    ]);
   });
 });

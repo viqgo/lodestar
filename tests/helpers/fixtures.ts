@@ -31,6 +31,13 @@ export const A = {
     feedback: null,
     question: textQ,
   }),
+  teach: (nodeId = "n1", verdict: Verdict | null = null): Action => ({
+    type: "teach",
+    nodeId,
+    verdict,
+    feedback: null,
+    markdown: "reading",
+  }),
   explain: (nodeId = "n1", check: Question = choiceQ, verdict: Verdict | null = null): Action => ({
     type: "explain",
     nodeId,
@@ -61,6 +68,7 @@ export const ans = (p: Partial<Answer> = {}): SessionEvent => ({
   at: AT,
   answer: { choiceIndex: null, text: null, reasoning: null, confidence: null, ...p },
 });
+export const cont = () => ans();
 export const pick = (i: number): SessionEvent => ans({ choiceIndex: i });
 export const say = (text = "words"): SessionEvent => ans({ text });
 export const session = (events: SessionEvent[] = []): Session => ({
@@ -81,5 +89,13 @@ export const toTeach: SessionEvent[] = [...toPlan, act(A.plan())];
 export const toCheck = (nodeId = "n1", check: Question = choiceQ): SessionEvent[] => [
   act(A.predict(nodeId)),
   say(),
+  act(A.teach(nodeId)),
+  cont(),
   act(A.explain(nodeId, check)),
+];
+/** predict answered, reading shown: now the learner must press Continue */
+export const toRead = (nodeId = "n1"): SessionEvent[] => [
+  act(A.predict(nodeId)),
+  say(),
+  act(A.teach(nodeId)),
 ];

@@ -20,6 +20,13 @@ export type Action =
       question: Question;
     }
   | {
+      type: "teach";
+      nodeId: string;
+      verdict: Verdict | null;
+      feedback: string | null;
+      markdown: string;
+    }
+  | {
       type: "explain";
       nodeId: string;
       verdict: Verdict | null;
@@ -72,7 +79,8 @@ export type KnowledgeView = KnowledgeItem & { lessonTopic: string | null }; // n
 
 export type Phase = "probe" | "plan" | "teach" | "done";
 export type NodeState = { status: "todo" | "passed" | "shaky"; fails: number };
-export type TeachStep = "need_predict" | "need_explain" | "need_repair" | "need_verdict";
+export type TeachStep =
+  "need_predict" | "need_teach" | "need_explain" | "need_repair" | "need_verdict";
 export type Awaiting =
   | { who: "model" }
   | {
@@ -82,6 +90,7 @@ export type Awaiting =
       nodeId: string | null;
       eventIndex: number;
     }
+  | { who: "learner"; purpose: "read"; question: null; nodeId: string; eventIndex: number }
   | { who: "nobody" };
 
 export type LessonState = {

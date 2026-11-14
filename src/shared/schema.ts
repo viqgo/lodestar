@@ -62,6 +62,13 @@ const ActionSchema = z.discriminatedUnion("type", [
     question: QuestionSchema,
   }),
   z.strictObject({
+    type: z.literal("teach"),
+    nodeId: z.string(),
+    verdict: VerdictSchema,
+    feedback: z.string().nullable(),
+    markdown: z.string(),
+  }),
+  z.strictObject({
     type: z.literal("explain"),
     nodeId: z.string(),
     verdict: VerdictSchema,
@@ -106,6 +113,7 @@ export const REPLY_JSON_SCHEMA: object = obj({
       obj({ type: lit("probe_done"), known: strList, goal: str }),
       obj({ type: lit("plan"), nodes: { type: "array", items: node } }),
       obj({ type: lit("predict"), nodeId: str, verdict, feedback: nullableStr, question }),
+      obj({ type: lit("teach"), nodeId: str, verdict, feedback: nullableStr, markdown: str }),
       obj({
         type: lit("explain"),
         nodeId: str,
