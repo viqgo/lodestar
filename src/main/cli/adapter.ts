@@ -1,7 +1,9 @@
-import type { DetectResult, RunRequest, RunResult } from "../../shared/types";
+import type { CliId, DetectResult, RunRequest, RunResult } from "../../shared/types";
 
 export interface CliAdapter {
-  id: "codex";
+  id: CliId;
+  label: string;
+  retries: number;
   detect(): Promise<DetectResult>;
   run(req: RunRequest): Promise<RunResult>;
 }

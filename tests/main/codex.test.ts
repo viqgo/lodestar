@@ -68,6 +68,15 @@ function make(
   return { adapter, f, tmpRoot };
 }
 
+describe("adapter identity", () => {
+  it("codex adapter has a label and one retry", () => {
+    const { adapter } = make({});
+    expect(adapter.id).toBe("codex");
+    expect(adapter.label).toBe("Codex");
+    expect(adapter.retries).toBe(1);
+  });
+});
+
 describe("detect", () => {
   it("detect returns the version", async () => {
     const { adapter, f } = make({ stdout: "codex-cli 0.167.0\n" });

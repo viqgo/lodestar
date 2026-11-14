@@ -54,6 +54,8 @@ export function fakeAdapter(...replies: (Action | string | RunResult)[]) {
   const prompts: string[] = [];
   const adapter: CliAdapter = {
     id: "codex",
+    label: "Codex",
+    retries: 1,
     detect: async () => ({ ok: true, version: "0.0.0" }),
     run: async (req: RunRequest): Promise<RunResult> => {
       prompts.push(req.prompt);

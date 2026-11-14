@@ -89,6 +89,8 @@ const setup = async (events: SessionEvent[], ...replies: Parameters<typeof fakeA
 
 const slowAdapter = (run: CliAdapter["run"]): CliAdapter => ({
   id: "codex",
+  label: "Codex",
+  retries: 1,
   detect: async () => ({ ok: true, version: "0.0.0" }),
   run,
 });
