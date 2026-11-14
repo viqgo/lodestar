@@ -10,6 +10,7 @@ type CallLesson = {
   session: Session | null;
   state: LessonState | null;
   busy: boolean;
+  blocked?: boolean;
   submit(a: Answer, attachPaths: string[]): void;
 };
 
@@ -149,13 +150,13 @@ export function useCall(lesson: CallLesson): {
         }
         const m = await startMic((pcm) => window.api.voiceAudio(pcm));
         if (!m.ok) {
-          void window.api.voiceStop();
+          void window.api.voiceStop(lessonRef.current.id);
           setError(MIC_REFUSED);
           return;
         }
         if (epochRef.current !== mine) {
           m.stop();
-          if (unmountedRef.current) void window.api.voiceStop();
+          if (unmountedRef.current) void window.api.voiceStop(lessonRef.current.id);
           return;
         }
         micRef.current = m;
@@ -171,7 +172,7 @@ export function useCall(lesson: CallLesson): {
   };
   const end = (): void => {
     if (!onRef.current) return;
-    void window.api.voiceStop();
+    void window.api.voiceStop(lessonRef.current.id);
     closeCall();
   };
   const skip = (): void => {
@@ -196,7 +197,7 @@ export function useCall(lesson: CallLesson): {
       }),
       window.api.onVoiceTranscript((text, final) => {
         const l = lessonRef.current;
-        if (!onRef.current || speakingRef.current || l.busy) return;
+        if (!onRef.current || speakingRef.current || l.busy || l.blocked) return;
         if (l.state?.awaiting.who !== "learner") return;
         if (final) {
           finalsRef.current.push(text);
@@ -211,7 +212,7 @@ export function useCall(lesson: CallLesson): {
         const spoken = heardNow().trim();
         clearHeard();
         const l = lessonRef.current;
-        if (spoken === "" || l.busy || !l.state) return;
+        if (spoken === "" || l.busy || l.blocked || !l.state) return;
         const a = l.state.awaiting;
         if (a.who !== "learner") return;
         const none: Answer = { choiceIndex: null, text: null, reasoning: null, confidence: null };
@@ -253,7 +254,7 @@ export function useCall(lesson: CallLesson): {
       for (const off of offs) off();
       unmountedRef.current = true;
       if (onRef.current || startingRef.current) {
-        void window.api.voiceStop();
+        void window.api.voiceStop(lessonRef.current.id);
         closeCall();
       }
     };

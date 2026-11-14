@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import "../helpers/dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { SubjectScreen } from "../../src/renderer/src/components/SubjectScreen";
@@ -123,6 +123,59 @@ describe("SubjectScreen", () => {
     });
     expect(await screen.findByText("The folder is missing.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+  });
+
+  it("the subject folder can be changed", async () => {
+    const pickFolder = vi.fn<() => Promise<string | null>>(async () => "/new/folder");
+    const setSubjectFolder = vi.fn<
+      (
+        id: string,
+        folder: string,
+      ) => Promise<{ ok: true; subject: Subject } | { ok: false; message: string }>
+    >(async () => ({ ok: true, subject: U(readySubject) }));
+    const { api } = setup({
+      getSubject: async () => U(readySubject),
+      pickFolder,
+      setSubjectFolder,
+    });
+    expect(await screen.findByText("Material folder: course")).toBeInTheDocument();
+    const change = screen.getByRole("button", { name: "Change" });
+    await userEvent.click(change);
+    expect(api.setSubjectFolder).toHaveBeenCalledWith("u_1", "/new/folder");
+    pickFolder.mockResolvedValueOnce(null);
+    await userEvent.click(change);
+    expect(api.setSubjectFolder).toHaveBeenCalledTimes(1);
+    setSubjectFolder.mockResolvedValueOnce({
+      ok: false,
+      message: "A reply is already on the way.",
+    });
+    await userEvent.click(change);
+    expect(await screen.findByText("A reply is already on the way.")).toBeInTheDocument();
+    cleanup();
+    setup({ getSubject: async () => U(readySubject), isSubjectRunning: async () => true });
+    await screen.findByText("Thinking…");
+    expect(screen.getByRole("button", { name: "Change" })).toBeDisabled();
+  });
+
+  it("changing a missing subject folder repeats the call", async () => {
+    const { api, emitSubjectEnded } = setup({
+      getSubject: async () => U([SE.outline()]),
+      pickFolder: vi.fn(async () => "/new/folder"),
+      setSubjectFolder: vi.fn(async () => ({ ok: true, subject: U([SE.outline()]) })),
+    });
+    await screen.findByRole("button", { name: "Accept outline" });
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await waitFor(() => expect(api.setSubjectFolder).toHaveBeenCalledTimes(1));
+    expect(api.advanceSubject).not.toHaveBeenCalled();
+    emitSubjectEnded("u_1", {
+      ok: false,
+      error: { kind: "folder_missing", message: "The folder is missing." },
+      subject: null,
+    });
+    expect(await screen.findByText("The folder is missing.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await waitFor(() => expect(api.advanceSubject).toHaveBeenCalledTimes(1));
+    expect(api.advanceSubject).toHaveBeenCalledWith("u_1");
   });
 
   it("SubjectScreen shows the senior chat once the outline is accepted", async () => {

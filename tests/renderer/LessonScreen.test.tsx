@@ -584,6 +584,18 @@ describe("LessonScreen call", () => {
     expect(api.voiceStop).toHaveBeenCalled();
   });
 
+  it("a spoken answer is not sent while the tutor is missing", async () => {
+    const { api, emitVoiceTranscript, emitVoiceUtterance } = withKey();
+    const view = render(<LessonScreen {...props} />);
+    await begin();
+    const none: CliStatus[] = ALL.map((c) => ({ ...c, installed: false, version: null }));
+    view.rerender(<LessonScreen {...props} statuses={none} />);
+    rtlAct(() => emitVoiceTranscript("an answer", true));
+    rtlAct(() => emitVoiceUtterance());
+    expect(api.answer).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Your answer")).toHaveValue("");
+  });
+
   it("the lesson has the side question box under its last item", async () => {
     installApi({ getSession: vi.fn(async () => S([act(A.probe())])) });
     const view = render(

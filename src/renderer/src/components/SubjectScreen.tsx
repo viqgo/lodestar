@@ -45,6 +45,20 @@ export function SubjectScreen(props: {
     return false;
   }
 
+  async function changeFolder() {
+    let picked: string | null;
+    try {
+      picked = await window.api.pickFolder();
+    } catch {
+      setMessage(SAVE_ERROR);
+      return;
+    }
+    if (picked === null) return;
+    const folder = picked;
+    const stored = await guarded(() => window.api.setSubjectFolder(id, folder));
+    if (stored && error?.kind === "folder_missing") retry();
+  }
+
   async function startUnit(unitId: string) {
     if (starting.current) return;
     starting.current = true;
@@ -88,7 +102,17 @@ export function SubjectScreen(props: {
       {subject && state && (
         <>
           <h3>{subject.name}</h3>
-          <p className="note">{`Material folder: ${lastSegment(subject.folder)}`}</p>
+          <div className="row">
+            <span className="note">{`Material folder: ${lastSegment(subject.folder)}`}</span>
+            <button
+              type="button"
+              className="btn"
+              disabled={busy}
+              onClick={() => void changeFolder()}
+            >
+              Change
+            </button>
+          </div>
           {state.phase === "review" && (
             <OutlineReview
               units={state.units}

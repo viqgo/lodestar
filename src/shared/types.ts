@@ -228,7 +228,7 @@ export type Api = {
   voiceAudio(pcm: ArrayBuffer): void;
   voiceSpeak(text: string): Promise<void>;
   voiceSkip(): Promise<void>;
-  voiceStop(): Promise<void>;
+  voiceStop(lessonId: string): Promise<void>;
   onVoiceState(cb: (state: CallState) => void): () => void;
   onVoiceTranscript(cb: (text: string, final: boolean) => void): () => void;
   onVoiceUtterance(cb: () => void): () => void;

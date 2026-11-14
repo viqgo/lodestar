@@ -34,7 +34,13 @@ export function LessonScreen(props: {
     retry,
     stop,
   } = useLesson(props.id, props.start);
-  const call = useCall({ id: props.id, session, state, busy, submit });
+  const cli: CliId = session !== null && isCliId(session.cli) ? session.cli : "codex";
+  const missing =
+    session !== null &&
+    props.statuses !== null &&
+    !props.statuses.some((s) => s.id === cli && s.installed);
+  const blocked = session !== null && (props.statuses === null || missing);
+  const call = useCall({ id: props.id, session, state, busy, submit, blocked });
   const [hasKey, setHasKey] = useState(false);
   const items = useMemo(() => (session ? buildItems(session) : []), [session]);
   const endRef = useRef<HTMLDivElement>(null);
@@ -57,12 +63,6 @@ export function LessonScreen(props: {
     endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
   }, [items.length, busy, error]);
 
-  const cli: CliId = session !== null && isCliId(session.cli) ? session.cli : "codex";
-  const missing =
-    session !== null &&
-    props.statuses !== null &&
-    !props.statuses.some((s) => s.id === cli && s.installed);
-  const blocked = session !== null && (props.statuses === null || missing);
   const switching = useRef(false);
 
   const retryAction = props.statuses === null ? {} : { actionLabel: "Retry", onAction: retry };

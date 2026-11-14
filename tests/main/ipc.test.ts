@@ -1330,6 +1330,16 @@ describe("ipc voice", () => {
     expect(voice.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("voice:stop passes the lesson id", async () => {
+    const { call, voice } = await setup();
+    await call("voice:stop", "s1");
+    expect(voice.stop).toHaveBeenLastCalledWith("s1");
+    await call("voice:stop", 42);
+    expect(voice.stop).toHaveBeenLastCalledWith(undefined);
+    await call("voice:stop");
+    expect(voice.stop).toHaveBeenLastCalledWith(undefined);
+  });
+
   it("voice:start refuses a lesson id that is not text", async () => {
     const { call, voice } = await setup();
     const r = await call("voice:start", 42);

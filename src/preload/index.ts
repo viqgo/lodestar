@@ -64,7 +64,7 @@ const api: Api = {
   },
   voiceSpeak: (text) => ipcRenderer.invoke("voice:say", text) as Promise<void>,
   voiceSkip: () => ipcRenderer.invoke("voice:skip") as Promise<void>,
-  voiceStop: () => ipcRenderer.invoke("voice:stop") as Promise<void>,
+  voiceStop: (lessonId) => ipcRenderer.invoke("voice:stop", lessonId) as Promise<void>,
   getProfile: () => ipcRenderer.invoke("profile:get") as Promise<string>,
   saveProfile: (text) => ipcRenderer.invoke("profile:save", text) as ReturnType<Api["saveProfile"]>,
   listSubjects: () => ipcRenderer.invoke("subjects:list") as ReturnType<Api["listSubjects"]>,

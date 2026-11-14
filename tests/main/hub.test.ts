@@ -185,6 +185,21 @@ describe("voice hub", () => {
     expect(send).not.toHaveBeenCalled();
   });
 
+  it("stop for another lesson leaves the call alone", async () => {
+    const { hub, listeners, send } = setup();
+    await hub.start("a");
+    send.mockClear();
+    hub.stop("b");
+    expect(listeners[0].close).not.toHaveBeenCalled();
+    expect(send).not.toHaveBeenCalledWith("voice:state", "off");
+    hub.stop("a");
+    expect(listeners[0].close).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith("voice:state", "off");
+    await hub.start("a");
+    hub.stop();
+    expect(listeners[1].close).toHaveBeenCalledTimes(1);
+  });
+
   it("a second start replaces the running call", async () => {
     const { hub, listeners, send } = setup();
     await hub.start("a");

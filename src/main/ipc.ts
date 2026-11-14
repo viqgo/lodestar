@@ -431,8 +431,8 @@ export function registerIpc(deps: IpcDeps): void {
   ipcMain.handle("voice:skip", () => {
     voice.skip();
   });
-  ipcMain.handle("voice:stop", () => {
-    voice.stop();
+  ipcMain.handle("voice:stop", (_event, lessonId: unknown) => {
+    voice.stop(typeof lessonId === "string" ? lessonId : undefined);
   });
   ipcMain.handle("voice:removeKey", () => secrets.remove());
 

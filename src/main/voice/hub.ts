@@ -29,11 +29,11 @@ export function createVoiceHub(deps: {
   audio(chunk: Buffer): void;
   say(text: string): Promise<void>;
   skip(): void;
-  stop(): void;
+  stop(lessonId?: string): void;
 } {
   let call: Call | null = null;
-  const stop = (): void => {
-    if (call === null) return;
+  const stop = (lessonId?: string): void => {
+    if (call === null || (lessonId !== undefined && call.lessonId !== lessonId)) return;
     const c = call;
     call = null;
     c.listener.close();

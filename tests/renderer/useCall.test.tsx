@@ -413,4 +413,31 @@ describe("useCall", () => {
     b.unmount();
     expect(b.api.voiceStop).not.toHaveBeenCalled();
   });
+
+  it("the call is stopped by its own lesson id", async () => {
+    const s = await started(probeText);
+    rtlAct(() => s.result.current.end());
+    expect(s.api.voiceStop).toHaveBeenCalledWith(session().id);
+
+    const b = await started(probeText);
+    b.unmount();
+    expect(b.api.voiceStop).toHaveBeenCalledWith(session().id);
+  });
+
+  it("nothing heard is used while the lesson is blocked", async () => {
+    const s = setup(probeText);
+    s.rerender({ ...s.initial, blocked: true });
+    await rtlAct(async () => {
+      s.result.current.start();
+    });
+    await waitFor(() => expect(s.result.current.state).not.toBe("off"));
+    rtlAct(() => s.emitVoiceTranscript("an answer", true));
+    expect(s.result.current.heard).toBe("");
+    rtlAct(() => s.emitVoiceUtterance());
+    expect(s.initial.submit).toHaveBeenCalledTimes(0);
+    s.rerender({ ...s.initial, blocked: false });
+    rtlAct(() => s.emitVoiceTranscript("an answer", true));
+    rtlAct(() => s.emitVoiceUtterance());
+    expect(s.initial.submit).toHaveBeenCalledTimes(1);
+  });
 });
