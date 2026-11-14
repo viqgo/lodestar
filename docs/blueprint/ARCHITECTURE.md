@@ -56,6 +56,7 @@ src/preload/index.ts                 - exposes window.api (the only bridge)
 
 src/renderer/index.html              - page shell
 src/renderer/src/main.tsx            - React entry
+src/renderer/src/vite-env.d.ts       - lets TypeScript accept CSS imports
 src/renderer/src/App.tsx             - layout and screen switching
 src/renderer/src/styles/tokens.css   - design tokens from UI.md
 src/renderer/src/styles/app.css      - all component styles
@@ -383,7 +384,7 @@ Private helpers of a few lines may be added inside a file. No new exported funct
 | File | Functions / contents | Task |
 |------|----------------------|------|
 | config files, `LICENSE`, `tests/smoke.test.ts` | - | T1 |
-| `electron.vite.config.ts`, `src/renderer/index.html`, `main.tsx`, `styles/tokens.css` | - | T2 |
+| `electron.vite.config.ts`, `src/renderer/index.html`, `main.tsx`, `vite-env.d.ts`, `styles/tokens.css` | - | T2 |
 | `src/main/index.ts` | `createWindow` (T2); `main` wiring, CSP, `LEARN_DATA_DIR` (T21) | T2, T21 |
 | `src/shared/limits.ts`, `src/shared/types.ts` | constants, types | T3 |
 | `src/shared/schema.ts` | `ReplySchema`, `REPLY_JSON_SCHEMA`, `parseReply` | T4 |
