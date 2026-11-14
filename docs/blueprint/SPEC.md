@@ -189,7 +189,7 @@ Evals (milestone 2): the same eight cases (E1-E7, E5b), run with `LEARN_EVAL_CLI
 
 Out of scope for milestone 2: streaming; choosing a model; signing in or installing a CLI from the app; Antigravity CLI; Windows and Linux.
 
-## Milestones 3-8 (DRAFT 2026-11-14, awaiting owner approval)
+## Milestones 3-8 (approved 2026-11-14, D54)
 
 Limits used below: `ATTACH_MAX_BYTES` 20 MB, `ATTACH_PER_LESSON` 10, `ATTACH_PER_ANSWER` 3, `FILE_LIST_MAX` 200, `CALL_TIMEOUT_TOOLS_MS` 300 000, `UNITS_MIN` 2, `UNITS_MAX` 30, `CHAT_TEXT_MAX` 4000, `SPEAK_CHUNK_MAX` 2000, `PRACTICE_MAX` 10, `CARD_BATCH` 20, `BOX_DAYS` [1, 3, 7, 14, 30], `METHOD_MAX` 6000.
 
@@ -292,7 +292,7 @@ Manual checklist (planner runs it on the built app, pastes the result): opens fr
 - B83. Profile shows the teaching method text (the Probe, Plan, Teach and Repair paragraphs) for editing, at most 6,000 characters, with "Reset to default". The reply format and rules are not editable. An empty box means the default.
 - B84. Profile has, for each CLI, "Model" (free text; empty = the CLI's own default) and "Effort" (Codex: default, low, medium, high; Claude Code: default, low, medium, high, xhigh, max; Gemini: no effort). They become flags on every call of that CLI: Codex `-m <model>` and `-c model_reasoning_effort=<effort>`; Claude Code `--model <model>` and `--effort <effort>`; Gemini `-m <model>`.
 - B85. A lesson header shows the tutor with its settings, for example "Tutor: Claude Code · sonnet · medium". A model the CLI rejects shows the normal "<name> failed: <detail>".
-- B86. All settings live in `settings.json` in the data folder; the tutor instructions of CR-4 move into it (an existing `profile.json` is read once and kept).
+- B86. All settings live in `settings.json` in the data folder (the file is introduced in milestone 5 for the voice settings); in milestone 8 the tutor instructions of CR-4 move into it (an existing `profile.json` is read once and kept).
 
 Tests: theme_applies_and_persists, system_theme_follows_the_mac, method_text_override_reaches_prompt, method_reset_restores_default, method_empty_means_default, method_over_6000_refused, model_and_effort_become_codex_flags, model_and_effort_become_claude_flags, model_becomes_gemini_flag, blank_settings_add_no_flags, header_shows_model_and_effort, settings_file_round_trips, old_profile_json_is_migrated.
 Evals (real, one call each): Claude Code with model `sonnet` and effort `low` -> the reported model is a Sonnet model; Codex with effort `low` -> a valid reply.

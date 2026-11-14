@@ -125,3 +125,33 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 - After each new item the reading column scrolls to the bottom.
 - Options in a choice card are shown in a shuffled order that stays the same every time that card is drawn.
 - Accessibility: every input has a label; icon buttons have `aria-label` ("Delete lesson", "Delete item"); grades and node states use text or a symbol as well as color (✓ passed, ~ shaky); focus is always visible (accent outline).
+
+## Milestones 3-8 (DRAFT 2026-11-14, awaiting owner approval)
+All copy is in SPEC (B35-B86), character for character. New pieces use the existing tokens; the only new values are the light theme's colors (milestone 8).
+
+### New components
+| Component (code) | States | Notes |
+|------------------|--------|-------|
+| Switch (`.switch`) | off, on, disabled | a labelled checkbox row; used for "Web search" |
+| File chip (`.chip`) | default, with × | an attachment's name; × removes it where removal is allowed |
+| Material controls (`MaterialControls`) | no folder, folder set, with attachments | label "Material folder", button "Choose folder", folder name with "Change" and "Remove", the tutor note (`.note`), button "Attach files", chips, the "Web search" switch |
+| Unit row (`.unit-row`) | not started, in progress, done, done with shaky | number, title, goal (`.note`), status (`.label`), button "Start" or "Open" |
+| Outline review (`OutlineReview`) | editing | each unit: title input, goal textarea, up, down, × ; one primary button "Accept outline" |
+| Chat (`.chat`, `.chat-msg.is-owner`, `.chat-msg.is-tutor`) | - | senior tutor chat: owner messages right-aligned on `color-surface-2`, tutor messages as plain prose; "Proposed change" card with "Accept" and "Dismiss" |
+| Aside (`.aside`) | - | a block in the lesson column with the label "Aside", the question in `.note`, the answer as prose, a left border in `color-border` |
+| Call bar (`CallBar`) | off, listening, thinking, speaking | in the lesson header row: "Start call" / "On call · listening" with "Skip", "Start over", "End call" |
+| Flashcard (`.flashcard`) | front, back | a card with the front; "Show answer"; then the back and "I knew it" / "I did not" |
+| Box mark (`.box-1` ... `.box-5`) | - | `color-danger` for 1, `color-accent` for 2-3, `color-success` for 4-5, with the number as text |
+
+### Screens
+- New lesson: Topic, Goal, Tutor, then Material controls, then Start.
+- Lesson header: goal line; row "Tutor: ..." + "Change tutor"; Material controls in compact form (folder name, chips, switch); Call bar. Under the column's last item: the "Ask a side question" box (`.field` with a "Ask" button).
+- Sidebar, top to bottom: "New lesson", "New subject", label "Subjects" (each subject, its unit lessons indented), label "Lessons", then buttons "Review" (with the due count, for example "Review · 4"), "Graph", "Knowledge", "Profile".
+- New subject: title "New subject"; fields "Name", Material folder (required), Tutor; button "Create". While the outline is written: the thinking bar.
+- Subject: title (the name); "Goal"-style note with the folder name; Outline review until accepted; then the unit list; then the label "Senior tutor" and the chat with a message box and "Send".
+- Review: title "Review"; the due count; filter (a `select` styled as `.field`); Tutor picker; buttons "Flashcards" and "Practice"; the run replaces the buttons until it ends.
+- Graph: title "Graph"; the map; under it the selected item's text and due date.
+- Profile, top to bottom: "Tutor instructions" (existing), "Voice" (Deepgram API key, Speech language, Voice), "Theme", "Models" (per CLI: Model, Effort), "Teaching method" (textarea, "Reset to default"). One "Save" per section.
+
+### Light theme (milestone 8)
+`[data-theme="light"]`: bg `#fafaf8`, surface `#ffffff`, surface-2 `#f0efeb`, text `#1b1b1a`, muted `#6b6d73`, border `#dcdad3`, accent `#b07d12`, accent-text `#ffffff`, danger `#c2473d`, success `#2f8f57`. Everything else is shared.

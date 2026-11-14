@@ -86,6 +86,15 @@
             border: 1px solid var(--color-border); border-radius: var(--radius); cursor: pointer; }
   .option i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--color-muted); flex: none; }
   .option.is-hover { background: var(--color-surface-2); }
+  /* milestones 3-8 */
+  .switch { display: flex; align-items: center; gap: var(--space-2); font: var(--text-sm) var(--font-mono); color: var(--color-muted); }
+  .chip { display: inline-flex; align-items: center; gap: var(--space-2); padding: var(--space-1) var(--space-2); border: 1px solid var(--color-border); border-radius: var(--radius); font-size: var(--text-sm); }
+  .unit-row { display: grid; grid-template-columns: auto 1fr auto auto; gap: var(--space-3); align-items: center; padding: var(--space-3) 0; border-bottom: 1px solid var(--color-border); }
+  .chat { display: flex; flex-direction: column; gap: var(--space-3); width: 100%; }
+  .chat-msg.is-owner { align-self: flex-end; background: var(--color-surface-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius); max-width: 80%; }
+  .aside { border-left: 3px solid var(--color-border); padding-left: var(--space-4); width: 100%; }
+  .flashcard { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius); padding: var(--space-5); min-height: 160px; display: flex; flex-direction: column; gap: var(--space-4); width: 100%; }
+  .box-1 { color: var(--color-danger); } .box-2, .box-3 { color: var(--color-accent); } .box-4, .box-5 { color: var(--color-success); }
   .option.is-disabled { color: var(--color-muted); cursor: default; }
   .row { display: flex; align-items: center; gap: var(--space-3); }
   .option.is-selected { border-color: var(--color-accent); }
@@ -429,5 +438,22 @@
     </div>
   </div>
 </main>
+
+  <!-- milestones 3-8: new components -->
+  <section style="padding: 24px; display: grid; gap: 16px; max-width: 720px;">
+    <span class="label">Material</span>
+    <div class="row"><button class="btn">Choose folder</button><span class="note">Physics year 2</span><button class="btn">Remove</button></div>
+    <p class="note">Codex cannot change your files, but it is able to read other files on this Mac.</p>
+    <div class="row"><span class="chip">unit1.pdf <button class="icon-btn">×</button></span><span class="chip">board.jpg <button class="icon-btn">×</button></span><button class="btn">Attach files</button></div>
+    <label class="switch"><input type="checkbox" /> Web search</label>
+    <span class="label">Units</span>
+    <div class="unit-row"><b>1</b><div>Kinematics<br /><span class="note">Describe motion with position, velocity and acceleration.</span></div><span class="label">done, 1 shaky</span><button class="btn">Open</button></div>
+    <div class="unit-row"><b>2</b><div>Forces<br /><span class="note">Predict motion from the forces on a body.</span></div><span class="label">not started</span><button class="btn is-primary">Start</button></div>
+    <span class="label">Senior tutor</span>
+    <div class="chat"><div class="chat-msg is-owner">What should I do next?</div><div class="chat-msg is-tutor">Start unit 2. Unit 1 left free fall shaky, and forces will use it.</div></div>
+    <div class="aside"><span class="label">Aside</span><p class="note">Why is g negative here?</p><p>Because up was chosen as the positive direction.</p></div>
+    <div class="row"><span class="note">On call · listening</span><button class="btn">Skip</button><button class="btn">Start over</button><button class="btn is-danger">End call</button></div>
+    <div class="flashcard"><span class="label">Flashcard · <span class="box-2">box 2</span></span><p>What does the slope of a position-time graph give?</p><div class="row"><button class="btn is-primary">Show answer</button></div></div>
+  </section>
 </body>
 </html>
