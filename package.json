@@ -1,6 +1,6 @@
 {
   "name": "lodestar",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A desktop app that teaches step by step using the AI CLI you already have",
   "license": "MIT",
   "private": true,
@@ -8,6 +8,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "dist": "electron-vite build && electron-builder --mac dmg --arm64 --x64",
     "test": "vitest run",
     "eval": "vitest run --config vitest.eval.config.mts",
     "lint": "eslint . && prettier --check .",
@@ -36,6 +37,7 @@
     "@types/react-dom": "19.3.0",
     "@vitejs/plugin-react": "6.3.0",
     "electron": "45.3.2",
+    "electron-builder": "26.18.0",
     "electron-vite": "6.0.0",
     "eslint": "10.14.0",
     "eslint-plugin-react-hooks": "7.1.1",
@@ -45,5 +47,20 @@
     "typescript-eslint": "8.72.2",
     "vite": "8.3.8",
     "vitest": "5.1.0"
+  },
+  "build": {
+    "appId": "io.github.viqgo.lodestar",
+    "productName": "lodestar",
+    "files": [
+      "out/**"
+    ],
+    "artifactName": "lodestar-${version}-${arch}.dmg",
+    "mac": {
+      "target": "dmg",
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "lodestar listens to your spoken answers during a call."
+      }
+    }
   }
 }
