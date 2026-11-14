@@ -60,6 +60,7 @@ export function deriveState(events: SessionEvent[]): LessonState {
   };
 
   events.forEach((event, i) => {
+    if (event.kind === "aside") return;
     const corrupt = () => new Error("corrupt session at event " + i);
     const awaiting = state.awaiting;
     if (event.kind === "answer") {

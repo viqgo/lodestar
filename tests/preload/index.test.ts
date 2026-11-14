@@ -78,6 +78,7 @@ describe("preload", () => {
         "practiceGrade",
         "practiceStop",
         "getGraph",
+        "aside",
         "onVoiceState",
         "onVoiceTranscript",
         "onVoiceUtterance",
@@ -163,6 +164,7 @@ describe("preload", () => {
       await api.practiceGrade("k", QUESTION, "words", "claude"),
       await api.practiceStop(),
       await api.getGraph(),
+      await api.aside("a", "why"),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -213,8 +215,9 @@ describe("preload", () => {
       ["practice:grade", "k", QUESTION, "words", "claude"],
       ["practice:stop"],
       ["graph:get"],
+      ["lesson:aside", "a", "why"],
     ]);
-    expect(results).toEqual(Array(48).fill("R"));
+    expect(results).toEqual(Array(49).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

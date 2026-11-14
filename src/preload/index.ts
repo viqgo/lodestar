@@ -49,6 +49,7 @@ const api: Api = {
       Api["practiceGrade"]
     >,
   practiceStop: () => ipcRenderer.invoke("practice:stop") as Promise<void>,
+  aside: (id, text) => ipcRenderer.invoke("lesson:aside", id, text) as Promise<TurnResult>,
   getGraph: () => ipcRenderer.invoke("graph:get") as ReturnType<Api["getGraph"]>,
   getSettings: () => ipcRenderer.invoke("settings:get") as Promise<Settings>,
   saveSettings: (settings) =>

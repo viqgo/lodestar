@@ -238,6 +238,24 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle("lesson:advance", (_event, id: string) => runTurn(id));
 
+  ipcMain.handle("lesson:aside", async (_event, id: string, text: unknown): Promise<TurnResult> => {
+    if (typeof text !== "string" || text.trim().length < 1 || text.trim().length > CHAT_TEXT_MAX) {
+      return {
+        ok: false,
+        error: { kind: "invalid_answer", message: "Write a question." },
+        session: null,
+      };
+    }
+    if (turns.isRunning(id)) {
+      return {
+        ok: false,
+        error: { kind: "busy", message: "A reply is already on the way." },
+        session: null,
+      };
+    }
+    return withLock(id, () => turns.aside(id, text.trim()));
+  });
+
   ipcMain.handle(
     "lesson:answer",
     async (_event, id: string, answer: Answer, attachPaths: string[] = []) => {

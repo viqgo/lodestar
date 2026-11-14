@@ -75,6 +75,13 @@ export const ans = (p: Partial<Answer> = {}): SessionEvent => ({
   at: AT,
   answer: { choiceIndex: null, text: null, reasoning: null, confidence: null, ...p },
 });
+export const asideEv = (question = "why", markdown = "because"): SessionEvent => ({
+  kind: "aside",
+  at: AT,
+  question,
+  markdown,
+  usage: null,
+});
 export const cont = () => ans();
 export const pick = (i: number): SessionEvent => ans({ choiceIndex: i });
 export const say = (text = "words"): SessionEvent => ans({ text });

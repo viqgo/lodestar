@@ -3,6 +3,7 @@ import type { Answer, Question, Session, Verdict } from "../../../shared/types";
 export type ChatItem =
   | { kind: "text"; key: string; markdown: string }
   | { kind: "probe_summary"; key: string; known: string[]; goal: string }
+  | { kind: "aside"; key: string; question: string; markdown: string }
   | { kind: "plan_notice"; key: string; count: number }
   | { kind: "reading"; key: string; eventIndex: number; markdown: string; answered: boolean }
   | {
@@ -54,6 +55,15 @@ export function buildItems(session: Session): ChatItem[] {
         lastCheck = q;
       }
       pending = null;
+      return;
+    }
+    if (event.kind === "aside") {
+      items.push({
+        kind: "aside",
+        key: `e${i}-as`,
+        question: event.question,
+        markdown: event.markdown,
+      });
       return;
     }
     const action = event.action;

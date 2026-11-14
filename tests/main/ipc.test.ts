@@ -65,6 +65,7 @@ const setup = async (
   const result: TurnResult = { ok: true, session: session() };
   const turns = {
     advance: vi.fn(async (): Promise<TurnResult> => result),
+    aside: vi.fn(async (): Promise<TurnResult> => result),
     stop: vi.fn(),
     isRunning: vi.fn(() => isRunning),
   };
@@ -1402,5 +1403,40 @@ describe("ipc practice", () => {
     const { call, practice } = await setup();
     expect(await call("practice:stop")).toBe(undefined);
     expect(practice.stop).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ipc aside", () => {
+  const BAD = {
+    ok: false,
+    error: { kind: "invalid_answer", message: "Write a question." },
+    session: null,
+  };
+
+  it("lesson:aside passes a trimmed question to the runner", async () => {
+    const { call, turns, result, send } = await setup();
+    expect(await call("lesson:aside", ID1, "  why  ")).toEqual(result);
+    expect(turns.aside).toHaveBeenCalledWith(ID1, "why");
+    expect(send).not.toHaveBeenCalledWith("turn:ended", expect.anything(), expect.anything());
+  });
+
+  it("lesson:aside refuses an empty or over-long question", async () => {
+    const { call, turns } = await setup();
+    for (const bad of ["", "   ", "x".repeat(4001), 42]) {
+      expect(await call("lesson:aside", ID1, bad)).toEqual(BAD);
+    }
+    expect(turns.aside).not.toHaveBeenCalled();
+    await call("lesson:aside", ID1, "x".repeat(4000));
+    expect(turns.aside).toHaveBeenCalledTimes(1);
+  });
+
+  it("aside_refused_while_running (ipc)", async () => {
+    const { call, turns } = await setup(true);
+    expect(await call("lesson:aside", ID1, "why")).toEqual({
+      ok: false,
+      error: { kind: "busy", message: "A reply is already on the way." },
+      session: null,
+    });
+    expect(turns.aside).not.toHaveBeenCalled();
   });
 });

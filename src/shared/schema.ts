@@ -218,6 +218,7 @@ export function parseSenior(
 export const FRONTS_JSON_SCHEMA: object = obj({
   fronts: { type: "array", items: obj({ itemId: str, front: str }) },
 });
+export const ASIDE_JSON_SCHEMA: object = obj({ markdown: str });
 export const ASK_JSON_SCHEMA: object = obj({ question });
 export const GRADE_JSON_SCHEMA: object = obj({
   verdict: { type: "string", enum: ["pass", "fail"] },
@@ -227,6 +228,7 @@ export const GRADE_JSON_SCHEMA: object = obj({
 const FrontsSchema = z.strictObject({
   fronts: z.array(z.strictObject({ itemId: z.string(), front: z.string() })),
 });
+const AsideSchema = z.strictObject({ markdown: z.string() });
 const AskSchema = z.strictObject({ question: QuestionSchema });
 const GradeSchema = z.strictObject({ verdict: z.enum(["pass", "fail"]), feedback: z.string() });
 
@@ -248,4 +250,10 @@ export function parseGrade(
   text: string,
 ): { ok: true; value: { verdict: Verdict; feedback: string } } | { ok: false; reason: string } {
   return parseWith(GradeSchema, text);
+}
+
+export function parseAside(
+  text: string,
+): { ok: true; value: { markdown: string } } | { ok: false; reason: string } {
+  return parseWith(AsideSchema, text);
 }

@@ -4,6 +4,7 @@ import { buildItems } from "../../src/renderer/src/lib/view";
 import {
   A,
   act,
+  asideEv,
   choiceQ,
   pick,
   say,
@@ -160,5 +161,26 @@ describe("buildItems", () => {
       { kind: "text", key: `e${i}-fb`, markdown: "Nice." },
       { kind: "reading", markdown: "reading" },
     ]);
+  });
+});
+
+describe("buildItems with an aside", () => {
+  it("aside_is_saved_and_shown (items)", () => {
+    const items = buildItems(session([act(A.probe()), asideEv(), pick(1)]));
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      kind: "question",
+      eventIndex: 0,
+      answer: (pick(1) as { answer: unknown }).answer,
+    });
+    expect(items[1]).toEqual({
+      kind: "aside",
+      key: "e1-as",
+      question: "why",
+      markdown: "because",
+    });
+    const open = buildItems(session([act(A.probe()), asideEv()]));
+    expect(open[0]).toMatchObject({ kind: "question", eventIndex: 0, answer: null });
+    expect(open[1]).toMatchObject({ kind: "aside" });
   });
 });

@@ -135,11 +135,18 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T95 Review screen
 - [x] T96 Graph data
 - [x] T97 Graph screen
-- [ ] T98 Asides in the rules
+- [x] T98 Asides in the rules
 - [ ] T99 Aside box
 - [ ] T100 Evals and README
 - [ ] GATE J Learning modes
-- [ ] T101-T106 Milestone 7: packaging and release (outline)
+- [ ] T101 Policy and paths
+- [ ] T102 Deferred fixes: CLI and lesson files
+- [ ] T102b Deferred fixes: subject writes and folder
+- [ ] T103 Deferred fixes: window
+- [ ] T103b Deferred fixes: subject folder button, calls
+- [ ] T104 Build config
+- [ ] T105 Build and check
+- [ ] T106 User README
 - [ ] GATE K Packaging
 - [ ] T107-T112 Milestone 8: customisation (outline)
 - [ ] GATE L Customisation, then the owner's try-out
@@ -2979,7 +2986,7 @@ The builder stops here.
 ## Stages G-L - milestones 3 to 8 (D52-D56)
 
 How these stages are run (D56):
-- Stage G (milestone 3) is written in full below. Stages K-L are task outlines (Stages H, I and J are written in full): scope, files, tests by name. At the start of each of those stages a Fable planner expands its outlines into full tasks against the code as it then is, without making decisions: every behavior, name, signature and text comes from SPEC (B35-B86), ARCHITECTURE "Milestones 3-8" and UI.md. Anything that would need a decision stops the stage and goes to the owner.
+- Stage G (milestone 3) is written in full below. Stage L is a task outline (Stages H, I, J and K are written in full): scope, files, tests by name. At the start of each of those stages a Fable planner expands its outlines into full tasks against the code as it then is, without making decisions: every behavior, name, signature and text comes from SPEC (B35-B86), ARCHITECTURE "Milestones 3-8" and UI.md. Anything that would need a decision stops the stage and goes to the owner.
 - A stage is built task by task by a Sonnet builder, then reviewed by a fresh Fable reviewer. The planner fixes Important findings and cheap Minor ones through fix tasks without asking, and lists them for the owner. Then the stage waits for the owner to say "check". The owner tries the app once, after stage L.
 - Test counts are relative: each task says how many tests it adds. Before starting a task the builder notes the current total from `npm test`; after the task the total must be that number plus the task's count.
 
@@ -4168,17 +4175,326 @@ Known gap, not planned here: the fronts of a batch are stored with a read of `re
 - The window: `ReviewScreen`, `PracticeRun`, `GraphScreen` and `AsideBox` import only from `shared`, `core` and the renderer; no new color, size or class beyond `.flashcard`, `.box-*`, `.aside` and `.field select`; every text is from SPEC, UI.md or the D66 list.
 **Then**: the planner fixes Important findings and cheap Minor ones through fix tasks (D56, D64), lists them with the D66 defaults for the owner, and goes on to Stage K without waiting (D64).
 
-## Stage K - milestone 7: packaging and release (outline)
+## Stage K - milestone 7: packaging and release
+What exists at the end: `npm run dist` builds two unsigned disk images, `lodestar-0.2.0-arm64.dmg` and `lodestar-0.2.0-x64.dmg`; the packaged app runs under the B77 policy (one exported string, with `media-src blob:` for the tutor's voice and `connect-src 'self'`), says why it wants the microphone, and finds the CLIs when it is started from Finder; the review findings that were put off to this milestone are fixed (D51, D60, D62, the Gate I leftovers N2 and N3, and the five B81 items from earlier gates); the README tells a user how to download, open and use the app. No GitHub release, no tag and no push is made by any task: the release is created only when the owner says so (B80, D52).
 
-| Task | Scope | Files | Tests |
-|------|-------|-------|-------|
-| T101 Policy and paths | `main/csp.ts` with the B77 string, used by `index.ts`; a test that the Finder `PATH` case finds a CLI through `detectVersion` | main, tests | csp_string_is_exact, finder_path_finds_homebrew_clis |
-| T102 Deferred fixes, main | `findJson`; the per-lesson write queue; `mkdtempSync` inside the try; a deleted lesson is not written back | main, tests | find_json_is_linear_and_prefers_top_level, switch_write_window_is_closed, mkdtemp_failure_is_a_value, delete_during_write_does_not_resurrect |
-| T103 Deferred fixes, window | banners wait for the CLI check; dialog focus trap; corrupt lesson message "This lesson could not be read."; times tick every minute; remote images dropped | renderer, tests | retry_banners_wait_for_cli_check, dialog_traps_focus, corrupt_lesson_shows_message_not_blank, relative_times_tick, remote_images_are_blocked |
-| T104 Build config | add `electron-builder` 26.18.0; `version` 0.2.0; the `build` block and `dist` script from ARCHITECTURE; `.gitignore` gains `dist` (already) | `package.json`, lockfile, tests reading `package.json` | dist_config_names_both_targets, plist_has_microphone_text |
-| T105 Build and check | run `npm run dist`; open the built app; run the manual checklist (opens from Finder, a Claude Code lesson works, math and map render, no CSP errors in the console) and paste the result. Runs on the owner's Mac; if the build needs a download, the builder stops and reports first. | none | manual checklist |
-| T106 User README | download, first open, requirements, data location, what is sent where | `README.md` | - |
-| GATE K | tests, lint, typecheck and build; Fable review of B76-B81; planner fixes; wait for "check". The GitHub release is created only when the owner says so. | | |
+Owner setup before the stage: none. No Apple account, no certificate, no icon. T104 and T105 need the network once each (the `electron-builder` package; the x64 Electron download, about 120 MB, and electron-builder's own helper files).
+
+Expanded by the stage planner on 2026-11-14 against HEAD `842a4d9` (692 tests; Stage J, T89-T100, was being built at the same time and ends at 803). The standard steps and stop rules of "Stages G-L" apply to every task. Totals: 803 at the start, 834 after T104 (T105 and T106 add none). Counts are relative: if the total before a task is not the one printed in it, the task's own count is what binds.
+
+| Task | Adds | Total after |
+|------|------|-------------|
+| T101 Policy and paths | +3 | 806 |
+| T102 Deferred fixes: CLI and lesson files | +5 | 811 |
+| T102b Deferred fixes: subject writes and folder | +8 | 819 |
+| T103 Deferred fixes: window | +6 | 825 |
+| T103b Deferred fixes: subject folder button, calls | +7 | 832 |
+| T104 Build config | +2 | 834 |
+| T105 Build and check | 0 | 834 |
+| T106 User README | 0 | 834 |
+
+The outline had six tasks. T102b and T103b are new: they carry the items the owner moved to this milestone after the outline was written (D62: M7 and M10; D65: N2 and N3), so that T102 and T103 stay the size of one sitting.
+
+Rules that hold for every task of this stage:
+- **Check first.** This stage was planned while Stage J was still being built. Every task starts by opening each file it lists and comparing it with the task's "Check first" line. If a named function, line or test helper is not there in the shape the task describes, and the difference is more than a moved line or one more field in an object, stop and report (name the file and what it has instead).
+- One new dev dependency in the whole stage: `electron-builder` 26.18.0 (T104). Nothing else is installed.
+- Nothing is signed or notarized (SPEC "Out of scope"): no certificate, no entitlements file, no hardened runtime. No icon file is added [D]: the blueprint names none, so the app keeps Electron's default icon.
+- No task runs `git push`, `git tag`, `gh release` or any `gh` command, and no task uploads a file anywhere.
+- The lesson rules, the reply format and every CLI argument list stay as they are. Of `src/main/cli/*` only `gemini.ts` and `process.ts` are touched, and only in T102. Every CLI still starts through `runProcess`; no CLI gets a write, edit or shell tool.
+- `src/renderer` imports only from `src/shared`, `src/core` and itself; `src/core` and `src/shared` stay pure. No new color, size, class or component: the two new buttons of T103b use `.btn` and `.row`, which exist.
+- No real CLI and no Deepgram is called from `tests/`. T105 starts the built app but makes no model call.
+- A text, name or number marked `[D]` is a planner default (D67), listed below with its reason. The builder copies it exactly like blueprint copy.
+
+### Defaults taken (D67)
+The owner asked for one non-stop run (D64), so nothing here blocks a task; each item is the most conservative choice the planner found, for the owner to review at the end.
+
+Policy and build
+1. T101 a third test reads `src/main/index.ts` as text and checks that the policy comes from `csp.ts`. Reason: `index.ts` runs `main()` when it is imported, so it cannot be loaded in a test (as R20 of Stage I says), and B77 is only true if the string is really the one in use.
+2. T104 no icon, no entitlements file, no `dmg` layout block, no `publish` block: the `build` block is exactly ARCHITECTURE's row and nothing more.
+3. T104 `dist` is added to the ignore lists of eslint and prettier. Reason: `npm run dist` writes a folder `dist/` (already in `.gitignore`); without this `npm run lint` could start to read built files.
+4. T104 the two SPEC tests live in a new file `tests/package.test.ts`, next to `tests/smoke.test.ts`. Reason: `package.json` has no `src/` file to mirror.
+5. T105 downloads during `npm run dist` are allowed without asking (the outline said to stop first; D64 overrides it): only the pinned Electron 45.3.2 x64 archive and electron-builder's own helper files. If they cannot be fetched the task falls back to an arm64 folder build, then to the unpackaged production build, and reports DEVIATED with what is left for the owner.
+6. T105 the SPEC checklist is split. The builder does what a script can prove: both files exist with the exact names, the bundle's version, name, id and microphone text, the app started the way Finder starts it (through `open`, so with Finder's short `PATH`), the window is not blank, the three CLIs are found, nothing is refused by the policy on load, a `blob:` sound is allowed and a remote request is refused. What needs eyes and ears (a lesson with Claude Code, math and the map on screen, the microphone question, the tutor's voice) is listed for the planner at GATE K or the owner's try-out, and the task says so instead of claiming it.
+7. T105 the check script is written to a temporary folder outside the repository and is not committed.
+
+Fixes
+8. T102 `findJson` looks only at top-level `{...}` spans, left to right, stops at the first one that never closes, and keeps the last match (ARCHITECTURE's three rules read literally). So a brace that never closes before a good object now hides it; the caller then falls back to the last stderr line or "Gemini returned no message".
+9. T102 the mark of a deleted lesson lives in memory for the run of the app (a `Set` in `createStore`). Reason: ids are random and never reused, and after a restart there is no late write left.
+10. T102 the folder walk stops after `FILE_WALK_MAX` (5000) folders, with the same constant that already stops it after 5000 files (D60: a tree of very many empty folders was walked to the end). No new number.
+11. T102b `appendSubjectEvent(id, make)` (the name D62 gives) sets `updatedAt` to the new event's `at`. Reason: the store has no clock, and every caller used the same moment for both.
+12. T102b `writeSubject` goes through the same queue as `appendSubjectEvent`, and the folder change is its own store function `setSubjectFolder(id, folder, at)` under that queue. Reason: a whole-file write beside an append would open the same window again.
+13. T102b channel `subjects:setFolder (id, folder)`, `Api.setSubjectFolder(id, folder)`, result `{ ok: true; subject } | { ok: false; message }` like `subject:accept`. Refusals use existing texts: "Choose a folder.", "A reply is already on the way.", "This subject no longer exists.", "Could not save. Check free disk space.". A subject cannot have its folder removed (B47: required).
+14. T102b changing a subject's folder does not touch the lessons that were already started from it: each keeps its own folder and can be fixed in its own header (B38). Lessons started afterwards get the new folder.
+15. T103 while the CLI check runs (`statuses === null`) the three banners that offer "Retry" for a reply ("Stopped.", a failed call, "The last reply did not arrive.") keep their message and lose the button until the check is done.
+16. T103 the focus trap only keeps Tab and Shift+Tab inside the dialog's buttons. Focus is not moved back to the opener when the dialog closes (nothing in the blueprint asks for it).
+17. T103 a corrupt lesson is one whose events make `deriveState` throw. It is shown as the error "This lesson could not be read." (kind `not_found`, so without Retry), with no header, no cards and no thinking bar. A lesson file that is missing or is not JSON still loads as "nothing" (an empty screen), as today.
+18. T103 the minute is `TIME_TICK_MS = 60000` in `limits.ts`.
+19. T103 "remote" is a source that starts with `http://`, `https://` or `//`. Such an image is not drawn at all (no alt text either). Other sources are left to react-markdown as today.
+20. T103b the subject header gets one button, "Change" (the word the lesson header uses), in a `.row` beside the folder note; it is disabled while a reply is on the way. When the subject's error is the missing folder and the change is stored, the call is repeated by itself (B38's "resumes by itself", B56).
+21. T103b `voiceStop` takes the lesson id (`Api.voiceStop(lessonId)`, channel `voice:stop (lessonId)`, hub `stop(lessonId?)`): a stop for a lesson that does not own the running call does nothing; a stop without an id ends the call as before (N2).
+22. T103b `useCall` takes one more optional input, `blocked?: boolean`; while it is true nothing that is heard fills the box or is submitted (N3). The call itself stays up.
+
+README
+23. T106 "First open" keeps B80's words (right-click, Open) and adds two sentences B80 does not have: on newer macOS the way is System Settings, Privacy & Security, "Open Anyway"; and what to type if macOS calls the app damaged. Reason: on the owner's macOS (27) the right-click way no longer opens an unsigned app, and an unsigned arm64 build can be reported as damaged after a download. See C4 and C6.
+24. T106 the download link is the project's Releases page, `https://github.com/viqgo/lodestar/releases` (the `origin` remote), although no release exists until the owner asks for one.
+
+Left as it is, on purpose
+25. N4 (a one-word option such as "No" can match inside a longer phrase) is not changed. Reason: the SPEC test `choice_matches_letter_ordinal_and_words` expects exactly that ("I think Rome is in Italy" picks "Rome"), and R6 was accepted by the owner.
+26. N5 (ARCHITECTURE's `createListener` row says `speech_final`) is a blueprint line, read-only for the builder. The planner corrects the row at GATE K.
+27. D60: the "more files" number past the walk cap stays low; a settings change can still apply late when it queues behind a turn; a fast double click after a missing folder still calls advance twice. D62 M6 (a false "busy" on a double message) stays. None of them loses data.
+28. The dependency list is not changed, so every package under `dependencies` is copied into the app although the window's code is already bundled in `out/renderer` (only `ws` and `zod` are loaded at run time; `mermaid` alone is 126 MB on disk). T105 prints the size of the two files; moving the window's packages to `devDependencies` would be a STACK change for the owner.
+
+### Contradictions found (SPEC followed)
+- C1. ARCHITECTURE's fix row asks for "a per-lesson write queue shared by `setCli`, `answer` and the turn". It exists since T66b (`withLock` in `ipc.ts`). T102 adds only the SPEC test `switch_write_window_is_closed`, which passes before any change.
+- C2. ARCHITECTURE asks for "a delete marks the id so a late write is dropped" in `store.ts`; T66d already made `sessions:delete` wait for the lesson's lock. The mark is added as written (T102): it also covers a write that does not hold the lock.
+- C3. B81 lists the D51 findings and five older ones. D60, D62 and D65 put more items off to this milestone after B81 was written; they have no SPEC test names. T102, T102b and T103b carry them with test names given by the planner.
+- C4. B80 says "first open (right-click, Open)". Since macOS 15 that no longer opens an unsigned app; the way is System Settings. The README says both (default 23).
+- C5. B76 asks for an unsigned build (`mac.identity` null). On Apple silicon such a bundle can be reported as "damaged" once it has been downloaded. Ad-hoc signing (`identity: "-"`) would avoid it but is a blueprint change. T105 pastes what `codesign` says about the built app, for the owner.
+- C6. SPEC says the planner runs the manual checklist on the built app; the outline gave it to T105. Split as in default 6.
+- C7. The outline's T105 says to stop before any download; D64 says not to stop. Default 5.
+- C8. The production policy is set with a response header, and the packaged window is loaded from a file. Checked by the planner with Electron 45.3.2: `onHeadersReceived` does run for `file://` pages and the policy holds there (inline script and a remote request refused, a script and an audio worklet beside the page allowed, a `blob:` sound allowed). No change of design is needed.
+
+### Deferred items and where they went
+- D51 (five Minor): `findJson` quadratic, and picks a nested or earlier object: T102 · the switch's write window: T102 (test only, C1) · Retry banners live during the CLI check: T103 · `mkdtempSync` outside the try: T102.
+- B81, older gates: a lesson deleted while it is written: T102 · dialog focus trap: T103 · corrupt lesson blanks the window: T103 · times do not tick: T103 · remote images: T103.
+- D60: the walk cap counts files only: T102 · the rest: default 27.
+- D62: M7 (no way to change a missing subject folder): T102b (channel), T103b (button) · M10 (read-then-write on a subject file): T102b · M6: default 27.
+- D65 / "Gate I findings not fixed": N2: T103b · N3: T103b · N4: default 25 · N5: default 26 · the policy without `media-src blob:`: T101 · the microphone text in the bundle: T104 · "audioWorklet.addModule must load from `file://` in a packaged build": checked by the planner (C8), and again by ear at the try-out.
+- Not planned here: the read-then-write of `reviews.json` named at the end of "Defaults taken (D66)". Stage J's code was not at HEAD when this stage was planned. If Gate J puts it off, it becomes a fix task of this stage (one store function that changes the file under the store's queue, as T102b does for subjects).
+
+### T101 - Policy and paths
+**Implements**: B77 (the string, in use), B79 (as a test) · ARCHITECTURE "Milestones 3-8", Milestone 7: `main/csp.ts`
+**Depends on**: T100
+**Files**: create `src/main/csp.ts`, `tests/main/csp.test.ts`; modify `src/main/index.ts`, `tests/main/process.test.ts`. Do NOT touch any other file.
+**Check first**: `src/main/index.ts` sets the header inside `if (!process.env.ELECTRON_RENDERER_URL) { session.defaultSession.webRequest.onHeadersReceived(...) }` with one string literal that starts with `default-src 'self'`. `tests/main/process.test.ts` has the helper `make(plan, env, fsDep)` with `home: "/home/x"`.
+**Details**
+- `csp.ts`, the whole file: `export const CSP: string = "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; media-src 'self' blob:; connect-src 'self'";` (B77, character for character; prettier may break the line).
+- `index.ts`: add `import { CSP } from "./csp";` and replace the string literal in the header array by `CSP`, so the line reads `"Content-Security-Policy": [CSP],`. The `if`, the handler and everything else stay. In `npm run dev` there is still no policy.
+- No source change for B79: `extraPathDirs` and `childEnv` already do it. The test below proves it for Finder's `PATH`.
+**Tests (+3)**: `tests/main/csp.test.ts` (+2): `csp_string_is_exact` (`CSP` equals the B77 string, written out in the test) · `the main process sets the policy from csp.ts` [D] (the text of `src/main/index.ts`, read with `fs.readFileSync(path.join(process.cwd(), "src/main/index.ts"), "utf8")`, contains `import { CSP } from "./csp"` and `"Content-Security-Policy": [CSP]` and does not contain `default-src`). `tests/main/process.test.ts` (+1): `finder_path_finds_homebrew_clis` (env `{ PATH: "/usr/bin:/bin:/usr/sbin:/sbin" }`; for each of `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, `/home/x/.local/bin/claude`, `/home/x/.npm-global/bin/claude`: with `fsDep` = `{ ...fs, existsSync: (p) => p === <that path> }`, `findCommand(deps, "claude", "LEARN_CLAUDE_PATH")` is that path; then, with the plan `{ stdout: "2.1.322 (Claude Code)\n" }`, `detectVersion(deps, <that path>)` resolves `{ ok: true, version: "2.1.322" }`, the spawned command is that path, and `opts.env.PATH` is exactly `/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin:/home/x/.local/bin:/home/x/.npm-global/bin`).
+**Expected failure**: `csp.test.ts` fails to import (`src/main/csp.ts` does not exist). `finder_path_finds_homebrew_clis` passes before the change: the behavior was built in T46 and T55b; name it in the report.
+**Totals**: 803 -> 806. **Commit**: `feat: one policy string with media and connect rules`
+**Stop and report**: `finder_path_finds_homebrew_clis` fails (then B79 is not met by the code: name the value that differs, do not change `process.ts` or `adapter.ts`); the header is no longer set in `index.ts` the way "Check first" says.
+
+### T102 - Deferred fixes: CLI and lesson files
+**Implements**: B81 (D51: `findJson`, the switch's write window, `mkdtempSync`; a lesson deleted while it is written) · D60 (walk cap) · ARCHITECTURE Milestone 7 "fixes": `gemini.ts`, `ipc.ts`/`turn.ts`, `process.ts`, `store.ts`
+**Depends on**: T101
+**Files**: modify `src/main/cli/gemini.ts`, `src/main/cli/process.ts`, `src/main/store.ts`, `src/main/files.ts`, `tests/main/gemini.test.ts`, `tests/main/process.test.ts`, `tests/main/store.test.ts`, `tests/main/files.test.ts`, `tests/main/ipc.test.ts`. Do NOT touch any other file (`src/main/ipc.ts` and `src/main/turn.ts` are NOT touched: C1).
+**Check first**: `gemini.ts` has the exported `extractJsonObject(text)` and a private `findJson(text, pick)` that loops over every `{`; `process.ts` `runProcess` calls `deps.fs.mkdtempSync` before its `try`; `store.ts` has `writeSession` and `deleteSession` as one-liners over `fileFor`; `files.ts` `listFolder` has the inner `walk(dir, rel)` that stops on `all.length >= FILE_WALK_MAX`; `ipc.ts` has `withLock` and `runTurn` calls `withLock(id, () => turns.advance(id))`.
+**Details**
+- `gemini.ts`
+  - New, not exported: `function objectEnd(text: string, start: number): number`: the loop that `extractJsonObject` has today, started at `start` (which is the index of a `{`), returning the index of the `}` that closes it, or `-1` when it never closes. `extractJsonObject` becomes: `const start = text.indexOf("{"); if (start === -1) return null; const end = objectEnd(text, start); return end === -1 ? null : text.slice(start, end + 1);`. Its results do not change; its tests pass unedited.
+  - `findJson` [D]: `let found: T | undefined; let i = text.indexOf("{"); while (i !== -1) { const end = objectEnd(text, i); if (end === -1) break; try { const parsed: unknown = JSON.parse(text.slice(i, end + 1)); if (typeof parsed === "object" && parsed !== null) { const hit = pick(parsed as Record<string, unknown>); if (hit !== undefined) found = hit; } } catch { /* not JSON: go on after it */ } i = text.indexOf("{", end + 1); } return found;`. So: every character is read once; an object inside another one is never looked at; the last top-level match wins; the first brace that never closes ends the search.
+- `process.ts` `runProcess`: `mkdtempSync` moves into the `try` that already holds `mkdirSync(work)` and `spec.prepare`. When it throws, the result is the same value as for a failed `prepare`: `{ kind: "exit", code: 1, stdout: "", stderr: "could not prepare the working folder" }`, nothing is spawned, and nothing is removed (no folder was made). Suggested shape: `let root = ""; let work = "";` before the `try`, `removeRoot` does nothing while `root === ""`, and `const dirs = { root, work }` is built after both are set. Everything after the `try` is unchanged.
+- `store.ts` [D]: inside `createStore`, `const deleted = new Set<string>();`. `deleteSession(id)`: after the id check and before the first `rm`, `deleted.add(id);`. `writeSession(s)`: `deleted.has(s.id) ? Promise.resolve() : writeJsonAtomic(fileFor(s.id), s)`. Nothing else in the store changes. (`deleteSubject` deletes its lessons through `deleteSession`, so they are marked too.)
+- `files.ts` [D]: in `listFolder`, `let folders = 0;` beside `all`; the first line of `walk` becomes `if (++folders > FILE_WALK_MAX) return true;`. The rest is unchanged.
+**Tests (+5)**: `tests/main/gemini.test.ts` (+1): `find_json_is_linear_and_prefers_top_level` (through `geminiErrorMessage` and the adapter, since `findJson` is private: (a) `const t = performance.now(); geminiErrorMessage("{".repeat(50_000));` returns `"{".repeat(200)` and `performance.now() - t` is under 1000; (b) `geminiErrorMessage('{"wrapper":{"error":{"message":"inner"}}}')` is the whole line (no top-level `error`, so the last stderr line); (c) `geminiErrorMessage('{"error":{"message":"first"}}\n{"error":{"message":"second"}}\n')` is `second`; (d) the adapter with stdout `{"response":"{\"a\":1}"}\n{"response":"{\"a\":2}"}\n` (two JSON lines) returns `{ ok: true, text: '{"a":2}', usage: null }`; (e) `geminiErrorMessage("oops {\n" + AUTH_ERROR + "\n")` is `AUTH_ERROR` itself, the last line: the brace that never closes ends the search). `tests/main/process.test.ts` (+1): `mkdtemp_failure_is_a_value` (`fsDep` = `{ ...fs, mkdtempSync: () => { throw new Error("ENOSPC"); } }`: `await runProcess(deps, spec())` equals `{ kind: "exit", code: 1, stdout: "", stderr: "could not prepare the working folder" }`, `f.calls.length` is 0, `tmpRoot` is empty, and the call itself does not throw). `tests/main/store.test.ts` (+1): `delete_during_write_does_not_resurrect` (write a lesson, `deleteSession(id)`, then `writeSession` of the same lesson with one more event resolves, and afterwards `readSession(id)` is `null`, `listSessions()` is `[]` and the `sessions` folder has no file; a lesson with another id is still written; a fresh `createStore` on the same folder writes that id again: the mark is not stored). `tests/main/files.test.ts` (+1): `listFolder stops walking after 5000 folders` (a fake `readdir` that counts its calls and returns 6000 folder entries `d0`..`d5999` for the root and `[]` for every other folder: the result is `{ files: [], more: 0 }` and `readdir` was called at most 5000 times). `tests/main/ipc.test.ts` (+1): `switch_write_window_is_closed` (with the file's `setup`: a stored lesson `[act(A.probe()), pick(1)]`; `turns.advance` is replaced by a function that waits for a promise the test holds and then stores the lesson with one more event, `act(A.plan())` or any action the fixtures have, through `store.writeSession`, and returns it; `turns.isRunning` answers `false` the whole time, the worst case; call `lesson:advance` without awaiting it, then `sessions:setCli (id, "claude")` without awaiting it, then release the turn and await both: the stored lesson has the turn's new event AND `cli: "claude"`).
+**Expected failure**: (a) of the gemini test takes several seconds and fails the time check, (b)-(e) fail on the picked object; `mkdtemp_failure_is_a_value` fails with the thrown `ENOSPC`; the store test finds the lesson back; the files test counts 6001 calls. `switch_write_window_is_closed` passes before the change (C1): name it in the report.
+**Totals**: 806 -> 811. **Commit**: `fix: deferred review fixes in the main process`
+**Stop and report**: an existing gemini test fails (most likely `gemini adapter reads the response when stdout has extra lines` or `geminiErrorMessage skips earlier braces`: both have a closed `{...}` before the object and must still pass); an existing store or ipc test writes a lesson again after deleting it and now fails (name it); `switch_write_window_is_closed` fails (then the lock is not what C1 says: do not change `ipc.ts`, report).
+
+### T102b - Deferred fixes: subject writes and folder
+**Implements**: D62 M10 (one store function for every event added to a subject), D62 M7 (the channel for changing a subject's folder) · B56, B38
+**Depends on**: T102
+**Files**: modify `src/shared/types.ts` (`Api`), `src/main/store.ts`, `src/main/turn.ts`, `src/main/subjectTurn.ts`, `src/main/ipc.ts`, `src/preload/index.ts`, `tests/main/store.test.ts`, `tests/main/turn.test.ts`, `tests/main/subjectTurn.test.ts`, `tests/main/ipc.test.ts`, `tests/preload/index.test.ts`, `tests/helpers/dom.ts`. Do NOT touch any other file.
+**Check first**: `store.writeSubject` is called from exactly four places under `src/`: `turn.ts` (the handover note after `lesson_done`), `subjectTurn.ts` (the end of `run`), and `ipc.ts` three times (`mutateSubject`, `subjects:create`, `subject:message`). Run `grep -n "writeSubject" -r src` and compare. In `tests/` it is only used to put a subject on disk before a test.
+**Mechanical edits forced by the `Api` change**: `src/preload/index.ts` is typed `const api: Api`, so it gains the method here. In `tests/preload/index.test.ts`: `preload exposes the api under window.api` gains `"setSubjectFolder"` in its key list; `each method calls its channel with its arguments` gains `await api.setSubjectFolder("u", "/f")` at the end of `results` and `["subjects:setFolder", "u", "/f"]` at the end of the expected calls, and its count goes up by one.
+**Details**
+- `store.ts`: `Store` gains `appendSubjectEvent(id: string, make: (subject: Subject) => SubjectEvent | null): Promise<Subject | null>` and `setSubjectFolder(id: string, folder: string, at: string): Promise<Subject | null>` (import the `SubjectEvent` type).
+  - `appendSubjectEvent` [D]: `serial(subjectFile(id), async () => { const subject = await readSubject(id); if (subject === null) return null; const event = make(subject); if (event === null) return subject; const next: Subject = { ...subject, updatedAt: event.at, events: [...subject.events, event] }; await writeJsonAtomic(subjectFile(id), next); return next; })`. For an id that is not a subject id it returns `null` before `serial` (as `readSubject` does) and `make` is not called.
+  - `setSubjectFolder` [D]: the same under the same key: read; `null` -> `null`; write and return `{ ...subject, folder, updatedAt: at }`.
+  - `writeSubject(s)` becomes `serial(subjectFile(s.id), () => writeJsonAtomic(subjectFile(s.id), s))` [D]. `deleteSubject` is unchanged.
+  - Both new functions are added to the returned object.
+- `turn.ts`: the block after `addKnowledge` that reads the subject, looks for a note of this lesson and writes the subject becomes one call: `if (next.subjectId !== null && next.unitId !== null) { await deps.store.appendSubjectEvent(next.subjectId, (s) => s.events.some((e) => e.kind === "note" && e.note.sessionId === next.id) ? null : { kind: "note", at: deps.now(), note: handoverNote(next) }); }`. Nothing else in the file changes.
+- `subjectTurn.ts`: the end of `run` (from `const fresh = await deps.store.readSubject(id);` to the `return`) becomes `const written = await deps.store.appendSubjectEvent(id, () => event); if (written === null) return notFound(); deps.notify(written); return { ok: true, subject: written };`.
+- `ipc.ts`:
+  - `mutateSubject`: inside `if (event !== undefined) { ... }`, the three statements that build `updated` and call `store.writeSubject` become `const updated = await store.appendSubjectEvent(id, () => event); if (updated === null) return { ok: false as const, message: "This subject no longer exists." };`; the `send` and the `return` stay.
+  - `subject:message`: the statements that build `updated` and call `store.writeSubject` become `const updated = await store.appendSubjectEvent(id, () => ({ kind: "message", at: now(), text: text.trim() })); if (updated === null) return <the not_found result used a few lines above>;`; the `send` and `return null` stay.
+  - `subjects:create` keeps `store.writeSubject`.
+  - New handler `subjects:setFolder (id, folder)` [D]: `typeof folder !== "string" || !isAbsolute(folder)` -> `{ ok: false, message: "Choose a folder." }`; `subjects.isRunning(id)` -> `{ ok: false, message: RUNNING_TEXT }`; else `withLock("start:" + id, () => withLock(id, async () => { ... }))`: `subjects.isRunning(id)` again -> the same refusal; in a `try` whose `catch` returns `{ ok: false, message: SAVE_TEXT }`: `const updated = await store.setSubjectFolder(id, folder, now());` `null` -> `{ ok: false, message: "This subject no longer exists." }`; else `send("subject:updated", updated)` and `{ ok: true, subject: updated }`. No lesson is read or written (default 14).
+- `types.ts` `Api` gains `setSubjectFolder(id: string, folder: string): Promise<{ ok: true; subject: Subject } | { ok: false; message: string }>;`. Preload: `setSubjectFolder: (id, folder) => ipcRenderer.invoke("subjects:setFolder", id, folder) as ReturnType<Api["setSubjectFolder"]>`. `dom.ts`: default `setSubjectFolder: vi.fn(async () => ({ ok: false as const, message: "This subject no longer exists." }))`.
+**Tests (+8)**: `tests/main/store.test.ts` (+3, in the subjects `describe`): `appendSubjectEvent adds each event to the newest file` (a stored subject; ten `appendSubjectEvent` calls started together without awaiting, each making a `message` event with its own text and `at`: afterwards the file has all ten, in the order of the calls; each call resolved with a subject that ends with its own event; `updatedAt` is the last event's `at`) · `appendSubjectEvent writes nothing for a null event or a missing subject` (`make` returning `null` -> the stored subject is returned and the file's bytes are unchanged; an unknown subject id -> `null`; `"nope"` as id -> `null` and `make` was not called) · `setSubjectFolder changes the folder and keeps the events` (the folder and `updatedAt` change, `events` and every other field stay; an unknown id -> `null` and no file is made; started together with an `appendSubjectEvent`, both the new folder and the new event are in the file). `tests/main/turn.test.ts` (+1): `the handover note is added through the store's queue` (a unit lesson that ends with `lesson_done`, on a store that spreads the real one and wraps `writeSubject` and `appendSubjectEvent` in `vi.fn`: `writeSubject` was not called by the turn, `appendSubjectEvent` once; the subject on disk ends with the note; a subject that already has this lesson's note gets no second one). `tests/main/subjectTurn.test.ts` (+1): `the senior reply is added through the store's queue` (a ready subject that waits for a reply, on a store whose `writeSubject` is a `vi.fn` that throws: `reply(id)` still resolves `{ ok: true }` and the file ends with the reply; a note added with `appendSubjectEvent` while the adapter is running is still in the file, before the reply). `tests/main/ipc.test.ts` (+3): `a note that lands during a subject write is kept` (a ready subject; `setup`'s store with `readSubject` wrapped so that its first call for this id reads the subject and then, before returning it, adds `SE.note(...)` with the real `appendSubjectEvent`: after `subject:message (SID, "hi")` the file's events end with the note, then the message; the same for `subject:resolveChange` on a subject with a pending change: the note and the `change` event are both there) · `subjects:setFolder stores the folder and tells the window` (a ready subject with one unit lesson whose `folder` is the old one: `call("subjects:setFolder", SID, "/new/folder")` -> `{ ok: true, subject }` with the new folder; the file has it; `send` was called with `"subject:updated"` and that subject; the events are unchanged; the unit lesson still has the old folder) · `subjects:setFolder refuses a bad folder, a running subject and a missing subject` (`"relative/path"`, `null`, `42` -> "Choose a folder."; `subjects.isRunning` -> `true` -> "A reply is already on the way."; an unknown subject id -> "This subject no longer exists."; a store whose `setSubjectFolder` throws -> "Could not save. Check free disk space."; nothing is sent in any of them).
+**Expected failure**: the three store tests fail with `store.appendSubjectEvent is not a function` / `store.setSubjectFolder is not a function`; the turn test (`writeSubject` was called); the subjectTurn test (the throwing `writeSubject` is hit); the first ipc test loses the note; the two `subjects:setFolder` tests have no handler; the two edited preload tests fail on the new name.
+**Totals**: 811 -> 819. **Commit**: `fix: subject events through one store queue, and a changeable folder`
+**Stop and report**: an existing turn, subjectTurn or ipc test fails (most likely one that compares a subject's `updatedAt` with a clock that counts: name it and both values); `grep` finds a fifth caller of `writeSubject` under `src/`; typecheck names a `Store` literal this task does not list.
+
+### T103 - Deferred fixes: window
+**Implements**: B81 (D51: the Retry banners; dialog focus trap; corrupt lesson; relative times; remote images) · ARCHITECTURE Milestone 7 "fixes": `LessonScreen`, `ConfirmDialog`, `useLesson`, `Sidebar`, `MarkdownView`
+**Depends on**: T102b
+**Files**: modify `src/shared/limits.ts`, `src/renderer/src/components/LessonScreen.tsx`, `src/renderer/src/components/ConfirmDialog.tsx`, `src/renderer/src/lib/useLesson.ts`, `src/renderer/src/components/Sidebar.tsx`, `src/renderer/src/components/MarkdownView.tsx`, `tests/shared/limits.test.ts`, `tests/renderer/LessonScreen.test.tsx`, `tests/renderer/ConfirmDialog.test.tsx`, `tests/renderer/useLesson.test.tsx`, `tests/renderer/Sidebar.test.tsx`, `tests/renderer/MarkdownView.test.tsx`. Do NOT touch any other file.
+**Check first**: `LessonScreen` builds `banner` in one `if / else if` chain with three `<Banner ... actionLabel="Retry" onAction={retry} />` ("Stopped.", the failed call, "The last reply did not arrive.") and shows an error of kind `not_found` without a button; `useLesson` computes `state` with `useMemo(() => (session ? deriveState(session.events) : null), [session])` and returns one object at its end (Stage J added `ask` and `asideError` to it); `Sidebar` has `const nowIso = new Date().toISOString();` in its body (Stage J added the "Review" and "Graph" buttons); `MarkdownView` is one `<ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>`; `useSubject` already handles corrupt events with a `derived` memo: `useLesson` gets the same shape.
+**Details**
+- `limits.ts` [D]: `export const TIME_TICK_MS = 60000;` (add it to the existing `limits match the spec` test with `toBe(60000)`; no new test).
+- `LessonScreen` [D]: before the banner chain, `const retryAction = props.statuses === null ? {} : { actionLabel: "Retry", onAction: retry };`. Each of the three banners named above gets `{...retryAction}` in place of its `actionLabel="Retry" onAction={retry}`. The "<name> not found" banner and the banners without a button are unchanged. So while the CLI check runs the message stays and the button is gone; it comes back when the check is done.
+- `ConfirmDialog` [D]: a `const dialogRef = useRef<HTMLDivElement>(null);` on the `div.dialog`. The existing `keydown` listener also handles Tab: `if (e.key !== "Tab") return; const box = dialogRef.current; const buttons = box?.querySelectorAll("button"); if (!box || !buttons || buttons.length === 0) return; const first = buttons[0]!; const last = buttons[buttons.length - 1]!; const active = document.activeElement; const outside = !box.contains(active); if (e.shiftKey ? active === first || outside : active === last || outside) { e.preventDefault(); (e.shiftKey ? last : first).focus(); }` (the Escape branch stays first). Nothing else changes: the confirm button still gets the focus when the dialog opens.
+- `useLesson`: the `state` memo becomes, as in `useSubject`: `const derived = useMemo(() => { if (!session) return { state: null, corrupt: false }; try { return { state: deriveState(session.events), corrupt: false }; } catch { return { state: null, corrupt: true }; } }, [session]); const state = derived.state;`. Directly before the final `return`: `if (derived.corrupt) return { <every field of the normal result>, session: null, state: null, busy: false, error: { kind: "not_found" as const, message: "This lesson could not be read." } };` (ARCHITECTURE's text, character for character; write the object so that every other field, also the ones Stage J added, is what the normal result has). `LessonScreen` needs no edit for it: with no session it draws no header and no card, and a `not_found` error is a banner without a button.
+- `Sidebar`: `const [, setTick] = useState(0); useEffect(() => { const timer = setInterval(() => setTick((n) => n + 1), TIME_TICK_MS); return () => clearInterval(timer); }, []);` (import `useEffect` and `TIME_TICK_MS` from `../../../shared/limits`). `nowIso` stays where it is, so every tick draws the times against the new moment.
+- `MarkdownView` [D]: `<ReactMarkdown ... components={{ img: ({ src, alt }) => typeof src === "string" && /^(https?:)?\/\//i.test(src) ? null : <img src={src} alt={alt ?? ""} /> }}>`. Nothing else.
+**Tests (+6)**: `tests/renderer/LessonScreen.test.tsx` (+2): `retry_banners_wait_for_cli_check` (with `statuses={null}`: a lesson whose last turn failed with `{ kind: "cli", message: "Codex failed: boom" }` shows the message and no button "Retry"; the same for a `stopped` error ("Stopped.") and for a lesson that waits for the model with no call running ("The last reply did not arrive."); after a rerender with the statuses of an installed tutor the button "Retry" is there and a click calls `api.advance`) · `corrupt_lesson_shows_message_not_blank (screen)` (`getSession` resolves a lesson with the events `[pick(1)]`, an answer nobody asked for: the screen shows "This lesson could not be read." in an alert, no button "Retry", no heading with the topic, no card, no thinking bar, and the render does not throw). `tests/renderer/ConfirmDialog.test.tsx` (+1): `dialog_traps_focus` (the dialog rendered beside a `<button>outside</button>`: the confirm button has the focus; `user.tab()` -> "Cancel"; `user.tab()` -> the confirm button; `user.tab({ shift: true })` -> "Cancel"; `user.tab({ shift: true })` -> the confirm button; the outside button never has the focus; after focusing the outside button by hand, `user.tab()` puts the focus on "Cancel"). `tests/renderer/useLesson.test.tsx` (+1): `corrupt_lesson_shows_message_not_blank` (`getSession` resolves a lesson with the events `[pick(1)]`: `error` equals `{ kind: "not_found", message: "This lesson could not be read." }`, `session` and `state` are `null`, `busy` is `false`, and `renderHook` does not throw; a good lesson sent later through `onSessionUpdated` clears it: `session` is that lesson and `error` is `null`). `tests/renderer/Sidebar.test.tsx` (+1): `relative_times_tick` (`vi.useFakeTimers()` and `vi.setSystemTime("2026-03-03T00:00:30.000Z")`; one lesson with `updatedAt: "2026-03-03T00:00:00.000Z"`: the row says `just now`; after `act(() => { vi.advanceTimersByTime(60000); })` it says `1m ago`, with no new props; after `unmount()` `vi.getTimerCount()` is 0; `vi.useRealTimers()` in a `finally`). `tests/renderer/MarkdownView.test.tsx` (+1): `remote_images_are_blocked` (`text ![a](https://example.com/a.png) ![b](http://example.com/b.png) ![c](//example.com/c.png) end`: the container has no `img` element and still shows `text` and `end`; `![d](pic.png)` alone gives one `img` whose `src` attribute is `pic.png`).
+**Expected failure**: the retry test finds the button; the two corrupt tests throw `corrupt` out of the render; the focus test lands on the outside button; the tick test still reads `just now`; the image test finds three `img` elements; `limits match the spec` fails on `TIME_TICK_MS`.
+**Totals**: 819 -> 825. **Commit**: `fix: deferred review fixes in the window`
+**Stop and report**: an existing `LessonScreen` test expects a "Retry" button while it passes `statuses={null}` (name it; do not edit it); an existing `Sidebar` or `App` test starts to fail because of the timer (name it); `react-markdown` hands the `img` component no `src` string for a remote image (then say what it hands over).
+
+### T103b - Deferred fixes: subject folder button, calls
+**Implements**: D62 M7 (the button), B56 with B38 ("resumes by itself") · Gate I N2 (a late stop from a lesson that was left), N3 (spoken answers while the tutor is missing) · B58, B28
+**Depends on**: T103 (same lines in `LessonScreen.tsx`), T102b (`setSubjectFolder`)
+**Files**: modify `src/shared/types.ts` (`Api.voiceStop`), `src/main/voice/hub.ts`, `src/main/ipc.ts`, `src/preload/index.ts`, `src/renderer/src/lib/useCall.ts`, `src/renderer/src/components/LessonScreen.tsx`, `src/renderer/src/components/SubjectScreen.tsx`, `tests/main/hub.test.ts`, `tests/main/ipc.test.ts`, `tests/preload/index.test.ts`, `tests/renderer/useCall.test.tsx`, `tests/renderer/LessonScreen.test.tsx`, `tests/renderer/SubjectScreen.test.tsx`. Do NOT touch any other file (`tests/helpers/dom.ts` already answers `voiceStop`, `pickFolder` and, since T102b, `setSubjectFolder`).
+**Check first**: `hub.ts` keeps `lessonId` in its `Call` and has `stop = (): void => { if (call === null) return; ... }`; `ipc.ts` has `ipcMain.handle("voice:stop", () => { voice.stop(); })`; `useCall.ts` calls `window.api.voiceStop()` in four places and its input type is `CallLesson = { id; session; state; busy; submit }`; `LessonScreen` calls `useCall({ id: props.id, session, state, busy, submit })` before it computes `cli`, `missing` and `blocked`; `SubjectScreen` shows the folder as `<p className="note">{`Material folder: ${lastSegment(subject.folder)}`}</p>` and has the helper `guarded(call)` that returns `true` on success.
+**Mechanical edits forced by the `Api` change**: preload `voiceStop: (lessonId) => ipcRenderer.invoke("voice:stop", lessonId) as Promise<void>`. In `tests/preload/index.test.ts`, `each method calls its channel with its arguments`: `await api.voiceStop()` becomes `await api.voiceStop("a")` and `["voice:stop"]` becomes `["voice:stop", "a"]`; the count does not change.
+**Details**
+- `types.ts` [D]: `voiceStop(lessonId: string): Promise<void>;`.
+- `hub.ts` [D]: `stop(lessonId?: string): void` in the returned type and in the function: `if (call === null || (lessonId !== undefined && call.lessonId !== lessonId)) return;` then as today. The hub's own calls (`fail`, and `start` ending an older call) keep calling `stop()` without an id.
+- `ipc.ts`: `ipcMain.handle("voice:stop", (_event, lessonId: unknown) => { voice.stop(typeof lessonId === "string" ? lessonId : undefined); });`.
+- `useCall.ts`:
+  - each of the four `window.api.voiceStop()` becomes `window.api.voiceStop(lessonRef.current.id)`.
+  - `CallLesson` gains `blocked?: boolean;` [D]. In the `onVoiceTranscript` handler the first check becomes `if (!onRef.current || speakingRef.current || l.busy || l.blocked) return;`. In the `onVoiceUtterance` handler `if (spoken === "" || l.busy || !l.state) return;` becomes `if (spoken === "" || l.busy || l.blocked || !l.state) return;` (what was heard is still cleared first, as today). Nothing else: the call stays up and the state shown does not change.
+- `LessonScreen`: the lines that compute `cli`, `missing` and `blocked` move above the `useCall` call (they need only `session` and `props.statuses`), and the call becomes `useCall({ id: props.id, session, state, busy, submit, blocked })`. No other change.
+- `SubjectScreen` [D]: the folder paragraph becomes `<div className="row"><span className="note">{`Material folder: ${lastSegment(subject.folder)}`}</span><button type="button" className="btn" disabled={busy} onClick={() => void changeFolder()}>Change</button></div>`, with `async function changeFolder() { let picked: string | null; try { picked = await window.api.pickFolder(); } catch { setMessage(SAVE_ERROR); return; } if (picked === null) return; const folder = picked; const stored = await guarded(() => window.api.setSubjectFolder(id, folder)); if (stored && error?.kind === "folder_missing") retry(); }`. The new subject arrives through `subject:updated`, which `useSubject` already follows. A refusal is shown by the existing `<small>{message}</small>`.
+**Tests (+7)**: `tests/main/hub.test.ts` (+1): `stop for another lesson leaves the call alone` (a call started for `"a"`: `hub.stop("b")` closes nothing and sends no `voice:state`; `hub.stop("a")` closes the listener and sends `"off"`; a second call for `"a"` is ended by `hub.stop()` without an id). `tests/main/ipc.test.ts` (+1): `voice:stop passes the lesson id` (`call("voice:stop", "s1")` -> `voice.stop` was called with `"s1"`; `call("voice:stop", 42)` and `call("voice:stop")` -> with `undefined`). `tests/renderer/useCall.test.tsx` (+2): `the call is stopped by its own lesson id` ("End call" through `end()` -> `api.voiceStop` was called with the lesson's id; unmounting during a call -> again with that id) · `nothing heard is used while the lesson is blocked` (a call on a lesson with a pending text question and `blocked: true`: a final transcript does not change `heard`; an utterance end calls `submit` zero times; after a rerender with `blocked: false` the same transcript and utterance end submit the answer once). `tests/renderer/LessonScreen.test.tsx` (+1): `a spoken answer is not sent while the tutor is missing` (as the file's existing call tests start a call: a key, a pending text question, and `statuses` in which the lesson's tutor is not installed: after "Start call", a final transcript and an utterance end, `api.answer` was not called and the box is empty). `tests/renderer/SubjectScreen.test.tsx` (+2): `the subject folder can be changed` (a ready subject: a button "Change" beside "Material folder: <name>"; `pickFolder` resolves `"/new/folder"` -> `api.setSubjectFolder(ID, "/new/folder")`; a picker that resolves `null` calls nothing; a refusal `{ ok: false, message: "A reply is already on the way." }` is shown; the button is disabled while a call runs) · `changing a missing subject folder repeats the call` (a subject whose `advanceSubject` ended with the `folder_missing` error: the B38 text is shown; "Change" with a folder and `{ ok: true, subject }` -> `api.advanceSubject` is called once more; without that error a successful change calls `advanceSubject` zero more times).
+**Expected failure**: the hub test (`stop("b")` ends the call); the ipc test (`voice.stop` called with no argument); the first useCall test (`voiceStop` called without an id), the second (the answer is submitted); the LessonScreen test (`api.answer` is called); the two SubjectScreen tests find no button "Change"; the edited preload test fails on `["voice:stop", "a"]`.
+**Totals**: 825 -> 832. **Commit**: `fix: subject folder can be changed, calls stop by lesson`
+**Stop and report**: an existing hub, ipc, useCall, LessonScreen or SubjectScreen test fails or needs an edit that is not named above (for example one that expects `voiceStop` to be called with no argument: name it); moving `cli`, `missing` and `blocked` above `useCall` breaks a rule of hooks or a use before definition.
+
+### T104 - Build config
+**Implements**: B76, B78 · ARCHITECTURE Milestone 7: `package.json` row · STACK: `electron-builder` 26.18.0 (dev dependency, milestone 7)
+**Depends on**: T103b
+**Files**: create `tests/package.test.ts`; modify `package.json`, `package-lock.json` (only through the npm command below), `eslint.config.mjs`, `.prettierignore`. Do NOT touch any other file. (`.gitignore` already has `dist`.)
+**Check first**: `package.json` has `"version": "0.1.0"`, no `build` key, no `dist` script and no `"type"` key; `eslint.config.mjs` has `{ ignores: ["out", "node_modules", "docs"] }`; `.prettierignore` starts with the line `out`.
+**Details**
+- Write the two tests first and see them fail. Then:
+- `package.json`, by hand: `"version": "0.2.0"`; in `scripts`, after `build`: `"dist": "electron-vite build && electron-builder --mac dmg --arm64 --x64"`; a new top-level key after `devDependencies`, exactly this and nothing more [D]:
+  ```json
+  "build": {
+    "appId": "io.github.viqgo.lodestar",
+    "productName": "lodestar",
+    "files": ["out/**"],
+    "artifactName": "lodestar-${version}-${arch}.dmg",
+    "mac": {
+      "target": "dmg",
+      "identity": null,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "lodestar listens to your spoken answers during a call."
+      }
+    }
+  }
+  ```
+- Then run `npm install --save-dev --save-exact electron-builder@26.18.0` once (this is the one task besides T1 that does not use `npm ci`; it needs the network). It adds `"electron-builder": "26.18.0"` to `devDependencies` and rewrites `package-lock.json`, also with the new version number. Do not edit the lockfile by hand. Paste the command's last lines.
+- `eslint.config.mjs`: the ignore list becomes `["out", "dist", "node_modules", "docs"]`. `.prettierignore`: a new line `dist` after `out` [D].
+- Nothing is built in this task. `npx electron-builder --version` must print `26.18.0`: paste it.
+**Tests (+2, `tests/package.test.ts`; `const pkg = JSON.parse(fs.readFileSync(path.join(process.cwd(), "package.json"), "utf8"))`)**: `dist_config_names_both_targets` (`pkg.version` is `"0.2.0"`; `pkg.scripts.dist` is exactly `electron-vite build && electron-builder --mac dmg --arm64 --x64`; `pkg.build.appId` is `io.github.viqgo.lodestar`; `pkg.build.productName` is `lodestar`; `pkg.build.files` equals `["out/**"]`; `pkg.build.artifactName` is `lodestar-${version}-${arch}.dmg` (the test writes it in single quotes, it is not a template); `pkg.build.mac.target` is `dmg`; `pkg.build.mac.identity` is `null`; `pkg.devDependencies["electron-builder"]` is `26.18.0`; `"type" in pkg` is `false`; `pkg.main` is `./out/main/index.js`) · `plist_has_microphone_text` (`pkg.build.mac.extendInfo.NSMicrophoneUsageDescription` is exactly `lodestar listens to your spoken answers during a call.`; `Object.keys(pkg.build.mac.extendInfo)` equals `["NSMicrophoneUsageDescription"]`).
+**Expected failure**: both fail on `pkg.build` being undefined (`dist_config_names_both_targets` first on the version).
+**Totals**: 832 -> 834. **Commit**: `build: electron-builder config for two unsigned disk images`
+**Stop and report**: `npm install` cannot reach the registry (say so; nothing else of the task is committed, because a `package.json` without its lockfile breaks `npm ci`); the install changes the version of any package other than `electron-builder` and what it brings in (paste `git diff --stat` and the changed top-level names); `npm test`, lint, typecheck or build fail after the install.
+
+### T105 - Build and check
+**Implements**: B76, B77, B78, B79 on the built app · SPEC milestone 7 "Manual checklist" (the part a script can prove: default 6)
+**Depends on**: T104
+**Files**: none under version control except the tick in `PLAN.md`. `dist/` is ignored by git. The check script lives in a temporary folder [D].
+**Check first**: `npx electron-builder --version` prints `26.18.0`; `git status --short` is clean; no window of lodestar is open from an earlier run (`pgrep -fl "lodestar.app/Contents/MacOS"` prints nothing).
+**Steps (they replace standard steps 2 and 3; steps 1, 4 and 5 stay)**
+1. `npm run dist`, with a time limit of ten minutes. It may download the Electron 45.3.2 x64 archive and electron-builder's helper files [D]. Paste the last 30 lines. Then `ls -la dist/*.dmg` must show exactly `dist/lodestar-0.2.0-arm64.dmg` and `dist/lodestar-0.2.0-x64.dmg`; paste it with `du -sh dist/*.dmg`.
+2. The bundles (`dist/mac-arm64/lodestar.app` is the arm64 one, `dist/mac/lodestar.app` the x64 one). For each, paste: `plutil -extract NSMicrophoneUsageDescription raw <app>/Contents/Info.plist` (must print `lodestar listens to your spoken answers during a call.`), the same for `CFBundleShortVersionString` (`0.2.0`), `CFBundleIdentifier` (`io.github.viqgo.lodestar`) and `CFBundleName` (`lodestar`). For the arm64 one also paste, whatever they print (they are facts for the owner, C5, not pass or fail): `codesign -dv <app> 2>&1 | head -8` and `codesign --verify --deep --strict <app>; echo "verify exit $?"`.
+3. Start the arm64 app the way Finder does, with its own empty data folder, and look inside the window:
+   ```sh
+   WORK=$(mktemp -d); DATA="$WORK/data"; mkdir "$DATA"
+   cat > "$WORK/check.mjs" <<'EOF'
+   const port = process.argv[2];
+   const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
+   const page = pages.find((p) => p.type === "page");
+   const ws = new WebSocket(page.webSocketDebuggerUrl);
+   await new Promise((r) => ws.addEventListener("open", r, { once: true }));
+   let id = 0;
+   const waiting = new Map();
+   const logs = [];
+   ws.addEventListener("message", (m) => {
+     const d = JSON.parse(m.data);
+     if (d.id && waiting.has(d.id)) waiting.get(d.id)(d.result);
+     if (d.method === "Log.entryAdded") logs.push(d.params.entry.text);
+     if (d.method === "Runtime.exceptionThrown") logs.push("EXCEPTION " + d.params.exceptionDetails.text);
+   });
+   const send = (method, params = {}) =>
+     new Promise((r) => {
+       waiting.set(++id, r);
+       ws.send(JSON.stringify({ id, method, params }));
+     });
+   const ev = async (expression) =>
+     (await send("Runtime.evaluate", { expression, awaitPromise: true, returnByValue: true })).result.value;
+   await send("Log.enable");
+   await send("Runtime.enable");
+   await send("Page.enable");
+   await send("Page.reload");
+   await new Promise((r) => setTimeout(r, 5000));
+   console.log("PROTOCOL", await ev("location.protocol"));
+   console.log("BUTTONS", await ev("[...document.querySelectorAll('button')].map((b) => b.textContent).join(' | ')"));
+   console.log("CLIS", await ev("window.api.detectClis().then((c) => JSON.stringify(c))"));
+   console.log("LOAD_LOGS", JSON.stringify(logs));
+   const probe = (body) =>
+     ev(`new Promise((done) => { const seen = []; const on = (e) => seen.push(e.violatedDirective); document.addEventListener("securitypolicyviolation", on); ${body}; setTimeout(() => { document.removeEventListener("securitypolicyviolation", on); done(seen.join(",") || "none"); }, 1500); })`);
+   console.log("BLOB_SOUND", await probe(`new Audio(URL.createObjectURL(new Blob([new Uint8Array(64)], { type: "audio/mpeg" }))).play().catch(() => {})`));
+   console.log("REMOTE_REQUEST", await probe(`fetch("https://example.invalid/").catch(() => {})`));
+   console.log("REMOTE_IMAGE", await probe(`new Image().src = "https://example.invalid/a.png"`));
+   ws.close();
+   EOF
+   open -n -a "$PWD/dist/mac-arm64/lodestar.app" --env LEARN_DATA_DIR="$DATA" --args --remote-debugging-port=9333
+   sleep 8
+   node "$WORK/check.mjs" 9333
+   pkill -f "lodestar.app/Contents/MacOS/lodestar"; sleep 1; ls "$DATA"; rm -rf "$WORK"
+   ```
+   Paste the whole output. It must read:
+   - `PROTOCOL file:`
+   - `BUTTONS` contains `New lesson` and `Profile` (the window is not blank under the policy).
+   - `CLIS` is a list of three entries, and the entry with `"id":"claude"` has `"installed":true` with a version. This is B79 for real: `open` gives the app Finder's `PATH`, and on this Mac Claude Code is in `~/.local/bin`, Codex and Gemini in `/opt/homebrew/bin` (checked by the planner with `which`), so all three should be `true`; only `claude` is required.
+   - `LOAD_LOGS` has no entry that contains `Content Security Policy` or `EXCEPTION`.
+   - `BLOB_SOUND none` (B77: `media-src blob:` lets the tutor's voice play).
+   - `REMOTE_REQUEST connect-src` and `REMOTE_IMAGE img-src` (the policy is really in force).
+   - `ls "$DATA"` shows the app made its folders there (`sessions`, `subjects`), so the owner's real data was not opened.
+4. Not done by this task, and to be written under "NOT IN THE PLAN" of the report as "left for the planner at GATE K or the owner's try-out": double-click the app in Finder after copying it out of the disk image; one lesson with Claude Code up to the first question; a formula and the lesson map are drawn; "Start call" brings macOS's microphone question with the B78 sentence, and the tutor's voice is heard; the Developer Tools console (View menu) shows no policy error during all of it.
+**If step 1 cannot download** (no network): run `npm run build && npx electron-builder --mac dir --arm64` and do steps 2 (arm64 only) and 3 on `dist/mac-arm64/lodestar.app`. If that cannot run either, do step 3 on the unpackaged production build: `npm run build`, then the same `open` line with `-a "$PWD/node_modules/electron/dist/Electron.app"` and `--args "$PWD" --remote-debugging-port=9333`, and `pkill -f "Electron.app/Contents/MacOS/Electron"` to end it. In both cases the report is STATUS: DEVIATED, names which checks were not possible, says "left for the owner: `npm run dist` with a network connection", and the task is still ticked and committed.
+**Tests**: none.
+**Totals**: 834 -> 834. **Commit**: `chore: build and check the packaged app`
+**Stop and report** (these are defects, not missing tools; do not tick the task): the two files do not have the exact names of B76; a bundle value of step 2 differs; the window is blank or `PROTOCOL` is not `file:`; `claude` is not found although `~/.local/bin/claude` exists; `LOAD_LOGS` has a policy error (paste it: it names the directive, which is what the planner needs); `BLOB_SOUND` is not `none`; a remote request or image is not refused. Never "fix" any of these in this task, and never change `csp.ts` to make a check pass.
+
+### T106 - User README
+**Implements**: B80 (the README) · B76-B79 (documented)
+**Depends on**: T105
+**Files**: modify `README.md`. Do NOT touch any other file.
+**Check first**: the README has the sections "How a lesson works", "Requirements", "Run it", "Your data", "What goes to the model", "Material, files and web search", "Subjects", "Voice", "Learning modes" (Stage J), "Development", "Status", "License".
+**Details**: plain sentences in the README's own style, these facts and no others. Texts in quotes are copied exactly.
+- A new section "Install", directly after "How a lesson works": download the file for your Mac from the Releases page, `https://github.com/viqgo/lodestar/releases` [D]: `lodestar-0.2.0-arm64.dmg` for a Mac with Apple silicon, `lodestar-0.2.0-x64.dmg` for an Intel Mac. Open it and drag lodestar into Applications.
+- A new section "First open", after "Install": lodestar is not signed with an Apple developer certificate, so macOS stops it the first time. Right-click lodestar in Applications and choose "Open", then "Open" again (B80). [D] On newer versions of macOS that way is gone: try to open the app once, then open System Settings, "Privacy & Security", and press "Open Anyway". [D] If macOS says the app is damaged, run `xattr -cr /Applications/lodestar.app` in Terminal once and open it again. This is needed once.
+- "Requirements" becomes: macOS, on Apple silicon or Intel; other systems are untested. At least one of Codex CLI, Claude Code, Gemini CLI (keep the existing words about Gemini being experimental and about `--version`), installed and signed in. The app, also when started from Finder, looks for them on your `PATH` and in `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/.npm-global/bin`. Node 26 and npm 11 are needed only to run or build from source.
+- "Run it" gets the heading "Run from source"; its text stays.
+- "Your data": keep everything; after the sentence about `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PATH` and `LEARN_GEMINI_PATH` add: a variable set in a terminal reaches the app only when the app is started from that terminal, not from Finder.
+- "What goes to the model" gets the heading "What is sent where"; its text stays, and one paragraph is added: during a call the microphone audio and the text that is read aloud also go to Deepgram, and only there (see "Voice"). The app itself makes no other connection: in the installed app the window may load nothing from the network.
+- "Voice": one sentence added to its first paragraph: the first call makes macOS ask for the microphone, with the reason "lodestar listens to your spoken answers during a call."
+- "Development" gains: `npm run dist` builds the two disk images into `dist/` (unsigned; it downloads Electron for the other processor type the first time).
+- "Status" becomes: Version 0.2.0. Lessons with Codex, Claude Code or Gemini; material folders, files and web search; subjects; voice; review, practice and the knowledge graph; an unsigned macOS build.
+**Tests**: none. **Verify**: the standard step 4 (prettier reads `README.md`).
+**Totals**: 834 -> 834. **Commit**: `docs: install, first open and what is sent where`
+**Stop and report**: a fact above contradicts the code or T105's pasted output (name it; do not change the code); the section "Learning modes" is missing (Stage J's T100 did not land): go on without it and say so.
+
+### Where each milestone 7 SPEC test lives
+- csp_string_is_exact, finder_path_finds_homebrew_clis: T101
+- find_json_is_linear_and_prefers_top_level, switch_write_window_is_closed, mkdtemp_failure_is_a_value, delete_during_write_does_not_resurrect: T102
+- retry_banners_wait_for_cli_check, dialog_traps_focus, relative_times_tick, remote_images_are_blocked: T103
+- corrupt_lesson_shows_message_not_blank: T103 (hook, screen)
+- dist_config_names_both_targets, plist_has_microphone_text: T104 (the config), T105 (the built bundle)
+- Manual checklist: T105 (script), GATE K or the owner's try-out (by hand)
+
+### GATE K - Packaging
+**Run**: `npm test` (834), `npm run lint`, `npm run typecheck`, `npm run build`; T105's pasted output.
+**Fresh review**: Fable, read-only, against B76-B81, ARCHITECTURE "Milestone 7", STACK and the list "Defaults taken (D67)". Extra focus:
+- The policy: `csp.ts` against B77 character for character; it is the only policy string under `src/`; what it allows that the window does not need; that math, the map (Mermaid's inline styles), the audio worklet and the tutor's voice need nothing it refuses; that `npm run dev` is the only path without it.
+- The build block: nothing beyond ARCHITECTURE's row; what ends up inside the app (default 28: every `dependencies` package; no test, no blueprint, no `.env`, no key file); `identity: null` and what `codesign` printed in T105 (C5); that no task made a tag, a push or a release.
+- `findJson`: Gemini output seen in the wild (a line of text before the JSON, two JSON lines, an error object inside a larger one) against default 8; that `extractJsonObject` did not change.
+- `runProcess`: every exit path still removes the folder it made, and none removes a folder it did not make.
+- The delete mark: every caller of `writeSession` (the turn, `mutate`, `lesson:answer`, `sessions:create`, `subject:startUnit`, the aside of Stage J) after a delete; a failed `sessions:create` that deletes and returns.
+- Subject writes: every path that adds an event now goes through `appendSubjectEvent`; an event that was checked against an older state and is added to a newer file (a note landing between the check and the write) must still give a subject that `deriveSubject` accepts; `subjects:setFolder` against the locks of `subject:startUnit` and `subjects:delete`; default 14.
+- The window: the trap with one button, with the focus outside the dialog, and with two dialogs in a row; the corrupt-lesson path for every reader of `session` in `LessonScreen` and `useCall` (also the aside box of Stage J); the timer cleared on unmount; an image source in upper case (`HTTPS://`), with a leading space, or as a reference-style image.
+- Calls: `voiceStop` with an id in every place the window stops a call; `blocked` while the CLI check runs and while the tutor is missing; that N4 was left alone.
+- README: every sentence against the code and against T105's output; no promise of a release that does not exist yet beyond the link.
+**By hand (the planner, or the owner at the try-out)**: the four points of T105 step 4, on the app copied out of `lodestar-0.2.0-arm64.dmg`; on an Intel Mac, if one is at hand, that the x64 file opens at all.
+**Then**: the planner fixes Important findings and cheap Minor ones through fix tasks (D56, D64); corrects ARCHITECTURE's `createListener` row (N5, default 26) and adds `Dist: npm run dist` to the commands in `CLAUDE.md`; lists the fixes with the D67 defaults and C4, C5 and default 28 for the owner; and goes on to Stage L without waiting (D64). The GitHub release with the two files is created only when the owner says so, by the planner, never by a task; no tag is pushed before that.
 
 ## Stage L - milestone 8: customisation (outline)
 

@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  ASIDE_JSON_SCHEMA,
   ASK_JSON_SCHEMA,
   FRONTS_JSON_SCHEMA,
   GRADE_JSON_SCHEMA,
   OUTLINE_JSON_SCHEMA,
+  parseAside,
   parseAsk,
   parseFronts,
   parseGrade,
@@ -227,5 +229,15 @@ describe("practice schemas", () => {
     expect(parseGrade('{"verdict":null,"feedback":"f"}').ok).toBe(false);
     expect(parseGrade('{"verdict":"maybe","feedback":"f"}').ok).toBe(false);
     expect(parseGrade('{"verdict":"pass","feedback":"f","x":1}').ok).toBe(false);
+  });
+});
+
+describe("aside schema", () => {
+  it("parseAside accepts markdown only", () => {
+    expect(parseAside('{"markdown":"m"}')).toEqual({ ok: true, value: { markdown: "m" } });
+    expect(parseAside('{"markdown":"m","x":1}').ok).toBe(false);
+    expect(parseAside("{}").ok).toBe(false);
+    expect(parseAside("garbage").ok).toBe(false);
+    expect((ASIDE_JSON_SCHEMA as any).required).toEqual(["markdown"]);
   });
 });

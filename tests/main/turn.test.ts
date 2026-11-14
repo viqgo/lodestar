@@ -5,10 +5,11 @@ import { describe, expect, it } from "vitest";
 import { deriveState } from "../../src/core/engine";
 import type { CliAdapter } from "../../src/main/cli/adapter";
 import { createStore } from "../../src/main/store";
+import { ASIDE_JSON_SCHEMA } from "../../src/shared/schema";
 import { NO_OPTIONS } from "../../src/shared/clis";
 import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../../src/shared/limits";
 import { createTurnRunner, modelStep, runOptions } from "../../src/main/turn";
-import type { RunResult, Session, SessionEvent } from "../../src/shared/types";
+import type { RunResult, Session, SessionEvent, TurnResult } from "../../src/shared/types";
 import { fakeAdapter, fakeAdapters } from "../helpers/fakes";
 import {
   A,
@@ -19,6 +20,7 @@ import {
   session,
   subject,
   toCheck,
+  toPlan,
   toTeach,
 } from "../helpers/fixtures";
 
@@ -619,5 +621,195 @@ describe("units in the lesson turn", () => {
     expect(stored!.events.some((e) => e.kind === "action" && e.action.type === "lesson_done")).toBe(
       true,
     );
+  });
+});
+
+describe("turn aside", () => {
+  const ASIDE_REPLY = JSON.stringify({ markdown: "because" });
+  const SIDE_END =
+    '# Your move\nThe learner asks a side question. Answer it in plain markdown, in a few sentences, without advancing the lesson and without asking a question back.\nSide question: "why"\n';
+  const FOLDER = "/tmp/lh-material";
+
+  const setupMaterial = async (
+    patch: Partial<Session>,
+    listing: { files: { path: string; bytes: number }[]; more: number } | null,
+    ...replies: Parameters<typeof fakeAdapter>
+  ) => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+    const store = await createStore(dir, fsp);
+    const base = { ...session([]), ...patch };
+    await store.writeSession(base);
+    const f = fakeAdapter(...replies);
+    const runner = createTurnRunner({
+      adapters: fakeAdapters(f.adapter),
+      store,
+      now: () => NOW,
+      newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+      notify: () => {},
+      listFolder: async () => listing,
+    });
+    return { dir, store, f, runner, base };
+  };
+
+  it("aside_is_saved_and_shown (turn)", async () => {
+    const { store, f, notified, runner } = await setup([act(A.probe())], ASIDE_REPLY);
+    const result = await runner.aside(ID, "why");
+    expect(result.ok).toBe(true);
+    const stored = (await store.readSession(ID))!;
+    expect(stored.events.at(-1)).toEqual({
+      kind: "aside",
+      at: NOW,
+      question: "why",
+      markdown: "because",
+      usage: null,
+    });
+    expect(deriveState(stored.events).awaiting).toMatchObject({
+      who: "learner",
+      purpose: "probe",
+    });
+    if (result.ok) expect(result.session).toEqual(stored);
+    expect(notified).toHaveLength(1);
+    expect(f.requests).toHaveLength(1);
+    expect(f.requests[0]!.schema).toBe(ASIDE_JSON_SCHEMA);
+    expect(f.prompts[0]!.endsWith(SIDE_END)).toBe(true);
+  });
+
+  it("aside_refused_while_running", async () => {
+    const BUSY = { kind: "busy", message: "A reply is already on the way." };
+    const hold = async (events: SessionEvent[]) => {
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let reached!: () => void;
+      const reachedP = new Promise<void>((r) => (reached = r));
+      let calls = 0;
+      const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+      const store = await createStore(dir, fsp);
+      await store.writeSession(session(events));
+      const runner = createTurnRunner({
+        adapters: fakeAdapters(
+          slowAdapter(async () => {
+            calls++;
+            reached();
+            await gate;
+            return { ok: true, text: ASIDE_REPLY, usage: null };
+          }),
+        ),
+        store,
+        now: () => NOW,
+        newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+        listFolder: async () => ({ files: [], more: 0 }),
+        notify: () => {},
+      });
+      return { runner, release, reachedP, calls: () => calls };
+    };
+    const a = await hold([]);
+    const first = a.runner.advance(ID);
+    await a.reachedP;
+    const refused = (await a.runner.aside(ID, "why")) as Extract<TurnResult, { ok: false }>;
+    expect(refused.ok).toBe(false);
+    expect(refused.error).toEqual(BUSY);
+    expect(a.calls()).toBe(1);
+    a.release();
+    await first;
+
+    const b = await hold([act(A.probe())]);
+    const side = b.runner.aside(ID, "why");
+    await b.reachedP;
+    expect(b.runner.isRunning(ID)).toBe(true);
+    const adv = (await b.runner.advance(ID)) as Extract<TurnResult, { ok: false }>;
+    const again = (await b.runner.aside(ID, "why")) as Extract<TurnResult, { ok: false }>;
+    expect(adv.error).toEqual(BUSY);
+    expect(again.error).toEqual(BUSY);
+    expect(b.calls()).toBe(1);
+    b.release();
+    await side;
+    expect(b.runner.isRunning(ID)).toBe(false);
+  });
+
+  it("a failed aside stores nothing", async () => {
+    const events = [act(A.probe())];
+    const bad = await setup(events, "garbage", "garbage");
+    const r1 = await bad.runner.aside(ID, "why");
+    expect(r1).toEqual({
+      ok: false,
+      error: { kind: "bad_reply", message: "The model gave an unusable reply. Press Retry." },
+      session: session(events),
+    });
+    expect(
+      bad.f.prompts[1]!.trimEnd().endsWith(
+        "Your last reply was not usable: not valid JSON. Allowed now: an answer in markdown.",
+      ),
+    ).toBe(true);
+    expect(await bad.store.readSession(ID)).toEqual(session(events));
+    expect(bad.notified).toEqual([]);
+
+    const boom = await setup(events, { ok: false, kind: "failed", message: "boom" });
+    const r2 = await boom.runner.aside(ID, "why");
+    expect(r2).toMatchObject({
+      ok: false,
+      error: { kind: "cli", message: "Codex failed: boom" },
+    });
+    expect(await boom.store.readSession(ID)).toEqual(session(events));
+    expect(boom.notified).toEqual([]);
+
+    const blank = await setup(events, '{"markdown":"  "}', '{"markdown":"  "}');
+    const r3 = await blank.runner.aside(ID, "why");
+    expect(r3).toMatchObject({ ok: false, error: { kind: "bad_reply" } });
+    expect(await blank.store.readSession(ID)).toEqual(session(events));
+    expect(blank.notified).toEqual([]);
+
+    const gone = await setup(events, ASIDE_REPLY);
+    expect(await gone.runner.aside("nope", "why")).toEqual({
+      ok: false,
+      error: { kind: "not_found", message: "This lesson no longer exists." },
+      session: null,
+    });
+  });
+
+  it("an aside uses the lesson's material, options and time limit", async () => {
+    const m = await setupMaterial(
+      { folder: FOLDER, webSearch: true },
+      { files: [], more: 0 },
+      ASIDE_REPLY,
+    );
+    await m.runner.aside(ID, "why");
+    expect(m.f.requests[0]!.options!.readDirs).toEqual([FOLDER]);
+    expect(m.f.requests[0]!.options!.webSearch).toBe(true);
+    expect(m.f.requests[0]!.timeoutMs).toBe(300_000);
+    expect(m.f.prompts[0]).toContain("# Material");
+    expect(m.f.prompts[0]).toContain("# Web search");
+
+    const missing = await setupMaterial({ folder: FOLDER }, null, ASIDE_REPLY);
+    const r = await missing.runner.aside(ID, "why");
+    expect(r).toEqual({
+      ok: false,
+      error: {
+        kind: "folder_missing",
+        message: "The material folder was not found. Choose it again or remove it.",
+      },
+      session: missing.base,
+    });
+    expect(missing.f.prompts).toHaveLength(0);
+
+    const plain = await setupMaterial({}, null, ASIDE_REPLY);
+    await plain.runner.aside(ID, "why");
+    expect(plain.f.requests[0]!.options).toEqual(NO_OPTIONS);
+    expect(plain.f.requests[0]!.timeoutMs).toBe(180_000);
+  });
+
+  it("an aside does not advance a lesson that waits for the model", async () => {
+    const { store, f, runner } = await setup(toPlan, ASIDE_REPLY, A.plan());
+    const r = await runner.aside(ID, "why");
+    expect(r.ok).toBe(true);
+    const after = (await store.readSession(ID))!;
+    expect(after.events).toHaveLength(toPlan.length + 1);
+    expect(after.events.at(-1)!.kind).toBe("aside");
+    expect(f.requests).toHaveLength(1);
+    await runner.advance(ID);
+    const done = (await store.readSession(ID))!;
+    expect(done.events.at(-1)).toMatchObject({ kind: "action", action: A.plan() });
+    expect(f.prompts[1]).toContain("ASIDE: ");
   });
 });

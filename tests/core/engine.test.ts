@@ -14,6 +14,7 @@ import {
   A,
   PLAN,
   act,
+  asideEv,
   choiceQ,
   cont,
   pick,
@@ -479,5 +480,42 @@ describe("validateProfile", () => {
     expect(validateProfile("")).toBeNull();
     expect(validateProfile("a".repeat(2000))).toBeNull();
     expect(validateProfile("a".repeat(2001))).toBe("Keep it under 2000 characters.");
+  });
+});
+
+describe("deriveState: asides", () => {
+  const lists: SessionEvent[][] = [
+    [],
+    [act(A.probe())],
+    toPlan,
+    [...toTeach, ...toRead()],
+    [...toTeach, ...toCheck()],
+    [...toTeach, ...toCheck("n1"), pick(1), ...toCheck("n2"), pick(1), act(A.done())],
+  ];
+
+  it("aside_never_changes_lesson_state", () => {
+    for (const events of lists) {
+      const base = deriveState(events);
+      for (let at = 0; at <= events.length; at++) {
+        const withAside = [...events.slice(0, at), asideEv(), ...events.slice(at)];
+        const got = deriveState(withAside);
+        if (base.awaiting.who === "learner" && at <= base.awaiting.eventIndex) {
+          expect(got).toEqual({
+            ...base,
+            awaiting: { ...base.awaiting, eventIndex: base.awaiting.eventIndex + 1 },
+          });
+        } else {
+          expect(got).toEqual(base);
+        }
+      }
+    }
+  });
+
+  it("an aside between a question and its answer keeps the question pending", () => {
+    const two = deriveState([act(A.probe()), asideEv()]);
+    expect(two.awaiting).toMatchObject({ who: "learner", purpose: "probe", eventIndex: 0 });
+    const three = deriveState([act(A.probe()), asideEv(), pick(1)]);
+    expect(three.awaiting).toEqual({ who: "model" });
+    expect(three.probeAnswered).toBe(1);
   });
 });

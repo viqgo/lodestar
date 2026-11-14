@@ -5,7 +5,7 @@ import { deriveSubject, handoverNote, renderSubjectSection } from "../core/subje
 import { callModel } from "./call";
 import { attachmentKind, renderMaterial } from "../core/material";
 import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../shared/limits";
-import { REPLY_JSON_SCHEMA, parseReply } from "../shared/schema";
+import { ASIDE_JSON_SCHEMA, REPLY_JSON_SCHEMA, parseAside, parseReply } from "../shared/schema";
 import type {
   Action,
   CliId,
@@ -87,6 +87,7 @@ export async function modelStep(
 
 export type TurnRunner = {
   advance(id: string): Promise<TurnResult>;
+  aside(id: string, text: string): Promise<TurnResult>;
   stop(id: string): void;
   isRunning(id: string): boolean;
 };
@@ -100,6 +101,61 @@ export function createTurnRunner(deps: {
   listFolder: (folder: string) => Promise<{ files: FileEntry[]; more: number } | null>;
 }): TurnRunner {
   const running = new Map<string, AbortController>();
+
+  async function prepare(session: Session) {
+    const knowledge = await deps.store.readKnowledge();
+    const profile = await deps.store.readProfile();
+    const listing = session.folder !== null ? await deps.listFolder(session.folder) : null;
+    if (session.folder !== null && listing === null) {
+      return {
+        ok: false as const,
+        error: {
+          kind: "folder_missing" as const,
+          message: "The material folder was not found. Choose it again or remove it.",
+        },
+      };
+    }
+    const attachmentsDir = deps.store.attachmentsDir(session.id);
+    const material = renderMaterial({
+      folder: session.folder,
+      files: listing?.files ?? [],
+      more: listing?.more ?? 0,
+      attachments: session.attachments.map((a) => ({
+        name: a.name,
+        path: path.join(attachmentsDir, a.file),
+      })),
+    });
+    let subjectSection: string | null = null;
+    if (session.subjectId !== null && session.unitId !== null) {
+      try {
+        const subject = await deps.store.readSubject(session.subjectId);
+        if (subject !== null) {
+          subjectSection = renderSubjectSection(
+            subject,
+            deriveSubject(subject.events),
+            session.unitId,
+          );
+        }
+      } catch {
+        subjectSection = null;
+      }
+    }
+    const options = runOptions(session, attachmentsDir, null);
+    const timeoutMs =
+      options.readDirs.length > 0 || options.webSearch ? CALL_TIMEOUT_TOOLS_MS : CALL_TIMEOUT_MS;
+    const adapter = deps.adapters[session.cli] ?? deps.adapters.codex;
+    return {
+      ok: true as const,
+      knowledge,
+      profile,
+      attachmentsDir,
+      material,
+      subjectSection,
+      options,
+      timeoutMs,
+      adapter,
+    };
+  }
 
   async function advance(id: string): Promise<TurnResult> {
     if (running.has(id)) {
@@ -123,50 +179,18 @@ export function createTurnRunner(deps: {
       for (;;) {
         const state = deriveState(session.events);
         if (state.awaiting.who !== "model") return { ok: true, session };
-        const knowledge = await deps.store.readKnowledge();
-        const profile = await deps.store.readProfile();
-        const listing = session.folder !== null ? await deps.listFolder(session.folder) : null;
-        if (session.folder !== null && listing === null) {
-          return {
-            ok: false,
-            error: {
-              kind: "folder_missing",
-              message: "The material folder was not found. Choose it again or remove it.",
-            },
-            session,
-          };
-        }
-        const attachmentsDir = deps.store.attachmentsDir(session.id);
-        const material = renderMaterial({
-          folder: session.folder,
-          files: listing?.files ?? [],
-          more: listing?.more ?? 0,
-          attachments: session.attachments.map((a) => ({
-            name: a.name,
-            path: path.join(attachmentsDir, a.file),
-          })),
-        });
-        let subjectSection: string | null = null;
-        if (session.subjectId !== null && session.unitId !== null) {
-          try {
-            const subject = await deps.store.readSubject(session.subjectId);
-            if (subject !== null) {
-              subjectSection = renderSubjectSection(
-                subject,
-                deriveSubject(subject.events),
-                session.unitId,
-              );
-            }
-          } catch {
-            subjectSection = null;
-          }
-        }
-        const options = runOptions(session, attachmentsDir, null);
-        const timeoutMs =
-          options.readDirs.length > 0 || options.webSearch
-            ? CALL_TIMEOUT_TOOLS_MS
-            : CALL_TIMEOUT_MS;
-        const adapter = deps.adapters[session.cli] ?? deps.adapters.codex;
+        const p = await prepare(session);
+        if (!p.ok) return { ok: false, error: p.error, session };
+        const {
+          knowledge,
+          profile,
+          attachmentsDir,
+          material,
+          subjectSection,
+          options,
+          timeoutMs,
+          adapter,
+        } = p;
         const step = await modelStep(
           {
             adapter,
@@ -232,8 +256,79 @@ export function createTurnRunner(deps: {
     }
   }
 
+  async function aside(id: string, text: string): Promise<TurnResult> {
+    if (running.has(id)) {
+      return {
+        ok: false,
+        error: { kind: "busy", message: "A reply is already on the way." },
+        session: null,
+      };
+    }
+    const controller = new AbortController();
+    running.set(id, controller);
+    try {
+      const session = await deps.store.readSession(id);
+      if (!session) {
+        return {
+          ok: false,
+          error: { kind: "not_found", message: "This lesson no longer exists." },
+          session: null,
+        };
+      }
+      const state = deriveState(session.events);
+      const p = await prepare(session);
+      if (!p.ok) return { ok: false, error: p.error, session };
+      const r = await callModel(
+        { adapter: p.adapter },
+        {
+          prompt: (retryNote) =>
+            buildPrompt({
+              session,
+              state,
+              knowledge: p.knowledge,
+              retryNote,
+              profile: p.profile,
+              material: p.material,
+              subject: p.subjectSection,
+              webSearch: p.options.webSearch,
+              attachmentsDir: p.attachmentsDir,
+              aside: text,
+            }),
+          schema: ASIDE_JSON_SCHEMA,
+          parse: parseAside,
+          check: (v) => (v.markdown.trim() === "" ? "markdown is empty" : null),
+          allowed: "an answer in markdown",
+          options: p.options,
+          timeoutMs: p.timeoutMs,
+          signal: controller.signal,
+        },
+      );
+      if (!r.ok) return { ok: false, error: r.error, session };
+      const next: Session = {
+        ...session,
+        updatedAt: deps.now(),
+        events: [
+          ...session.events,
+          {
+            kind: "aside",
+            at: deps.now(),
+            question: text,
+            markdown: r.value.markdown,
+            usage: r.usage,
+          },
+        ],
+      };
+      await deps.store.writeSession(next);
+      deps.notify(next);
+      return { ok: true, session: next };
+    } finally {
+      running.delete(id);
+    }
+  }
+
   return {
     advance,
+    aside,
     stop: (id) => running.get(id)?.abort(),
     isRunning: (id) => running.has(id),
   };

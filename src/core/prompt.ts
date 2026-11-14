@@ -79,6 +79,10 @@ export function renderTranscript(events: SessionEvent[], attachmentsDir?: string
       asked = questionOf(event.action) ?? asked;
       continue;
     }
+    if (event.kind === "aside") {
+      lines.push("ASIDE: " + JSON.stringify({ question: event.question, answer: event.markdown }));
+      continue;
+    }
     if (asked === null) {
       lines.push("LEARNER: " + JSON.stringify(event.answer));
       continue;
@@ -111,6 +115,7 @@ export function buildPrompt(input: {
   webSearch?: boolean;
   attachmentsDir?: string;
   subject?: string | null;
+  aside?: string | null;
 }): string {
   const { session, state, knowledge, retryNote } = input;
   const profile = (input.profile ?? "").trim();
@@ -149,11 +154,18 @@ export function buildPrompt(input: {
     sections.push(["# Node status", ...lines].join("\n"));
   }
   sections.push("# Transcript so far\n" + renderTranscript(session.events, input.attachmentsDir));
-  const move = [
-    "# Your move",
-    `Allowed action types now: ${allowedActions(state).join(", ")}.`,
-    ...moveNotes(state),
-  ];
+  const move =
+    typeof input.aside === "string"
+      ? [
+          "# Your move",
+          "The learner asks a side question. Answer it in plain markdown, in a few sentences, without advancing the lesson and without asking a question back.",
+          "Side question: " + JSON.stringify(input.aside),
+        ]
+      : [
+          "# Your move",
+          `Allowed action types now: ${allowedActions(state).join(", ")}.`,
+          ...moveNotes(state),
+        ];
   if (retryNote !== null) move.push(retryNote);
   sections.push(move.join("\n"));
   return sections.join("\n\n") + "\n";

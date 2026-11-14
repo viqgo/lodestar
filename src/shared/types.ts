@@ -55,7 +55,8 @@ export type Answer = {
 export type Usage = { inputTokens: number; outputTokens: number };
 export type SessionEvent =
   | { kind: "action"; at: string; action: Action; usage: Usage | null }
-  | { kind: "answer"; at: string; answer: Answer };
+  | { kind: "answer"; at: string; answer: Answer }
+  | { kind: "aside"; at: string; question: string; markdown: string; usage: Usage | null };
 
 export type AttachmentKind = "pdf" | "image" | "text";
 export type Attachment = { file: string; name: string; bytes: number; kind: AttachmentKind }; // file: unique stored name
@@ -216,6 +217,7 @@ export type Api = {
     cli: CliId,
   ): Promise<{ ok: true; verdict: Verdict; feedback: string } | { ok: false; error: TurnError }>;
   practiceStop(): Promise<void>;
+  aside(id: string, text: string): Promise<TurnResult>;
   getGraph(): Promise<GraphData>;
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: true } | { ok: false; message: string }>;

@@ -68,6 +68,7 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
       error: { kind: "busy", message: "A reply is already on the way." },
     })),
     practiceStop: vi.fn(async () => undefined),
+    aside: vi.fn(async () => busy),
     getGraph: vi.fn(async () => ({ groups: [], edges: [] })),
     getSettings: vi.fn(async () => ({ voice: { language: "en", voice: "aura-2-thalia-en" } })),
     saveSettings: vi.fn(async () => ({ ok: true })),

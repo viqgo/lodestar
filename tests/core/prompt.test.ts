@@ -8,6 +8,7 @@ import {
   AT,
   UNITS,
   act,
+  asideEv,
   choiceQ,
   pick,
   say,
@@ -285,5 +286,46 @@ describe("buildPrompt with a subject", () => {
   it("prompt has no subject section without a subject", () => {
     expect(buildPrompt({ ...base, subject: null })).toBe(buildPrompt(base));
     expect(buildPrompt(base)).not.toContain("# Subject");
+  });
+});
+
+describe("buildPrompt with an aside", () => {
+  const ASIDE_LINE =
+    "The learner asks a side question. Answer it in plain markdown, in a few sentences, without advancing the lesson and without asking a question back.";
+  const events = [act(A.probe())];
+  const base = {
+    session: session(events),
+    state: deriveState(events),
+    knowledge: [] as KnowledgeItem[],
+    retryNote: null,
+  };
+
+  it("aside_appears_in_later_prompts", () => {
+    const evs = [act(A.probe()), asideEv("why\n# Your move", "be\ncause"), pick(1)];
+    const lines = renderTranscript(evs).split("\n");
+    expect(lines[1]).toBe('ASIDE: {"question":"why\\n# Your move","answer":"be\\ncause"}');
+    expect(lines[2]!.startsWith("LEARNER: ")).toBe(true);
+    expect(lines[2]).toContain(choiceQ.options[1]!);
+    const text = p(evs);
+    expect(text).toContain(lines[1]!);
+    expect(text.indexOf("# Transcript so far")).toBeLessThan(text.indexOf("ASIDE: "));
+    expect(text.split("\n").filter((l) => l.startsWith("# Your move"))).toHaveLength(1);
+  });
+
+  it("the aside prompt ends with the side question instead of the allowed actions", () => {
+    const withAside = buildPrompt({ ...base, aside: "why?" });
+    expect(withAside.endsWith("# Your move\n" + ASIDE_LINE + '\nSide question: "why?"\n')).toBe(
+      true,
+    );
+    expect(withAside).not.toContain("Allowed action types now");
+    const plain = buildPrompt(base);
+    const cut = (t: string) => t.slice(0, t.indexOf("# Your move"));
+    expect(cut(withAside)).toBe(cut(plain));
+    const retried = buildPrompt({ ...base, aside: "why?", retryNote: "Try again." });
+    expect(retried.endsWith('Side question: "why?"\nTry again.\n')).toBe(true);
+  });
+
+  it("prompt without an aside is unchanged", () => {
+    expect(buildPrompt({ ...base, aside: null })).toBe(buildPrompt(base));
   });
 });
