@@ -10,7 +10,13 @@ export function MarkdownView({ markdown }: { markdown: string }) {
         rehypePlugins={[rehypeKatex]}
         components={{
           img: ({ src, alt }) =>
-            typeof src === "string" && /^(https?:)?\/\//i.test(src) ? null : (
+            typeof src === "string" &&
+            /^(https?:)?\/\//i.test(
+              src
+                .replace(/[\t\n\r]/g, "")
+                .trim()
+                .replace(/\\/g, "/"),
+            ) ? null : (
               <img src={src} alt={alt ?? ""} />
             ),
         }}

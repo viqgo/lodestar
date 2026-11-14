@@ -43,7 +43,7 @@ If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PA
 
 ## What is sent where
 
-Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far and the tutor instructions from the Profile screen are sent. Nothing else is sent.
+Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far, your knowledge list, the tutor instructions and, when the lesson has material, the files the CLI reads from that folder and your attachments are sent to the CLI you chose.
 
 During a call the microphone audio and the text that is read aloud also go to Deepgram, and only there (see "Voice"). The app itself makes no other connection: in the installed app the window may load nothing from the network.
 

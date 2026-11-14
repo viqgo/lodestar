@@ -16,4 +16,10 @@ describe("csp", () => {
     expect(text).toContain('"Content-Security-Policy": [CSP]');
     expect(text).not.toContain("default-src");
   });
+
+  it("the packaged app ignores ELECTRON_RENDERER_URL", () => {
+    const text = fs.readFileSync(path.join(process.cwd(), "src/main/index.ts"), "utf8");
+    expect(text).toContain("app.isPackaged");
+    expect(text.match(/process\.env\.ELECTRON_RENDERER_URL/g)).toHaveLength(1);
+  });
 });

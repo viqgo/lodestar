@@ -94,6 +94,42 @@ describe("store deleted lessons", () => {
   });
 });
 
+describe("store delete races", () => {
+  it("deleteSubject waits for a write in flight and nothing is resurrected", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-store-"));
+    const slow = await createStore(dir, {
+      ...fsp,
+      rename: async (from: string, to: string) => {
+        await new Promise((r) => setTimeout(r, 30));
+        return fsp.rename(from, to);
+      },
+    } as typeof fsp);
+    const write = slow.writeSubject(subject());
+    const del = slow.deleteSubject(subject().id);
+    await Promise.all([write, del]);
+    expect(await slow.readSubject(subject().id)).toBeNull();
+    expect(await fsp.readdir(path.join(dir, "subjects"))).toEqual([]);
+  });
+
+  it("a lesson deleted between the temp write and the rename is not recreated", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-store-"));
+    let del: Promise<void> = Promise.resolve();
+    let holder: Awaited<ReturnType<typeof createStore>> | null = null;
+    const hooked = await createStore(dir, {
+      ...fsp,
+      writeFile: async (...args: Parameters<typeof fsp.writeFile>) => {
+        await fsp.writeFile(...args);
+        if (holder && String(args[0]).includes(".tmp")) del = holder.deleteSession(session().id);
+      },
+    } as typeof fsp);
+    holder = hooked;
+    await hooked.writeSession(session());
+    await del;
+    expect(await hooked.readSession(session().id)).toBeNull();
+    expect(await fsp.readdir(path.join(dir, "sessions"))).toEqual([]);
+  });
+});
+
 const ki = (n: number, createdAt: string) => ({
   id: "k_0000000" + n + "-0000-0000-0000-000000000000",
   text: "t" + n,

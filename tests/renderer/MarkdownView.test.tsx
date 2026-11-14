@@ -44,4 +44,23 @@ describe("MarkdownView", () => {
     expect(imgs).toHaveLength(1);
     expect(imgs[0]?.getAttribute("src")).toBe("pic.png");
   });
+
+  it("remote images with tabs or backslashes are blocked", () => {
+    const sources = [
+      "<ht\ttps://example.com/a.png>",
+      "<\\\\example.com/b.png>",
+      "< //example.com/c.png>",
+      "https:\\\\example.com/d.png",
+    ];
+    for (const src of sources) {
+      const { container } = render(<MarkdownView markdown={"![x](" + src + ")"} />);
+      for (const img of Array.from(container.querySelectorAll("img"))) {
+        const seen = (img.getAttribute("src") ?? "")
+          .replace(/%09|%0A|%0D/gi, "")
+          .replace(/%5C/gi, "/")
+          .trim();
+        expect(seen).not.toMatch(/^(https?:)?\/\//i);
+      }
+    }
+  });
 });

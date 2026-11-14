@@ -19,6 +19,8 @@ import { createTurnRunner } from "./turn";
 import { createListener, speak } from "./voice/deepgram";
 import { createVoiceHub } from "./voice/hub";
 
+const devUrl = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL;
+
 export function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1200,
@@ -34,7 +36,6 @@ export function createWindow(): BrowserWindow {
     },
   });
   win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-  const devUrl = process.env.ELECTRON_RENDERER_URL;
   // block all navigation, except reloads of the dev server page while developing
   win.webContents.on("will-navigate", (e, url) => {
     if (!devUrl || !url.startsWith(devUrl)) e.preventDefault();
@@ -126,7 +127,7 @@ async function main(): Promise<void> {
       webContents === win.webContents &&
       !(details as { mediaTypes?: string[] }).mediaTypes?.includes("video"),
   );
-  if (!process.env.ELECTRON_RENDERER_URL) {
+  if (!devUrl) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({
         responseHeaders: {

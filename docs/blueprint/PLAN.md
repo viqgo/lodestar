@@ -149,7 +149,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T104 Build config
 - [x] T105 Build and check
 - [x] T106 User README
-- [ ] T106b Gate K fixes
+- [x] T106b Gate K fixes
 - [ ] GATE K Packaging
 - [ ] T107 Settings grow
 - [ ] T108 Method text

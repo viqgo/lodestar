@@ -74,10 +74,18 @@ export async function createStore(
   };
   let tmpCounter = 0;
 
-  const writeJsonAtomic = async (file: string, data: unknown): Promise<void> => {
+  const writeJsonAtomic = async (
+    file: string,
+    data: unknown,
+    skipRename?: () => boolean,
+  ): Promise<void> => {
     const tmp = file + "." + process.pid + "." + tmpCounter++ + ".tmp";
     try {
       await fs.writeFile(tmp, JSON.stringify(data, null, 2), "utf8");
+      if (skipRename?.()) {
+        await fs.rm(tmp, { force: true });
+        return;
+      }
       await fs.rename(tmp, file);
     } catch (err) {
       await fs.rm(tmp, { force: true });
@@ -169,7 +177,9 @@ export async function createStore(
   };
 
   const writeSession = (s: Session): Promise<void> =>
-    deleted.has(s.id) ? Promise.resolve() : writeJsonAtomic(fileFor(s.id), s);
+    deleted.has(s.id)
+      ? Promise.resolve()
+      : writeJsonAtomic(fileFor(s.id), s, () => deleted.has(s.id));
 
   const deleteSession = async (id: string): Promise<void> => {
     if (!ID.test(id)) return;
@@ -251,7 +261,7 @@ export async function createStore(
     for (const s of await listSessions()) {
       if (s.subjectId === id) await deleteSession(s.id);
     }
-    await fs.rm(subjectFile(id), { force: true });
+    await serial(subjectFile(id), () => fs.rm(subjectFile(id), { force: true }));
   };
 
   const knowledgeFile = path.join(dir, "knowledge.json");
