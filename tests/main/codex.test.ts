@@ -2,7 +2,15 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { createClaudeAdapter } from "../../src/main/cli/claude";
 import { createCodexAdapter, lastStderrLine, parseCodexEvents } from "../../src/main/cli/codex";
+import {
+  GEMINI_EXCLUDED_TOOLS,
+  createGeminiAdapter,
+  geminiExcluded,
+} from "../../src/main/cli/gemini";
+import { NO_OPTIONS } from "../../src/shared/clis";
+import type { RunOptions } from "../../src/shared/types";
 import { fakeSpawn, type FakePlan } from "../helpers/fakes";
 
 const lines = (text: string) => [
@@ -159,6 +167,94 @@ describe("run", () => {
     expect(call.opts.shell).toBe(false);
     expect(call.opts.cwd.endsWith("/work")).toBe(true);
     expect(call.opts.env.PATH).toContain("/opt/homebrew/bin");
+  });
+
+  it("codex_folder_keeps_read_only_flags", async () => {
+    const plain = make({ stdout: OK });
+    await plain.adapter.run(req());
+    const withDir = make({ stdout: OK });
+    await withDir.adapter.run({ ...req(), options: { ...NO_OPTIONS, readDirs: ["/m"] } });
+    const args = withDir.f.calls[0].args;
+    expect(args).toContain("--sandbox");
+    expect(args[args.indexOf("--sandbox") + 1]).toBe("read-only");
+    expect(args).not.toContain("--add-dir");
+    expect(args.filter((x) => !x.endsWith("schema.json"))).toEqual(
+      plain.f.calls[0].args.filter((x) => !x.endsWith("schema.json")),
+    );
+  });
+
+  it("codex_gets_images_by_flag", async () => {
+    const { adapter, f } = make({ stdout: OK });
+    await adapter.run({ ...req(), options: { ...NO_OPTIONS, images: ["/a.png", "/b.jpg"] } });
+    expect(f.calls[0].args.slice(-5)).toEqual(["-i", "/a.png", "-i", "/b.jpg", "-"]);
+  });
+
+  it("web_search_flags_per_cli (codex)", async () => {
+    const { adapter, f } = make({ stdout: OK });
+    await adapter.run({ ...req(), options: { ...NO_OPTIONS, webSearch: true } });
+    expect(f.calls[0].args.slice(0, 2)).toEqual(["--search", "exec"]);
+  });
+
+  it("model and effort become flags for each cli", async () => {
+    const o: RunOptions = { ...NO_OPTIONS, model: "m1", effort: "high" };
+    const codex = make({ stdout: OK });
+    await codex.adapter.run({ ...req(), options: o });
+    const a = codex.f.calls[0].args;
+    expect(a.slice(a.indexOf("--skip-git-repo-check") + 1)).toEqual([
+      "-m",
+      "m1",
+      "-c",
+      "model_reasoning_effort=high",
+      "-",
+    ]);
+    const claude = fakeSpawn({ stdout: "{}" });
+    await createClaudeAdapter({
+      spawn: claude.spawn,
+      env: { LEARN_CLAUDE_PATH: "/fake/claude", PATH: "" },
+      home: "/home/x",
+      tmpRoot: fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-")),
+      fs,
+    }).run({ ...req(), options: o });
+    expect(claude.calls[0].args.slice(-4)).toEqual(["--model", "m1", "--effort", "high"]);
+    const gemini = fakeSpawn({ stdout: "{}" });
+    await createGeminiAdapter({
+      spawn: gemini.spawn,
+      env: { LEARN_GEMINI_PATH: "/fake/gemini", PATH: "" },
+      home: "/home/x",
+      tmpRoot: fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-")),
+      fs,
+    }).run({ ...req(), options: o });
+    expect(gemini.calls[0].args.slice(-2)).toEqual(["-m", "m1"]);
+  });
+
+  it("no_cli_ever_gets_write_tools", async () => {
+    for (const readDirs of [[], ["/m"]]) {
+      for (const webSearch of [false, true]) {
+        const options: RunOptions = { ...NO_OPTIONS, readDirs, webSearch };
+        const codex = make({ stdout: OK });
+        await codex.adapter.run({ ...req(), options });
+        expect(codex.f.calls[0].args).toContain("read-only");
+        expect(codex.f.calls[0].args).not.toContain("--add-dir");
+        const claude = fakeSpawn({ stdout: "{}" });
+        await createClaudeAdapter({
+          spawn: claude.spawn,
+          env: { LEARN_CLAUDE_PATH: "/fake/claude", PATH: "" },
+          home: "/home/x",
+          tmpRoot: fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-")),
+          fs,
+        }).run({ ...req(), options });
+        const args = claude.calls[0].args;
+        const tools = args[args.indexOf("--tools") + 1];
+        for (const bad of ["Write", "Edit", "Bash", "NotebookEdit", "WebFetch"]) {
+          expect(tools).not.toContain(bad);
+        }
+        const ex = geminiExcluded(options);
+        for (const t of ["run_shell_command", "write_file", "replace"]) {
+          expect(ex).toContain(t);
+        }
+        expect(GEMINI_EXCLUDED_TOOLS).toContain("run_shell_command");
+      }
+    }
   });
 
   it("run returns the message and usage", async () => {

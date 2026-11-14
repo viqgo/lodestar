@@ -1,6 +1,7 @@
 import path from "node:path";
+import { NO_OPTIONS } from "../../shared/clis";
 import { STDERR_MAX } from "../../shared/limits";
-import type { DetectResult, RunRequest, RunResult } from "../../shared/types";
+import type { DetectResult, RunOptions, RunRequest, RunResult } from "../../shared/types";
 import type { CliAdapter } from "./adapter";
 import {
   detectVersion,
@@ -29,6 +30,16 @@ export const GEMINI_EXCLUDED_TOOLS = [
   "list_mcp_resources",
   "read_mcp_resource",
 ];
+
+const GEMINI_READ_TOOLS = ["read_file", "read_many_files", "glob", "grep_search", "list_directory"];
+
+export function geminiExcluded(o: RunOptions): string[] {
+  return GEMINI_EXCLUDED_TOOLS.filter(
+    (t) =>
+      !(o.readDirs.length > 0 && GEMINI_READ_TOOLS.includes(t)) &&
+      !(o.webSearch && t === "google_web_search"),
+  );
+}
 
 export function extractJsonObject(text: string): string | null {
   const start = text.indexOf("{");
@@ -101,9 +112,20 @@ export function createGeminiAdapter(deps: ProcessDeps): CliAdapter {
       return detectVersion(deps, command());
     },
     async run(req: RunRequest): Promise<RunResult> {
+      const o = req.options ?? NO_OPTIONS;
       const r = await runProcess(deps, {
         command: command(),
-        args: () => ["-p", "", "-o", "json", "--approval-mode", "plan", "--skip-trust"],
+        args: () => [
+          "-p",
+          "",
+          "-o",
+          "json",
+          "--approval-mode",
+          "plan",
+          "--skip-trust",
+          ...o.readDirs.flatMap((d) => ["--include-directories", d]),
+          ...(o.model ? ["-m", o.model] : []),
+        ],
         stdin: geminiPrompt(req.prompt, req.schema),
         signal: req.signal,
         timeoutMs: req.timeoutMs,
@@ -111,7 +133,7 @@ export function createGeminiAdapter(deps: ProcessDeps): CliAdapter {
           deps.fs.mkdirSync(path.join(d.work, ".gemini"));
           deps.fs.writeFileSync(
             path.join(d.work, ".gemini", "settings.json"),
-            JSON.stringify({ tools: { exclude: GEMINI_EXCLUDED_TOOLS } }),
+            JSON.stringify({ tools: { exclude: geminiExcluded(o) } }),
           );
         },
       });

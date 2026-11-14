@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { createCodexAdapter } from "../../src/main/cli/codex";
 import { createGeminiAdapter } from "../../src/main/cli/gemini";
 import { createClaudeAdapter, parseClaudeResult } from "../../src/main/cli/claude";
+import { NO_OPTIONS } from "../../src/shared/clis";
 import { fakeSpawn, type FakePlan } from "../helpers/fakes";
 
 const SAMPLE = JSON.stringify({
@@ -89,6 +90,33 @@ describe("claude adapter", () => {
     expect(call.opts.shell).toBe(false);
     expect(call.stdin).toBe("PROMPT");
     expect(call.opts.cwd.endsWith("/work")).toBe(true);
+  });
+
+  it("claude_folder_adds_read_tools_and_dir", async () => {
+    const { adapter, f } = make({ stdout: SAMPLE });
+    await adapter.run({ ...req(), options: { ...NO_OPTIONS, readDirs: ["/m", "/att"] } });
+    const a = f.calls[0].args;
+    expect(a[a.indexOf("--tools") + 1]).toBe("Read,Glob,Grep");
+    const i = a.indexOf("--disable-slash-commands");
+    expect(a.slice(i + 1)).toEqual([
+      "--allowed-tools",
+      "Read,Glob,Grep",
+      "--add-dir",
+      "/m",
+      "--add-dir",
+      "/att",
+    ]);
+  });
+
+  it("web_search_flags_per_cli (claude)", async () => {
+    const { adapter, f } = make({ stdout: SAMPLE });
+    await adapter.run({ ...req(), options: { ...NO_OPTIONS, webSearch: true } });
+    const a = f.calls[0].args;
+    expect(a[a.indexOf("--tools") + 1]).toBe("WebSearch");
+    expect(a.slice(a.indexOf("--disable-slash-commands") + 1)).toEqual([
+      "--allowed-tools",
+      "WebSearch",
+    ]);
   });
 
   it("claude adapter drops the Claude Code env markers", async () => {

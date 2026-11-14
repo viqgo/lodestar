@@ -1,4 +1,5 @@
 import path from "node:path";
+import { NO_OPTIONS } from "../../shared/clis";
 import type { DetectResult, RunRequest, RunResult, Usage } from "../../shared/types";
 import type { CliAdapter } from "./adapter";
 import {
@@ -48,11 +49,13 @@ export function createCodexAdapter(deps: ProcessDeps): CliAdapter {
       return detectVersion(deps, command());
     },
     async run(req: RunRequest): Promise<RunResult> {
+      const o = req.options ?? NO_OPTIONS;
       const r = await runProcess(deps, {
         command: command(),
         prepare: (d) =>
           deps.fs.writeFileSync(path.join(d.root, "schema.json"), JSON.stringify(req.schema)),
         args: (d) => [
+          ...(o.webSearch ? ["--search"] : []),
           "exec",
           "--json",
           "--output-schema",
@@ -61,6 +64,9 @@ export function createCodexAdapter(deps: ProcessDeps): CliAdapter {
           "--sandbox",
           "read-only",
           "--skip-git-repo-check",
+          ...(o.model ? ["-m", o.model] : []),
+          ...(o.effort ? ["-c", "model_reasoning_effort=" + o.effort] : []),
+          ...o.images.flatMap((i) => ["-i", i]),
           "-",
         ],
         stdin: req.prompt,

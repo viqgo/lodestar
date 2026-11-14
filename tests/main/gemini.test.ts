@@ -7,8 +7,10 @@ import {
   createGeminiAdapter,
   extractJsonObject,
   geminiErrorMessage,
+  geminiExcluded,
   geminiPrompt,
 } from "../../src/main/cli/gemini";
+import { NO_OPTIONS } from "../../src/shared/clis";
 import { fakeSpawn, type FakePlan } from "../helpers/fakes";
 
 const AUTH_ERROR =
@@ -101,6 +103,44 @@ describe("gemini adapter", () => {
     expect(call.args).toEqual(["-p", "", "-o", "json", "--approval-mode", "plan", "--skip-trust"]);
     expect(call.opts.shell).toBe(false);
     expect(call.opts.cwd.endsWith("/work")).toBe(true);
+  });
+
+  async function runWith(options: object) {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-"));
+    const f = fakeSpawn({ stdout: '{"response":"{}"}' });
+    let seen: any = null;
+    const spawn = ((cmd: string, args: string[], opts: any) => {
+      seen = JSON.parse(fs.readFileSync(path.join(opts.cwd, ".gemini", "settings.json"), "utf8"));
+      return f.spawn(cmd, args, opts);
+    }) as any;
+    const adapter = createGeminiAdapter({
+      spawn,
+      env: { LEARN_GEMINI_PATH: "/fake/gemini", PATH: "" },
+      home: "/home/x",
+      tmpRoot,
+      fs,
+    });
+    await adapter.run({ ...req(), options: { ...NO_OPTIONS, ...options } });
+    return { args: f.calls[0].args, excluded: seen.tools.exclude as string[] };
+  }
+
+  it("gemini_folder_includes_dir_and_unexcludes_read_tools", async () => {
+    const { args, excluded } = await runWith({ readDirs: ["/m"] });
+    expect(args.slice(-2)).toEqual(["--include-directories", "/m"]);
+    for (const t of ["read_file", "read_many_files", "glob", "grep_search", "list_directory"]) {
+      expect(excluded).not.toContain(t);
+    }
+    for (const t of ["run_shell_command", "write_file", "replace", "google_web_search"]) {
+      expect(excluded).toContain(t);
+    }
+    expect(excluded).toEqual(geminiExcluded({ ...NO_OPTIONS, readDirs: ["/m"] }));
+  });
+
+  it("web_search_flags_per_cli (gemini)", async () => {
+    const { args, excluded } = await runWith({ webSearch: true });
+    expect(excluded).not.toContain("google_web_search");
+    expect(excluded).toContain("read_file");
+    expect(args).toEqual(["-p", "", "-o", "json", "--approval-mode", "plan", "--skip-trust"]);
   });
 
   it("gemini_writes_tool_exclusion_settings", async () => {

@@ -1,3 +1,4 @@
+import { NO_OPTIONS } from "../../shared/clis";
 import { STDERR_MAX } from "../../shared/limits";
 import type { DetectResult, RunRequest, RunResult, Usage } from "../../shared/types";
 import type { CliAdapter } from "./adapter";
@@ -57,6 +58,11 @@ export function createClaudeAdapter(deps: ProcessDeps): CliAdapter {
       return detectVersion(deps, command());
     },
     async run(req: RunRequest): Promise<RunResult> {
+      const o = req.options ?? NO_OPTIONS;
+      const tools = [
+        ...(o.readDirs.length > 0 ? ["Read", "Glob", "Grep"] : []),
+        ...(o.webSearch ? ["WebSearch"] : []),
+      ].join(",");
       const r = await runProcess(deps, {
         command: command(),
         args: () => [
@@ -66,12 +72,16 @@ export function createClaudeAdapter(deps: ProcessDeps): CliAdapter {
           "--json-schema",
           JSON.stringify(req.schema),
           "--tools",
-          "",
+          tools,
           "--setting-sources",
           "",
           "--strict-mcp-config",
           "--no-session-persistence",
           "--disable-slash-commands",
+          ...(tools ? ["--allowed-tools", tools] : []),
+          ...o.readDirs.flatMap((d) => ["--add-dir", d]),
+          ...(o.model ? ["--model", o.model] : []),
+          ...(o.effort ? ["--effort", o.effort] : []),
         ],
         stdin: req.prompt,
         signal: req.signal,
