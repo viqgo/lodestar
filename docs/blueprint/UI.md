@@ -98,8 +98,9 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 | Plan panel | "Lesson map" |
 | Thinking | "Thinking…", "Stop" |
 | Stopped | "Stopped." + "Retry" |
+| Interrupted lesson | "The last reply did not arrive." with button "Retry" (info banner; added by D31) |
 | Errors | "The model gave an unusable reply. Press Retry."; "Codex failed: <detail>"; "This lesson no longer exists."; "Could not save. Check free disk space."; button "Retry" |
-| Lesson summary | "Lesson complete"; "<n> items added to your knowledge list." and, when any step is shaky, " <m> step is still shaky." / " <m> steps are still shaky." |
+| Lesson summary | the summary text is shown as normal prose above a block that holds the label "Lesson complete" and (D31);  "<n> items added to your knowledge list." and, when any step is shaky, " <m> step is still shaky." / " <m> steps are still shaky." |
 | Delete lesson | "Delete this lesson? This cannot be undone."; "Cancel", "Delete" |
 | Knowledge | title "Knowledge"; "What you have shown you understand. Later lessons start from here."; "Deleted lesson" when the source is gone; empty text above |
 

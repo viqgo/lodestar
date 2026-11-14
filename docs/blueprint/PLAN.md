@@ -38,7 +38,24 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T19 Evals against real Codex
 - [x] T19b Gate B fixes (CR-1)
 - [x] GATE B A lesson runs headless against real Codex
-- [ ] T20-T37 Stage C (outline)
+- [ ] T20 IPC handlers
+- [ ] T21 Preload bridge and main wiring
+- [ ] T22 Component styles
+- [ ] T23 Turning a lesson into things to draw
+- [ ] T24 Stable option shuffling
+- [ ] T25 The plan as Mermaid text
+- [ ] T26 Banner, ThinkingBar, ConfirmDialog
+- [ ] T27 MarkdownView with math
+- [ ] T28 QuestionCard
+- [ ] T29 ChatItemView
+- [ ] T30 PlanPanel
+- [ ] T31 useLesson
+- [ ] T32 Sidebar, CliGate, time helpers
+- [ ] T33 NewLessonForm
+- [ ] T34 LessonScreen
+- [ ] T35 KnowledgeScreen
+- [ ] T36 App wiring
+- [ ] T37 README
 - [ ] GATE C A full lesson in the window
 
 Conventions used in every task:
@@ -1220,30 +1237,835 @@ The builder stops here. Nothing continues until the owner says so.
 
 ---
 
-## Stage C - the window (outline; planned in detail after Gate B)
+## Stage C - the window
 What the owner can see working at the end: start a lesson in the app, answer questions, see the map fill in, finish, and find the learned items on the Knowledge screen; quit mid-lesson and resume.
 
-| Task | Delivers | Files | Behaviors / tests |
-|------|----------|-------|-------------------|
-| T20 | IPC handlers (`registerIpc`): all 11 channels, `session:updated`, `turn:ended` | `src/main/ipc.ts`, `tests/main/ipc.test.ts` | B2, B14, B16, B17, B18; `delete_session_needs_confirm` (main part), `knowledge_listed_newest_first_with_source` |
-| T21 | Preload bridge and main wiring (store, adapter, runner, CSP, `LEARN_DATA_DIR`) | `src/preload/index.ts`, `src/main/index.ts` | B20; app still starts |
-| T22 | Component styles copied from `ui-template.html` | `src/renderer/src/styles/app.css` | UI.md tokens and components |
-| T23 | `buildItems` | `src/renderer/src/lib/view.ts` + test | B3, B4, B8 (grades) |
-| T24 | `shuffledOrder` | `src/renderer/src/lib/shuffle.ts` + test | B8 (stable shuffle) |
-| T25 | `planToMermaid` | `src/renderer/src/lib/planGraph.ts` + test | B6; `plan_map_marks_states` |
-| T26 | `Banner`, `ThinkingBar`, `ConfirmDialog` | three components + tests | B12, B13, B17 |
-| T27 | `MarkdownView` with KaTeX; proves math renders under the CSP | component + test | removes one `unverified` item |
-| T28 | `QuestionCard` | component + test | B3, B8; `probe_card_collects_reasoning_and_confidence`, `choice_check_graded_by_app` (display) |
-| T29 | `ChatItemView` | component + test | B4, B10 |
-| T30 | `PlanPanel` with Mermaid and the plain-list fallback; proves Mermaid renders under the CSP | component + test | B6; removes one `unverified` item |
-| T31 | `useLesson` | `src/renderer/src/lib/useLesson.ts` + test | B14, B16; `resume_shows_pending_question`, `resume_offers_retry_for_interrupted_call` |
-| T32 | `Sidebar`, `CliGate` | components + tests | B1, B16, B17; `sessions_listed_newest_first` (display), `delete_session_needs_confirm` |
-| T33 | `NewLessonForm` | component + test | B2 |
-| T34 | `LessonScreen` | component + test | B6, B12, B13, B14 |
-| T35 | `KnowledgeScreen` | component + test | B18 |
-| T36 | `App` wiring and screen switching | `src/renderer/src/App.tsx` + test | all screens reachable |
-| T37 | `README.md`: what it is, requirements, how to run, how lessons are stored | `README.md` | - |
-| GATE C | full lesson by hand in the window, side by side with `ui-template.html` | - | every B-number walked once |
+Planned on 2026-11-14 against the code as it exists after Gate B (decision D31). Test counts below assume 125 passing at the start of T20.
+
+Conventions for every Stage C task (in addition to the ones at the top):
+- Renderer tests live in `tests/renderer/<Name>.test.tsx`. Their first two lines are `// @vitest-environment jsdom` and `import "../helpers/dom";` (created in T26). Tests use `@testing-library/react` (`render`, `screen`), `@testing-library/user-event` (`userEvent.setup()`), and `window.api` fakes from `installApi` (created in T26).
+- Components are named exports in `src/renderer/src/components/<Name>.tsx`. They import types from `../../../shared/types` and never import `electron`. Markup uses only the CSS classes that exist in `docs/blueprint/ui-template.html`.
+- Text shown to the user is copied from `docs/blueprint/UI.md` "Copy" (plus the three additions listed in D31). Never reword.
+- A task that adds a component also adds its tests in the same task; the failing run before the code is shown as in earlier tasks. "Run tests" expected counts are the whole suite.
+
+### T20 - IPC handlers
+
+**Implements**: B2, B14, B16, B17, B18 (main side) · `registerIpc` and all 11 channels · decisions D15, D31
+**Depends on**: T18, T16
+
+**Context**
+- `registerIpc` is created here for the first time. Deps shape (from ARCHITECTURE): `{ ipcMain: Pick<Electron.IpcMain, "handle">; adapter: CliAdapter; store: Store; turns: TurnRunner; now: () => string; newId: (prefix: "s" | "k") => string; send: (channel: string, ...args: unknown[]) => void }`. Import `type { IpcMain } from "electron"` (type-only: fine in tests).
+- Existing: `deriveState`, `validateNewLesson`, `checkAnswer` in `src/core/engine.ts`; `Store` in `src/main/store.ts` (`listSessions`, `readSession`, `writeSession`, `deleteSession`, `readKnowledge`, `deleteKnowledge`); `TurnRunner` in `src/main/turn.ts` (`advance`, `stop`, `isRunning`); types `Answer`, `Session`, `SessionSummary`, `KnowledgeView`, `TurnResult` in `src/shared/types.ts`.
+- Handlers receive `(event, ...args)` in Electron; write each as `ipcMain.handle(channel, (_event, ...) => ...)`.
+- In tests the fake is `const handlers = new Map<string, (...a: any[]) => any>(); const ipcMain = { handle: (c: string, f: (...a: any[]) => any) => { handlers.set(c, f); } };` and a handler is called as `await handlers.get("sessions:get")!(null, id)`. Real store in a temp dir (as in `store.test.ts`), `turns` is a fake object `{ advance: vi.fn(async (id) => ({ ok: true, session })), stop: vi.fn(), isRunning: vi.fn(() => false) }`, `send` is `vi.fn()`, `now: () => "2026-03-03T00:00:00.000Z"`, `newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000"`.
+
+**Files**
+- Create: `src/main/ipc.ts`, `tests/main/ipc.test.ts`
+- Do NOT touch any other file. Do NOT add channels beyond the 11 below.
+
+**Steps**
+
+1. Create `tests/main/ipc.test.ts` with 15 tests:
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | cli:detect passes the adapter result through | adapter whose `detect` resolves `{ ok: true, version: "1.2.3" }` | handler result equals that |
+   | sessions:list returns summaries newest first | store holds `session()` variants with ids ending 1, 2 and `updatedAt` 2026-01-01 and 2026-01-02, event lists `[]` and `[act(A.probe())]` | `[{ id: ...2, topic: "T", phase: "probe", updatedAt: ... }, { id: ...1, ... }]` (exactly these four keys) |
+   | sessions:list leaves out a lesson that cannot be read | one good session and one with events `[pick(1)]` (derive throws) | only the good one is listed |
+   | sessions:create rejects bad input | `{ topic: "", goal: "g" }` | `{ ok: false, message: "Enter a topic and a goal." }` and `listSessions()` is empty |
+   | sessions:create stores a trimmed lesson | `{ topic: "  Maths ", goal: " Limits " }` | `{ ok: true, session }` where `session` equals `{ version: 1, id: "s_00000001-0000-0000-0000-000000000000", topic: "Maths", goal: "Limits", cli: "codex", createdAt: NOW, updatedAt: NOW, events: [] }` and the same object is in the store |
+   | sessions:get returns a lesson or null | existing id; unknown id `"s_99999999-0000-0000-0000-000000000000"` | the session; `null` |
+   | sessions:delete stops the turn and removes the lesson | write a session, call with its id | `turns.stop` called with the id; `readSession` is `null` afterwards |
+   | lesson:advance runs the turn and announces the result | `turns.advance` resolves `R = { ok: true, session }` | handler returns `R`; `send` called with `("turn:ended", id, R)` |
+   | lesson:answer refuses while a turn runs | `turns.isRunning` returns true | `{ ok: false, error: { kind: "busy", message: "A reply is already on the way." }, session: null }`; `turns.advance` not called |
+   | lesson:answer reports a missing lesson | unknown id | `{ ok: false, error: { kind: "not_found", message: "This lesson no longer exists." }, session: null }` |
+   | lesson:answer rejects an invalid answer | session `[act(A.probe())]`, answer `{ choiceIndex: null, text: null, reasoning: null, confidence: null }` | `error` equals `{ kind: "invalid_answer", message: "Pick an option." }`; stored events unchanged; `turns.advance` not called |
+   | lesson:answer saves the answer, announces it, then advances | session `[act(A.probe())]`, answer `{ choiceIndex: 1, text: null, reasoning: "r", confidence: "sure" }` | stored session has 2 events and the second equals `{ kind: "answer", at: NOW, answer }`; `send` first call is `("session:updated", <that session>)`; `turns.advance` called once with the id; handler returns `turns.advance`'s result; `send` second call is `("turn:ended", id, result)` |
+   | lesson:stop and lesson:running pass through | `turns.isRunning` returns true | `lesson:running` handler returns `true`; `lesson:stop` handler calls `turns.stop(id)` |
+   | knowledge:list names the source lesson | knowledge items for an existing lesson (topic "T") and for a deleted one; both added with `addKnowledge` | the view items carry `lessonTopic: "T"` and `lessonTopic: null`, newest first |
+   | knowledge:delete removes the item | `addKnowledge([ki])`, call with its id | `readKnowledge()` is empty |
+2. Run tests. Expected: `ipc.test.ts` fails to import. Paste.
+3. Create `src/main/ipc.ts` exporting `registerIpc(deps)` registering exactly these channels (name, arguments, behavior):
+   - `cli:detect` () -> `adapter.detect()`
+   - `sessions:list` () -> sessions from `store.listSessions()` mapped to `{ id, topic, phase, updatedAt }` where `phase = deriveState(events).phase`; a session for which `deriveState` throws is left out
+   - `sessions:create` (`input: { topic: string; goal: string }`) -> `validateNewLesson`; on a message return `{ ok: false, message }`; else write and return `{ ok: true, session }` (fields trimmed; `id = newId("s")`; `version: 1`, `cli: "codex"`, `createdAt = updatedAt = now()`, `events: []`)
+   - `sessions:get` (`id`) -> `store.readSession(id)`
+   - `sessions:delete` (`id`) -> `turns.stop(id)`, then `store.deleteSession(id)`
+   - `lesson:advance` (`id`) -> `const result = await turns.advance(id); send("turn:ended", id, result); return result;`
+   - `lesson:answer` (`id`, `answer: Answer`) -> in this order: `turns.isRunning(id)` -> busy result; `readSession` null -> not_found result; `checkAnswer(deriveState(session.events), answer)` message -> `{ ok: false, error: { kind: "invalid_answer", message }, session }`; then write `{ ...session, updatedAt: now(), events: [...session.events, { kind: "answer", at: now(), answer }] }`, `send("session:updated", thatSession)`, then the same two lines as `lesson:advance`
+   - `lesson:stop` (`id`) -> `turns.stop(id)`; `lesson:running` (`id`) -> `turns.isRunning(id)`
+   - `knowledge:list` () -> `store.readKnowledge()` mapped to `{ ...item, lessonTopic }` where `lessonTopic` is the topic of the session whose id equals `item.sessionId`, or `null`
+   - `knowledge:delete` (`id`) -> `store.deleteKnowledge(id)`
+   Messages for busy and not_found are exactly those in SPEC / the table above. No `any` in `src/`.
+4. Run tests. Expected: `Tests  140 passed (140)`. Run `npm run format && npm run lint && npm run typecheck`: exit 0. Paste.
+5. Tick T20, then `git add -A && git commit -m "feat: ipc handlers"`.
+
+**Stop and report instead of continuing if** tests fail after two attempts, or you need a file or channel not named here.
+
+### T21 - Preload bridge and main wiring
+
+**Implements**: B20 (main side) · `window.api` (preload) and `main()` · decisions D15, D17, D23
+**Depends on**: T20
+
+**Context**
+- `src/preload/index.ts` is currently `export {};`. `src/main/index.ts` has `createWindow()` and a `main()` that only awaits `app.whenReady()`, calls `createWindow()` and registers `window-all-closed`.
+- Channels and argument shapes are exactly those of T20. `Api` is in `src/shared/types.ts`.
+- Production Content-Security-Policy via a response header only reaches pages served over http(s). Milestone 1 runs only through `npm run dev`, where the policy is intentionally off. The code below is added because the blueprint asks for it; it takes effect when the renderer is later served over a custom protocol (packaging milestone).
+
+**Files**
+- Modify: `src/preload/index.ts`, `src/main/index.ts`
+- Create: `tests/preload/index.test.ts`
+- Do NOT touch any other file.
+
+**Steps**
+
+1. Create `tests/preload/index.test.ts` with 3 tests. Before each: `vi.resetModules()` and `vi.doMock("electron", ...)` returning `{ contextBridge: { exposeInMainWorld: expose }, ipcRenderer: { invoke, on, removeListener } }` (all `vi.fn()`; `invoke` resolves `"R"`), then `await import("../../src/preload/index")`. `api` is `expose.mock.calls[0][1]`.
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | preload exposes the api under window.api | import | `expose` called once with first argument `"api"`; `api` has exactly the 13 keys of `Api` (`detectCli, listSessions, createSession, getSession, deleteSession, advance, answer, stop, isRunning, listKnowledge, deleteKnowledge, onSessionUpdated, onTurnEnded`) |
+   | each method calls its channel with its arguments | call each of the 11 request methods with sample arguments (`createSession({ topic: "t", goal: "g" })`, `getSession("a")`, `deleteSession("a")`, `advance("a")`, `answer("a", ANSWER)`, `stop("a")`, `isRunning("a")`, `deleteKnowledge("k")`, `detectCli()`, `listSessions()`, `listKnowledge()`) | `invoke` was called, in this order, with channels `cli:detect`, `sessions:list`, `sessions:create`, `sessions:get`, `sessions:delete`, `lesson:advance`, `lesson:answer`, `lesson:stop`, `lesson:running`, `knowledge:list`, `knowledge:delete` with the same arguments after the channel; each call resolves `"R"` |
+   | event subscriptions return an unsubscribe | `const off = api.onSessionUpdated(cb)`; take the handler from `on.mock.calls[0]` and call it as `handler({}, SESSION)`; then `off()`. Same for `onTurnEnded` with `handler({}, "id", RESULT)` | `on` was called with `"session:updated"`; `cb` received `SESSION`; `removeListener` called with `"session:updated"` and that same handler; the turn-ended callback received `("id", RESULT)` and channel is `"turn:ended"` |
+2. Run tests. Expected: 3 failed (preload exposes nothing). Paste.
+3. Write `src/preload/index.ts`: `import { contextBridge, ipcRenderer } from "electron";`, build `const api: Api = { ... }` mapping each method to `ipcRenderer.invoke(<channel>, ...args)` (typed returns via `as Promise<...>`), `onSessionUpdated(cb)` and `onTurnEnded(cb)` registering `ipcRenderer.on(channel, handler)` and returning `() => { ipcRenderer.removeListener(channel, handler); }`, then `contextBridge.exposeInMainWorld("api", api);`.
+4. Replace `main()` in `src/main/index.ts` with:
+   ```ts
+   async function main(): Promise<void> {
+     await app.whenReady();
+     const dataDir = process.env.LEARN_DATA_DIR ?? app.getPath("userData");
+     const store = await createStore(dataDir, fsp);
+     const adapter = createCodexAdapter({ spawn, env: process.env, home: os.homedir(), tmpRoot: os.tmpdir(), fs });
+     let win: BrowserWindow | null = null;
+     const send = (channel: string, ...args: unknown[]): void => {
+       win?.webContents.send(channel, ...args);
+     };
+     const now = (): string => new Date().toISOString();
+     const newId = (prefix: "s" | "k"): string => prefix + "_" + randomUUID();
+     const turns = createTurnRunner({ adapter, store, now, newId, notify: (s) => send("session:updated", s) });
+     registerIpc({ ipcMain, adapter, store, turns, now, newId, send });
+     if (!process.env.ELECTRON_RENDERER_URL) {
+       session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+         callback({
+           responseHeaders: {
+             ...details.responseHeaders,
+             "Content-Security-Policy": ["default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:"],
+           },
+         });
+       });
+     }
+     win = createWindow();
+     app.on("window-all-closed", () => app.quit());
+   }
+   ```
+   Add the imports (`ipcMain`, `session` from `electron`; `spawn` from `node:child_process`; `* as fs from "node:fs"`; `* as fsp from "node:fs/promises"`; `os` from `node:os`; `randomUUID` from `node:crypto`; `createStore`, `createCodexAdapter`, `createTurnRunner`, `registerIpc`). Keep `createWindow` as it is.
+5. Run `npm test`: `Tests  143 passed (143)`. Run `npm run format && npm run lint && npm run typecheck && npm run build`: all exit 0. Paste.
+6. Smoke run: `D=$(mktemp -d) && (LEARN_DATA_DIR=$D npm run dev > "$D/out.log" 2>&1 & echo $! > "$D/pid"); sleep 10; pkill -f "electron-vite" ; pkill -f "\.lodestar/node_modules/electron"; ls "$D"; grep -ci "error" "$D/out.log"` (a window may flash on screen for ten seconds). Expected: `ls` lists `sessions` (it proves `main()` ran `createStore`) and the `grep -ci` count is `0`. Paste the commands and output.
+7. Tick T21, then `git add -A && git commit -m "feat: preload bridge and main wiring"`.
+
+**Stop and report instead of continuing if**
+- step 6 shows no `sessions` folder or any "error" line (paste `out.log`),
+- `ipcMain` or `contextBridge` types do not typecheck as written (paste the error; do not use `any`),
+- tests fail after two attempts.
+
+### T22 - Component styles
+
+**Implements**: UI.md tokens and components · decision D10
+**Depends on**: T2
+
+**Context**
+- `docs/blueprint/ui-template.html` has one `<style>` block with these sections: TOKENS (already copied to `tokens.css` in T2), BASE, TOKEN SWATCHES, COMPONENTS (`.label` through `.map-edge`, `.dialog`, `.summary`) and SCREENS (`.screen`, `.sidebar`, `.content`, `.plan`, `.k-row`). The app uses the COMPONENTS and SCREENS rules; the page-documentation rules (`main.doc`, `h1.doc`, `h2.doc`, `.note` stays, `.row`, `.state`, `.swatch`) are not copied.
+- `src/renderer/src/styles/app.css` currently holds the three base rules from T2.
+
+**Files**
+- Modify: `src/renderer/src/styles/app.css`
+- Create: `tests/renderer/styles.test.ts`
+- Do NOT touch `tokens.css`. Do NOT add any color, font size or spacing that is not a `var(--...)` token.
+
+**Steps**
+
+1. Create `tests/renderer/styles.test.ts` (no jsdom needed) with 1 test:
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | app.css uses no raw colors | read `src/renderer/src/styles/app.css` with `fs.readFileSync` | `/#[0-9a-fA-F]{3,8}\b/.test(css)` is `false` and `/rgba?\(/.test(css)` is `false` |
+2. Run tests. Expected: 1 passes (the file has no colors yet): this test guards the copy, it is not expected to fail first. Say so in the report.
+3. Append to `app.css`, copied character for character from `ui-template.html`: the `.note` rule, then every rule from `/* COMPONENTS */` down to and including `.summary ul`, then the SCREENS rules (not `.screen`, which is written below) `.sidebar`, `.sidebar .list`, `.content`, `.content > *`, `.content h3`, `.content p`, `.plan`, `.plan .label`, `.k-row`. Skip `.swatch`, `.row`, `.state`, `main.doc`, `h1.doc`, `h2.doc` and the `.screen` rule. Then add these new rules (they are the only new ones):
+   ```css
+   .screen { display: grid; grid-template-columns: var(--sidebar-width) minmax(0, 1fr) auto; height: 100%; min-height: 0; }
+   .plan { width: var(--plan-width); }
+   .sidebar, .content, .plan { min-height: 0; overflow-y: auto; }
+   .option { position: relative; }
+   .option input { position: absolute; opacity: 0; }
+   .option input:focus-visible + i { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+   .btn:focus-visible, .segment:focus-visible, .icon-btn:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
+   .overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--color-bg) 85%, transparent); }
+   ```
+   (the layout is a three-column grid; the third column is `auto`, so it takes no space when no plan panel is rendered.)
+4. Run `npm test` (`Tests  144 passed (144)`), `npm run format && npm run lint && npm run typecheck && npm run build`: exit 0. Paste.
+5. Tick T22, then `git add -A && git commit -m "feat: component styles from the template"`.
+
+**Stop and report if** the build fails on the CSS, or a rule in the template you were told to copy is missing.
+
+### T23 - Turning a lesson into things to draw
+
+**Implements**: B3, B4, B8 (display) · `buildItems`, `ChatItem` · decision D14
+**Depends on**: T10
+
+**Context**
+- `ChatItem` is exactly:
+  ```ts
+  export type ChatItem =
+    | { kind: "text"; key: string; markdown: string }
+    | { kind: "probe_summary"; key: string; known: string[]; goal: string }
+    | { kind: "plan_notice"; key: string; count: number }
+    | { kind: "question"; key: string; eventIndex: number; purpose: "probe" | "predict" | "check";
+        question: Question; answer: Answer | null; grade: Verdict | null };
+  ```
+- Fixtures: `A`, `act`, `pick`, `say`, `session`, `toTeach`, `toCheck`, `choiceQ`, `textQ` (`tests/helpers/fixtures.ts`). `Answer`, `Question`, `Verdict`, `Session` from `src/shared/types.ts`.
+
+**Files**
+- Create: `src/renderer/src/lib/view.ts`, `tests/renderer/view.test.ts` (no jsdom needed)
+- Do NOT touch any other file.
+
+**Steps**
+
+1. Create `tests/renderer/view.test.ts` with 8 tests. `keys(items)` = `items.map((i) => i.kind)`.
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | an empty lesson has nothing to draw | `buildItems(session([]))` | `[]` |
+   | a pending probe question has no answer | `buildItems(session([act(A.probe())]))` | one item equal to `{ kind: "question", key: "e0-q", eventIndex: 0, purpose: "probe", question: choiceQ, answer: null, grade: null }` |
+   | an answered probe carries its answer and no grade | `[act(A.probe()), pick(1)]` | the question item has `answer` equal to `pick(1).answer` and `grade` `null` |
+   | probe_done becomes a probe summary | `buildItems(session(toPlan))` | last item equals `{ kind: "probe_summary", key: "e2-ps", known: ["k1"], goal: "g" }` |
+   | a plan becomes a plan notice | `buildItems(session(toTeach))` | last item equals `{ kind: "plan_notice", key: "e3-pn", count: 2 }` |
+   | explain gives feedback, explanation, then the check, graded by the app | events `[...toTeach, act({ ...A.predict("n1"), feedback: "Nice" }), say(), act({ ...A.explain("n1"), feedback: "Good" }), pick(1)]` | the items after the plan notice are exactly the five listed under the table |
+   | a text check is graded by the next verdict | `[...toTeach, ...toCheck("n1", textQ), say(), act(A.predict("n2", "pass"))]` | the check question item has `grade` `"pass"`; with `"fail"` in place of `"pass"` (`A.explain("n1", choiceQ, "fail")` as the next action) it is `"fail"` |
+   | lesson_done gives feedback and the summary | `[...toTeach, ...toCheck("n1"), pick(1), ...toCheck("n2"), pick(1), act({ ...A.done(), feedback: "Well done" })]` | the last two items are `{ kind: "text", key: "e<i>-fb", markdown: "Well done" }` then `{ kind: "text", key: "e<i>-sum", markdown: "s" }` |
+   For the sixth test (explain), the items after the plan notice are, in order: a `text` item with markdown `"Nice"` (key `"e4-fb"`), a `question` item (key `"e4-q"`, purpose `"predict"`, answered by `say()`, grade `null`), a `text` item `"Good"` (key `"e6-fb"`), a `text` item `"m"` (key `"e6-md"`), a `question` item (key `"e6-q"`, purpose `"check"`, answer `pick(1).answer`, grade `"pass"`). Index numbers are positions in the events array (`toTeach` is events 0 to 3).
+2. Run tests. Expected: `view.test.ts` fails to import. Paste.
+3. Create `src/renderer/src/lib/view.ts`: `export type ChatItem` (as above) and `export function buildItems(session: Session): ChatItem[]`. Rules:
+   - go through `session.events` by index `i`;
+   - an `action` event produces, in order: a `text` item (key `` `e${i}-fb` ``) for a non-empty `feedback` when the action type has that field; then by type: `probe` -> question item (key `e${i}-q`, purpose `"probe"`); `probe_done` -> `probe_summary` (key `e${i}-ps`); `plan` -> `plan_notice` (key `e${i}-pn`, `count = nodes.length`); `predict` -> question item (purpose `"predict"`); `explain` -> `text` item (key `e${i}-md`, `markdown`) then question item (purpose `"check"`, question = `check`); `lesson_done` -> `text` item (key `e${i}-sum`, `markdown = summary`);
+   - question items start with `eventIndex: i`, `answer: null`, `grade: null`;
+   - an `answer` event fills the most recent question item that is still unanswered: `answer = event.answer`; and `grade` = for `purpose === "check"` with `question.kind === "choice"`, `"pass"` when `answer.choiceIndex === question.correctIndex` else `"fail"`; otherwise `null`;
+   - when an `action` event carries `verdict` non-null and the most recent answered check question is a `text` question with `grade === null`, set that question's `grade` to the verdict.
+4. Run tests. Expected: `Tests  152 passed (152)`. Run `npm run format && npm run lint && npm run typecheck`: exit 0. Paste.
+5. Tick T23, then `git add -A && git commit -m "feat: turn a lesson into chat items"`.
+
+**Stop and report if** tests fail after two attempts.
+
+### T24 - Stable option shuffling
+
+**Implements**: B8 (shuffle) · `shuffledOrder`
+**Depends on**: T3
+
+**Context**: the order must be the same every time a card is drawn (the card is redrawn on every update), but different between questions. Code is given exactly because the generator choice is a judgment call.
+
+**Files**
+- Create: `src/renderer/src/lib/shuffle.ts`, `tests/renderer/shuffle.test.ts`
+
+**Steps**
+
+1. Create `tests/renderer/shuffle.test.ts` with 5 tests:
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | shuffledOrder is a permutation | `shuffledOrder("a:1", 6)` | sorted copy equals `[0,1,2,3,4,5]` |
+   | shuffledOrder is stable for a seed | two calls with `"a:1"`, 5 | equal |
+   | shuffledOrder differs between seeds | the orders for seeds `"s:0"` to `"s:9"` with n = 5 | at least 2 distinct orders |
+   | shuffledOrder handles 0 and 1 | `shuffledOrder("x", 0)`, `shuffledOrder("x", 1)` | `[]`, `[0]` |
+   | shuffledOrder does not always keep the order | seeds `"s:0"` to `"s:9"`, n = 4 | at least one result differs from `[0,1,2,3]` |
+2. Run tests (fails to import). Paste.
+3. Create `src/renderer/src/lib/shuffle.ts`:
+   ```ts
+   function hash(seed: string): number {
+     let h = 2166136261;
+     for (let i = 0; i < seed.length; i++) {
+       h ^= seed.charCodeAt(i);
+       h = Math.imul(h, 16777619);
+     }
+     return h >>> 0;
+   }
+   function mulberry32(a: number): () => number {
+     return () => {
+       a = (a + 0x6d2b79f5) | 0;
+       let t = Math.imul(a ^ (a >>> 15), 1 | a);
+       t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+       return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+     };
+   }
+   export function shuffledOrder(seed: string, n: number): number[] {
+     const order = Array.from({ length: n }, (_, i) => i);
+     const rand = mulberry32(hash(seed));
+     for (let i = n - 1; i > 0; i--) {
+       const j = Math.floor(rand() * (i + 1));
+       [order[i], order[j]] = [order[j]!, order[i]!];
+     }
+     return order;
+   }
+   ```
+4. Run tests: `Tests  157 passed (157)`; format, lint, typecheck exit 0. Paste.
+5. Tick T24, then `git add -A && git commit -m "feat: stable option shuffling"`.
+
+**Stop and report if** the third or fifth test fails with this generator (paste the orders; do not change the tests).
+
+### T25 - The plan as Mermaid text
+
+**Implements**: B6 · `planToMermaid`
+**Depends on**: T3, T2
+
+**Context**
+- `PlanNode = { id; title; deps }`, `NodeState = { status: "todo" | "passed" | "shaky"; fails }` (`src/shared/types.ts`).
+- The class colors must equal the tokens (`src/renderer/src/styles/tokens.css`): surface `#17181a`, border `#2c2d31`, text `#ececec`, accent `#e8b84a`, success `#6fcf8e`. Mermaid needs literal colors in its text; this file is the one place in `src/renderer` allowed to contain hex values, and a test keeps them equal to the tokens.
+- Node ids inside Mermaid are `n0`, `n1`, ... (the index in the plan), never the model's ids.
+
+**Files**
+- Create: `src/renderer/src/lib/planGraph.ts`, `tests/renderer/planGraph.test.ts`
+
+**Steps**
+
+1. Create `tests/renderer/planGraph.test.ts` with 6 tests (`PLAN` has `n1`, `n2 <- n1`; `todo`, `passed`, `shaky` are `{ status, fails: 0 }`):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | planToMermaid draws nodes and edges | `planToMermaid(PLAN, { n1: todo, n2: todo }, null)` split into lines | line 0 is `"graph TD"`; contains `'  n0["One"]:::todo'`, `'  n1["Two"]:::todo'` and `"  n0 --> n1"` |
+   | the current node gets the current class | same with `currentNodeId` `"n1"` | contains `'  n0["One"]:::current'` and `'  n1["Two"]:::todo'` |
+   | passed and shaky nodes carry a symbol and their class | `{ n1: passed, n2: shaky }`, current null | contains `'  n0["✓ One"]:::passed'` and `'  n1["~ Two"]:::shaky'` |
+   | titles are escaped | a node titled `Say "hi" <b>` | its line is `'  n0["Say #quot;hi#quot; #lt;b#gt;"]:::todo'` |
+   | class colors equal the design tokens | every `#rrggbb` found in the output | each one appears in `tokens.css` (read with `fs`), case-insensitive |
+   | node ids do not leak into the graph | plan ids `"a-b"`, `"c-d"` | output contains no `"a-b"` and no `"c-d"` |
+2. Run tests (fails to import). Paste.
+3. Create `src/renderer/src/lib/planGraph.ts` exporting `planToMermaid(plan: PlanNode[], nodes: Record<string, NodeState>, currentNodeId: string | null): string`. The output is these lines joined with `"\n"`, in this order:
+   - `graph TD`
+   - one line per node, in plan order: `` `  n${i}["${label}"]:::${cls}` `` where `label` is the title escaped (`"` -> `#quot;`, `<` -> `#lt;`, `>` -> `#gt;`) with a prefix `"✓ "` for `passed` or `"~ "` for `shaky`; `cls` is `"current"` when the node id equals `currentNodeId` and its status is `todo`, otherwise its status (`"todo"`, `"passed"`, `"shaky"`);
+   - one line per dependency: `` `  n${indexOf(dep)} --> n${i}` ``, nodes in plan order, deps in listed order (a dep id not found is skipped);
+   - these four fixed lines at the end:
+     ```
+       classDef todo fill:#17181a,stroke:#2c2d31,color:#ececec
+       classDef current fill:#17181a,stroke:#e8b84a,stroke-width:2px,color:#e8b84a
+       classDef passed fill:#17181a,stroke:#6fcf8e,color:#ececec
+       classDef shaky fill:#17181a,stroke:#e8b84a,stroke-dasharray:4 3,color:#ececec
+     ```
+4. Run tests: `Tests  163 passed (163)`; format, lint, typecheck exit 0. Paste.
+5. Tick T25, then `git add -A && git commit -m "feat: plan to mermaid text"`.
+
+**Stop and report if** tests fail after two attempts.
+
+### T26 - Banner, ThinkingBar, ConfirmDialog (and the test helper)
+
+**Implements**: B12, B13, B14, B17 (display) · UI.md components Banner, Thinking bar, Confirm dialog
+**Depends on**: T22
+
+**Context**: template markup to match (`docs/blueprint/ui-template.html`): `<div class="banner is-error"><span>…</span><button class="btn">Retry</button></div>`; `<div class="thinking"><span>Thinking…</span><button class="btn">Stop</button></div>`; `<div class="dialog"><p style="margin:0">…</p><div class="actions"><button class="btn">Cancel</button><button class="btn is-danger">Delete</button></div></div>` (the dialog sits centered over a dimmed window: wrap it in `<div className="overlay" role="presentation">`).
+
+**Files**
+- Create: `tests/helpers/dom.ts`, `src/renderer/src/components/Banner.tsx`, `ThinkingBar.tsx`, `ConfirmDialog.tsx`, `tests/renderer/Banner.test.tsx`, `ThinkingBar.test.tsx`, `ConfirmDialog.test.tsx`
+
+**Steps**
+
+1. Create `tests/helpers/dom.ts` exactly:
+   ```ts
+   import "@testing-library/jest-dom/vitest";
+   import { cleanup } from "@testing-library/react";
+   import { afterEach, vi } from "vitest";
+   import type { Api, Session, TurnResult } from "../../src/shared/types";
+
+   afterEach(cleanup);
+
+   /** Installs a fake window.api. Returns it with helpers to fire the two events. */
+   export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
+     const updated = new Set<(s: Session) => void>();
+     const ended = new Set<(id: string, r: TurnResult) => void>();
+     const busy: TurnResult = { ok: false, error: { kind: "busy", message: "A reply is already on the way." }, session: null };
+     const api = {
+       detectCli: vi.fn(async () => ({ ok: true, version: "0.0.0" })),
+       listSessions: vi.fn(async () => []),
+       createSession: vi.fn(async () => ({ ok: false, message: "unused" })),
+       getSession: vi.fn(async () => null),
+       deleteSession: vi.fn(async () => undefined),
+       advance: vi.fn(async () => busy),
+       answer: vi.fn(async () => busy),
+       stop: vi.fn(async () => undefined),
+       isRunning: vi.fn(async () => false),
+       listKnowledge: vi.fn(async () => []),
+       deleteKnowledge: vi.fn(async () => undefined),
+       onSessionUpdated: vi.fn((cb: (s: Session) => void) => {
+         updated.add(cb);
+         return () => updated.delete(cb);
+       }),
+       onTurnEnded: vi.fn((cb: (id: string, r: TurnResult) => void) => {
+         ended.add(cb);
+         return () => ended.delete(cb);
+       }),
+       ...over,
+     };
+     (window as unknown as { api: unknown }).api = api;
+     return {
+       api: api as unknown as Api & typeof api,
+       emitUpdated: (s: Session) => updated.forEach((cb) => cb(s)),
+       emitEnded: (id: string, r: TurnResult) => ended.forEach((cb) => cb(id, r)),
+       listenerCounts: () => ({ updated: updated.size, ended: ended.size }),
+     };
+   }
+   ```
+2. Create the three test files (9 tests; each file starts with `// @vitest-environment jsdom` and `import "../helpers/dom";`):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | Banner shows its message | `<Banner kind="error" message="Codex failed: x" />` | text present; the root has class `banner` and `is-error` |
+   | Banner action button calls back | `kind="info" message="Stopped." actionLabel="Retry" onAction={fn}`; click the "Retry" button | `fn` called once; root has `is-info` |
+   | Banner has no button without an action | `<Banner kind="error" message="m" />` | `queryByRole("button")` is null |
+   | ThinkingBar shows the text | `<ThinkingBar onStop={fn} />` | text `Thinking…` visible |
+   | ThinkingBar Stop calls back | click "Stop" | `fn` called once |
+   | ConfirmDialog shows message and labels | `message="Delete this lesson? This cannot be undone." confirmLabel="Delete"` | the message, a "Cancel" button and a "Delete" button |
+   | ConfirmDialog confirm calls back | click "Delete" | `onConfirm` called once, `onCancel` not called |
+   | ConfirmDialog cancel calls back | click "Cancel" | `onCancel` called once |
+   | ConfirmDialog Escape cancels | `userEvent.keyboard("{Escape}")` | `onCancel` called once |
+3. Run tests. Expected: the three new files fail to import. Paste.
+4. Create the components (named exports, markup per the template, classes `banner is-error|is-info`, `btn`, `thinking`, `overlay`, `dialog`, `actions`, `btn is-danger`):
+   - `Banner(props: { kind: "error" | "info"; message: string; actionLabel?: string; onAction?(): void })`: root `<div className={"banner is-" + kind} role={kind === "error" ? "alert" : "status"}>` with `<span>` and, only when both `actionLabel` and `onAction` are given, `<button className="btn" onClick={onAction}>`.
+   - `ThinkingBar(props: { onStop(): void })`.
+   - `ConfirmDialog(props: { message: string; confirmLabel: string; onConfirm(): void; onCancel(): void })`: `role="dialog"` `aria-modal="true"` on the `.dialog` element; a `useEffect` registers a `keydown` listener on `document` for `Escape` that calls `onCancel` and removes it on cleanup; the confirm button gets autofocus on mount (`ref` + `focus()` in an effect).
+5. Run tests: `Tests  172 passed (172)`; format, lint, typecheck exit 0. Paste.
+6. Tick T26, then `git add -A && git commit -m "feat: banner, thinking bar, confirm dialog"`.
+
+**Stop and report if** the jsdom environment or `@testing-library/jest-dom/vitest` import fails (this was checked once on 2026-11-14 and worked), or tests fail after two attempts.
+
+### T27 - MarkdownView with math
+
+**Implements**: lesson prose and math · `MarkdownView` · decision D5 (stack)
+**Depends on**: T26
+
+**Context**: `react-markdown` 10.1.0, `remark-math` 6.0.0, `rehype-katex` 7.0.1, `katex` 0.19.1 are installed. `react-markdown` does not render raw HTML by default; keep it that way (no `rehype-raw`, no `skipHtml` changes). The KaTeX stylesheet is `katex/dist/katex.min.css`.
+
+**Files**
+- Create: `src/renderer/src/components/MarkdownView.tsx`, `tests/renderer/MarkdownView.test.tsx`
+- Modify: `src/renderer/src/main.tsx` (one import line added)
+
+**Steps**
+
+1. Create `tests/renderer/MarkdownView.test.tsx` with 4 tests:
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | MarkdownView renders paragraphs | `markdown="Hello **world**"` | `strong` element with text `world` |
+   | MarkdownView renders inline math | `markdown="Slope $\\frac{a}{b}$ here"` | `container.querySelector(".katex")` is not null |
+   | MarkdownView renders display math | `markdown="$$x^2$$"` | `container.querySelector(".katex-display")` is not null |
+   | MarkdownView does not render raw HTML | `markdown="a <script>alert(1)</script> <b>b</b>"` | `container.querySelector("script")` is null and `container.querySelector("b")` is null |
+2. Run tests (fails to import). Paste.
+3. Create `MarkdownView.tsx`:
+   ```tsx
+   import ReactMarkdown from "react-markdown";
+   import rehypeKatex from "rehype-katex";
+   import remarkMath from "remark-math";
+
+   export function MarkdownView({ markdown }: { markdown: string }) {
+     return (
+       <div className="markdown">
+         <ReactMarkdown remarkPlugins={[remarkMath]} rehypePlugins={[rehypeKatex]}>
+           {markdown}
+         </ReactMarkdown>
+       </div>
+     );
+   }
+   ```
+   In `src/renderer/src/main.tsx` add `import "katex/dist/katex.min.css";` as the first import line.
+4. Run tests: `Tests  176 passed (176)`; format, lint, typecheck, `npm run build` exit 0. Paste.
+5. Tick T27, then `git add -A && git commit -m "feat: markdown view with math"`.
+
+**Stop and report if** the build fails on the CSS import or the fonts it references, or tests fail after two attempts.
+
+### T28 - QuestionCard
+
+**Implements**: B3, B8 (display) · `QuestionCard` · UI.md "Question card"; template section "question card"
+**Depends on**: T24, T26, T27
+
+**Context**
+- Props (exactly): `{ seed: string; purpose: "probe" | "predict" | "check"; question: Question; answer: Answer | null; grade: Verdict | null; disabled: boolean; onSubmit(a: Answer): void }`. `answer !== null` means the card is answered and read-only.
+- `shuffledOrder(seed, n)` in `src/renderer/src/lib/shuffle.ts`. `MarkdownView` in `./MarkdownView`. Types in `src/shared/types.ts`.
+- Copy (UI.md): labels `Probe` / `Predict` / `Check`; choice has no extra label; text field label `Your answer`, placeholder `Take a guess. This is not graded.` for predict and `Type your answer` for probe and check; reasoning label `Your thinking (optional)`, placeholder `Why do you think so?`; confidence buttons `Sure`, `Unsure`, `Guessing`; button `Submit`; grades `Correct`, `Not yet`.
+- Template markup: `<div class="card"><span class="label">Check</span><p class="prompt">…</p><div class="option is-selected"><i></i>text</div>…<div class="field"><label class="label">…</label><textarea …></textarea></div><div class="card-foot"><div class="segments"><button class="segment is-selected">Sure</button>…</div><button class="btn is-primary">Submit</button></div></div>`; answered: `<div class="option is-correct is-selected">`, `<div class="card-foot"><span class="grade is-pass">Correct</span><span></span></div>`.
+
+**Files**
+- Create: `src/renderer/src/components/QuestionCard.tsx`, `tests/renderer/QuestionCard.test.tsx`
+
+**Steps**
+
+1. Create `tests/renderer/QuestionCard.test.tsx` with 12 tests. `choiceQ` (options `["a","b","c"]`, correct index 1) and `textQ` come from fixtures. `renderCard(over)` renders `<QuestionCard seed="s:1" purpose="check" question={choiceQ} answer={null} grade={null} disabled={false} onSubmit={fn} {...over} />`. Option labels are found with `getByLabelText("a")` etc. (radio inputs).
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | shows the purpose label and the prompt | purpose `"probe"` | text `Probe` and `Pick` (the fixture prompt) visible |
+   | shows options in the shuffled order for its seed | `choiceQ`, seed `"s:1"` | the radio inputs' labels in DOM order equal `shuffledOrder("s:1", 3).map((i) => ["a","b","c"][i])` |
+   | submit needs a picked option and sends the original index | initially `Submit` is disabled; click option `"b"`; click `Submit` | `Submit` enabled after the pick; `onSubmit` called once with `{ choiceIndex: 1, text: null, reasoning: null, confidence: null }` |
+   | a text answer is required and trimmed | `question={textQ}`; `Submit` disabled; type `"  hello  "` in the `Your answer` field; click Submit | `onSubmit` called with `{ choiceIndex: null, text: "hello", reasoning: null, confidence: null }` |
+   | reasoning is sent when typed, null when blank | pick `"a"`, type `" because "` in `Your thinking (optional)`; Submit | `reasoning` is `"because"`; (second render without typing) `reasoning` is `null` |
+   | confidence buttons appear on probe only and toggle | `purpose="probe"` shows `Sure`, `Unsure`, `Guessing`; `purpose="check"` shows none; click `Sure` twice | after the first click `Sure` has class `is-selected`; after the second it does not |
+   | a probe confidence goes into the answer | probe, pick `"a"`, click `Unsure`, Submit | `confidence` is `"unsure"` |
+   | a predict card says it is not graded | `purpose="predict"`, `question={textQ}` | the answer field has placeholder `Take a guess. This is not graded.` |
+   | Cmd+Enter submits when enabled and not otherwise | pick `"a"`, then `userEvent.keyboard("{Meta>}{Enter}{/Meta}")` (focus on the card's textarea: first focus the reasoning field) ; and on a fresh render with nothing picked | first: `onSubmit` called once; second: not called |
+   | an answered passed check shows Correct | `answer` = pick(1).answer, `grade="pass"` | text `Correct`; option `b` has class `is-correct` and `is-selected`; no `Submit` button |
+   | an answered failed check shows Not yet | `answer` = pick(0).answer, `grade="fail"` | text `Not yet`; option `a` has class `is-wrong`; no `Submit` button |
+   | disabled disables everything | `disabled={true}` | all radio inputs, text areas and the `Submit` button are disabled |
+2. Run tests (fails to import). Paste.
+3. Create `QuestionCard.tsx` (named export `QuestionCard`). Behavior, in the markup order of the template:
+   - State: `picked: number | null` (original option index), `text`, `reasoning`, `confidence: Confidence | null`.
+   - Header `<span className="label">{LABEL[purpose]}</span>`, then `<div className="prompt"><MarkdownView markdown={question.prompt} /></div>`.
+   - Choice question: `<div role="radiogroup" className="options">`, and for each `i` of `shuffledOrder(seed, question.options.length)`: `<label className={...}><input type="radio" name={seed} checked={...} onChange={() => setPicked(i)} disabled={...} /><i /><MarkdownView markdown={question.options[i]!} /></label>`; class is `"option"` plus ` is-selected` for the picked (pending) or answered index (`answer.choiceIndex`), plus, when answered and `grade` is not null, ` is-correct` (pass) or ` is-wrong` (fail) on the selected option only. The accessible name of each radio must be the option text (the label wraps the input).
+   - Text question, pending: `<div className="field"><label className="label" htmlFor={id}>Your answer</label><textarea id={id} placeholder={...} /></div>`; answered: `<p>{answer.text}</p>`.
+   - Pending only: reasoning field (`label` `Your thinking (optional)`, placeholder `Why do you think so?`).
+   - Foot `<div className="card-foot">`: pending: on the left the confidence `<div className="segments">` for `purpose === "probe"` (else an empty `<span />`), on the right `<button className="btn is-primary" disabled={!canSubmit || disabled}>Submit</button>`; answered: a `<span className="grade is-pass">Correct</span>` / `<span className="grade is-fail">Not yet</span>` when `grade` is not null, else (probe answered with a confidence) `<span className="label">{Sure|Unsure|Guessing}</span>`, else `<span />`.
+   - `canSubmit`: choice -> `picked !== null`; text -> `text.trim() !== ""`.
+   - Submit builds `{ choiceIndex: picked or null, text: trimmed text or null, reasoning: trimmed or null (blank -> null), confidence }`. Cmd+Enter (`event.metaKey || event.ctrlKey`, key `Enter`) on the card's `onKeyDown` submits when `canSubmit && !disabled && answer === null`.
+   - When `disabled` or answered: every input, textarea and button is `disabled`.
+4. Run tests: `Tests  188 passed (188)`; format, lint, typecheck exit 0. Paste.
+5. Tick T28, then `git add -A && git commit -m "feat: question card"`.
+
+**Stop and report if** the template and these rules disagree on markup (quote both), or tests fail after two attempts.
+
+### T29 - ChatItemView
+
+**Implements**: B4, B10 (display) · `ChatItemView`
+**Depends on**: T23, T28
+
+**Context**: `ChatItem` is in `src/renderer/src/lib/view.ts`. Probe summary markup (template): `<div class="summary"><span class="label">What you already know</span><ul><li>…</li></ul><span class="label">Your goal</span><p>…</p></div>`. Plan notice: `<p class="note">Your path: <n> steps</p>` (`1` step is never possible: plans have 2 or more).
+
+**Files**
+- Create: `src/renderer/src/components/ChatItemView.tsx`, `tests/renderer/ChatItemView.test.tsx`
+
+**Steps**
+
+1. Create the test file with 5 tests (items built by hand; `sessionId` is `"s_1"`):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | a text item renders its markdown | `{ kind: "text", key: "k", markdown: "Hello **there**" }` | `strong` with `there` |
+   | a probe summary lists what is known and the goal | `{ kind: "probe_summary", key: "k", known: ["Slope is rise over run"], goal: "Explain limits" }` | `What you already know`, the list item, `Your goal`, `Explain limits` |
+   | a plan notice says how many steps | `{ kind: "plan_notice", key: "k", count: 4 }` | text `Your path: 4 steps` |
+   | a pending question can be answered | a question item (`choiceQ`, answer null, eventIndex 7), `disabled=false` | picking an option and Submit calls `onSubmit` once |
+   | an answered question is read-only | same item with an answer and `grade: "pass"` | no `Submit` button; text `Correct` |
+2. Run tests (fails to import). Paste.
+3. Create `ChatItemView.tsx`: `ChatItemView(props: { item: ChatItem; sessionId: string; disabled: boolean; onSubmit(a: Answer): void })`. A `switch` on `item.kind`: `text` -> `<MarkdownView>`; `probe_summary` / `plan_notice` as above; `question` -> `<QuestionCard seed={`${sessionId}:${item.eventIndex}`} purpose question answer grade disabled onSubmit />`.
+4. Run tests: `Tests  193 passed (193)`; format, lint, typecheck exit 0. Paste.
+5. Tick T29, then `git add -A && git commit -m "feat: chat item view"`.
+
+**Stop and report if** tests fail after two attempts.
+
+### T30 - PlanPanel
+
+**Implements**: B6 · `PlanPanel` · UI.md "Plan map"
+**Depends on**: T25, T26
+
+**Context**
+- Props: `{ plan: PlanNode[]; nodes: Record<string, NodeState>; currentNodeId: string | null }`. Heading `<span className="label">Lesson map</span>`.
+- Mermaid 12.3.0: `import("mermaid")` (load it lazily inside an effect), `mermaid.initialize({ startOnLoad: false, securityLevel: "strict", theme: "base", themeVariables: { ... } })` once, `const { svg } = await mermaid.render(id, text)`. Use these themeVariables (token values): `background: "#0e0e0f"`, `primaryColor: "#17181a"`, `primaryTextColor: "#ececec"`, `primaryBorderColor: "#2c2d31"`, `lineColor: "#8b8d93"`, `fontFamily: "system-ui, sans-serif"`.
+- Fallback: until the svg exists, and whenever rendering fails, show the plan as a plain list: `<ul>` with one `<li>` per node: the title, prefixed `✓ ` (passed), `~ ` (shaky) or `→ ` (current).
+- Tests mock mermaid: `vi.mock("mermaid", () => ({ default: { initialize: vi.fn(), render: vi.fn() } }))` and import the mocked default in the test to set `render` behavior.
+
+**Files**
+- Create: `src/renderer/src/components/PlanPanel.tsx`, `tests/renderer/PlanPanel.test.tsx`
+
+**Steps**
+
+1. Create the test file with 5 tests (`PLAN` and the `todo`/`passed` states from earlier fixtures; `mermaid.render` resolves `{ svg: '<svg data-testid="map"></svg>' }` unless said otherwise):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | PlanPanel shows its heading | render | text `Lesson map` |
+   | PlanPanel shows the plain list until the map is ready | render, check synchronously before awaiting | the titles `One` and `Two` are visible in a list |
+   | PlanPanel shows the drawn map when ready | `await findByTestId("map")` | the svg is in the document and the plain list is gone |
+   | PlanPanel draws what planToMermaid says | read `mermaid.render` mock | its second argument equals `planToMermaid(PLAN, nodes, "n1")` |
+   | PlanPanel falls back to the list when drawing fails | `mermaid.render` rejects | after `await waitFor(...)` the list is still shown with `✓ One` when `n1` is passed, and no svg exists |
+2. Run tests (fails to import). Paste.
+3. Create `PlanPanel.tsx`: state `svg: string | null`; an effect keyed on `planToMermaid(...)`'s text: `let cancelled = false`; `import("mermaid").then(async ({ default: mermaid }) => { initialize once (module-level flag); try { const { svg } = await mermaid.render("lh-plan-" + (++counter), text); if (!cancelled) setSvg(svg); } catch { if (!cancelled) setSvg(null); } })`; cleanup sets `cancelled = true`. Render the svg with `<div className="plan-map" dangerouslySetInnerHTML={{ __html: svg }} />` (safe because `securityLevel: "strict"`), else the list.
+4. Run tests: `Tests  198 passed (198)`; format, lint, typecheck, `npm run build` exit 0. Paste.
+5. Tick T30, then `git add -A && git commit -m "feat: plan panel with mermaid and fallback"`.
+
+**Stop and report if** `vi.mock("mermaid")` does not intercept the dynamic import (paste the error), or tests fail after two attempts.
+
+### T31 - useLesson
+
+**Implements**: B14, B16 · `useLesson`
+**Depends on**: T26 (helpers), T20 (channel semantics)
+
+**Context**
+- Signature: `useLesson(id: string, start: boolean): { session: Session | null; state: LessonState | null; busy: boolean; error: TurnError | null; submit(a: Answer): void; retry(): void; stop(): void }`.
+- `window.api` is the `Api` from `src/shared/types.ts`. `deriveState` is in `src/core/engine.ts`. Test helper `installApi` is in `tests/helpers/dom.ts`; hooks are tested with `renderHook` from `@testing-library/react` and `act`.
+- Rules: the lesson is loaded with `api.getSession(id)`; `busy` starts from `api.isRunning(id)`; `onSessionUpdated` events for other ids are ignored; `onTurnEnded` for other ids are ignored; a failed result with `error.kind === "busy"` is ignored; a rejected API call sets `error` to `{ kind: "cli", message: "Could not save. Check free disk space." }` and `busy` false.
+- `start === true` and no events -> call `api.advance(id)` once. Guard with a `useRef` flag so React StrictMode's double effect run starts only one call.
+
+**Files**
+- Create: `src/renderer/src/lib/useLesson.ts`, `tests/renderer/useLesson.test.tsx`
+- Modify: `src/renderer/src/vite-env.d.ts` (add the `window.api` type, below)
+
+**Steps**
+
+1. Replace `src/renderer/src/vite-env.d.ts` with:
+   ```ts
+   /// <reference types="vite/client" />
+   import type { Api } from "../../shared/types";
+
+   declare global {
+     interface Window {
+       api: Api;
+     }
+   }
+   ```
+2. Create the test file with 8 tests (a hook test component is not needed; use `renderHook(() => useLesson("s_1", false))` and `await waitFor`):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | useLesson loads the lesson and derives its state | `getSession` resolves `session([act(A.probe())])` | `result.current.session` is it and `state.awaiting.who` is `"learner"` |
+   | useLesson starts an empty lesson once | `session([])`, `start=true` | `api.advance` called exactly once with `"s_1"` |
+   | resume_does_not_send_anything_automatically | `session([act(A.probe()), pick(1)])` (reply missing), `start=false` | after loading, `api.advance` and `api.answer` were not called |
+   | useLesson shows a running turn as busy | `isRunning` resolves `true` | `busy` is `true` after loading |
+   | useLesson follows updates for its own lesson only | `emitUpdated(session with 1 more event)` for `s_1`; then for id `s_2` | the first replaces `session`; the second changes nothing |
+   | useLesson reports a failed turn and ignores busy | `emitEnded("s_1", { ok: false, error: { kind: "cli", message: "Codex failed: x" }, session })` then an ended result with `kind: "busy"` | after the first `error.message` is `"Codex failed: x"` and `busy` false; after the second `error` is unchanged |
+   | useLesson submit sends the answer and waits for the turn | `submit(ANSWER)` | `api.answer` called with `("s_1", ANSWER)`; `busy` true; after `emitEnded("s_1", { ok: true, session: S2 })` `busy` is false, `session` is `S2` and `error` is null |
+   | useLesson unsubscribes on unmount | `unmount()` | `listenerCounts()` is `{ updated: 0, ended: 0 }` |
+3. Run tests. Expected: the file fails to import. Paste.
+4. Create `useLesson.ts`: `useState` for session, busy, error; an effect on `[id]` that subscribes to both events and loads; `useMemo(() => (session ? deriveState(session.events) : null), [session])`; `submit` -> clear error, `setBusy(true)`, `api.answer(id, a).catch(onReject)`; `retry` -> clear error, `setBusy(true)`, `api.advance(id).catch(onReject)`; `stop` -> `api.stop(id)`. A turn result arrives through `onTurnEnded`; the promise returned by `answer`/`advance` is not used for state, only for the rejection case.
+5. Run tests: `Tests  206 passed (206)`; format, lint, typecheck exit 0. Paste.
+6. Tick T31, then `git add -A && git commit -m "feat: useLesson hook"`.
+
+**Stop and report if** tests fail after two attempts, or typecheck rejects the `Window.api` declaration (paste the error).
+
+### T32 - Sidebar, CliGate, small time helpers
+
+**Implements**: B1, B16, B17 (display) · `Sidebar`, `CliGate`, `relativeTime`, `phaseLabel` · decision D31 (new file `src/renderer/src/lib/time.ts`)
+**Depends on**: T26
+
+**Context**
+- Props (exactly): `Sidebar: { sessions: SessionSummary[]; activeId: string | null; onNew(): void; onOpen(id: string): void; onDelete(id: string): void; onKnowledge(): void; newDisabled: boolean }`; `CliGate: { cli: DetectResult | null; onRetry(): void }`.
+- Template markup (sidebar): `<div class="sidebar"><button class="btn is-primary">New lesson</button><span class="label">Lessons</span><div class="list">…rows…</div><button class="btn">Knowledge</button></div>`; row: `<div class="lesson-row is-active"><div><b>Topic</b><small>teaching · 2h ago</small></div><button class="icon-btn" aria-label="Delete lesson">×</button></div>`; empty text `<span class="note">No lessons yet.</span>`.
+- `SessionSummary = { id; topic; phase: Phase; updatedAt }`. Copy: Codex missing text is `Codex CLI not found. Install it and sign in, then press Retry.`; button `Retry`; delete dialog message `Delete this lesson? This cannot be undone.`, buttons `Cancel` / `Delete`.
+
+**Files**
+- Create: `src/renderer/src/lib/time.ts`, `src/renderer/src/components/Sidebar.tsx`, `src/renderer/src/components/CliGate.tsx`, `tests/renderer/time.test.ts`, `tests/renderer/Sidebar.test.tsx`, `tests/renderer/CliGate.test.tsx`
+
+**Steps**
+
+1. Create the tests (15 tests):
+
+   `time.test.ts` (5; `now = "2026-03-03T12:00:00.000Z"`):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | relativeTime says just now under a minute | `relativeTime("2026-03-03T11:59:30.000Z", now)` | `"just now"` |
+   | relativeTime counts minutes | 5 minutes earlier | `"5m ago"` |
+   | relativeTime counts hours | 2 hours earlier | `"2h ago"` |
+   | relativeTime counts days | 3 days earlier | `"3d ago"` |
+   | phaseLabel maps phases to words | `probe`, `plan`, `teach`, `done` | `"probing"`, `"planning"`, `"teaching"`, `"done"` |
+
+   `Sidebar.test.tsx` (7; `sessions` has `{ id: "s_1", topic: "Derivatives", phase: "teach", updatedAt: two hours before NOW }`; `NOW` is faked with `vi.setSystemTime` or by passing nothing and using `vi.useFakeTimers({ now })`):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | Sidebar shows the empty text | `sessions=[]` | `No lessons yet.` |
+   | Sidebar lists lessons with phase and age | the session above | `Derivatives` and `teaching · 2h ago` |
+   | Sidebar marks the active lesson | `activeId="s_1"` | the row has class `is-active` |
+   | Sidebar opens a lesson on click | click `Derivatives` | `onOpen` called with `"s_1"` |
+   | Sidebar deletes only after confirming | click the `Delete lesson` button; dialog shown with the message; click `Delete` | `onDelete` called with `"s_1"` once |
+   | Sidebar keeps the lesson when cancelled | click `Delete lesson`, then `Cancel` | `onDelete` not called and the dialog is gone |
+   | Sidebar buttons call back and respect newDisabled | click `New lesson`, `Knowledge`; then render with `newDisabled` | `onNew` and `onKnowledge` called once each; second render: `New lesson` disabled |
+
+   `CliGate.test.tsx` (3):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | detect_reports_missing_cli | `cli={ ok: false }` | the exact message and a `Retry` button; clicking it calls `onRetry` |
+   | CliGate is silent while checking | `cli={null}` | nothing rendered (`container` is empty) |
+   | CliGate is silent when Codex is found | `cli={ ok: true, version: "1.0.0" }` | nothing rendered |
+2. Run tests (three files fail to import). Paste.
+3. Implement:
+   - `time.ts`: `relativeTime(iso: string, nowIso: string): string` (seconds difference: `< 60` -> `"just now"`; `< 3600` -> `` `${m}m ago` ``; `< 86400` -> `` `${h}h ago` ``; else `` `${d}d ago` ``, all with floor); `phaseLabel(phase: Phase): string`.
+   - `Sidebar.tsx`: state `confirmId: string | null`; clicking a row (not the ×) calls `onOpen`; the × button has `aria-label="Delete lesson"`, calls `setConfirmId(id)` and does not open the lesson (`stopPropagation`); when `confirmId` is set render `<ConfirmDialog message="Delete this lesson? This cannot be undone." confirmLabel="Delete" onConfirm={() => { onDelete(confirmId); setConfirmId(null); }} onCancel={() => setConfirmId(null)} />`. The status line is `` `${phaseLabel(phase)} · ${relativeTime(updatedAt, new Date().toISOString())}` ``.
+   - `CliGate.tsx`: `if (cli === null || cli.ok) return null;` else `<Banner kind="error" message="Codex CLI not found. Install it and sign in, then press Retry." actionLabel="Retry" onAction={onRetry} />`.
+4. Run tests: `Tests  221 passed (221)`; format, lint, typecheck exit 0. Paste.
+5. Tick T32, then `git add -A && git commit -m "feat: sidebar, cli gate and time helpers"`.
+
+**Stop and report if** fake timers and `userEvent` do not work together (use `userEvent.setup({ advanceTimers: vi.advanceTimersByTime })`), or tests fail after two attempts.
+
+### T33 - NewLessonForm
+
+**Implements**: B2 (display) · `NewLessonForm`
+**Depends on**: T26 (helpers), T20
+
+**Context**
+- Props: `{ disabled: boolean; onCreated(session: Session): void }`. It calls `window.api.createSession({ topic, goal })`, which resolves `{ ok: true, session }` or `{ ok: false, message }`.
+- Copy: title `What do you want to learn?`; labels `Topic`, `Goal`; placeholders `e.g. Derivatives` and `e.g. Understand why the derivative is the slope of the tangent line`; button `Start`. Error text goes in `<small>` under the goal field (template: `.field small`, color danger).
+- Template markup (the part inside `.content`): `<h3>…</h3><div class="field"><label class="label">Topic</label><input …></div><div class="field"><label class="label">Goal</label><textarea …></textarea><small>…</small></div><div><button class="btn is-primary">Start</button></div>`. The component returns exactly these elements in a fragment; `App` supplies the `<div className="content">` around it (so the Codex banner can sit above the title).
+
+**Files**
+- Create: `src/renderer/src/components/NewLessonForm.tsx`, `tests/renderer/NewLessonForm.test.tsx`
+
+**Steps**
+
+1. Create the test file with 6 tests (`installApi` from `../helpers/dom`):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | NewLessonForm shows its title, labels and button | render | `What do you want to learn?`, fields labelled `Topic` and `Goal`, button `Start` |
+   | new_lesson_rejects_empty_fields | `createSession` resolves `{ ok: false, message: "Enter a topic and a goal." }`; click `Start` with empty fields | that text is shown and `onCreated` not called |
+   | NewLessonForm sends the typed values | type `Derivatives` and `Limits`, click `Start` | `createSession` called with `{ topic: "Derivatives", goal: "Limits" }` |
+   | NewLessonForm hands the created lesson on | `createSession` resolves `{ ok: true, session: S }` | `onCreated` called once with `S` |
+   | NewLessonForm moves to the goal on Enter | type in `Topic` then `{Enter}` | the `Goal` field has focus |
+   | NewLessonForm can be disabled | `disabled={true}` | both fields and `Start` are disabled |
+2. Run tests (fails to import). Paste.
+3. Create `NewLessonForm.tsx`: controlled fields, `error` state cleared on typing, `Start` click or Cmd+Enter in the goal field submits; return a fragment, with no `.content` wrapper.
+4. Run tests: `Tests  227 passed (227)`; format, lint, typecheck exit 0. Paste.
+5. Tick T33, then `git add -A && git commit -m "feat: new lesson form"`.
+
+**Stop and report if** tests fail after two attempts.
+
+### T34 - LessonScreen
+
+**Implements**: B6, B12, B13, B14, B16 · `LessonScreen` · UI.md "Lesson"; template "Lesson" screens
+**Depends on**: T23, T29, T30, T31, T26
+
+**Context**
+- Props: `{ id: string; start: boolean }`. Uses `useLesson`, `buildItems`, `ChatItemView`, `ThinkingBar`, `Banner`, `PlanPanel` and `learnedToSave` from `src/core/engine.ts`.
+- Layout (template): the component returns a fragment of two grid children of `.screen`: `<div className="content">` holding `<h3>{topic}</h3><p className="note">Goal: {goal}</p>`, the item list, then (when busy) `ThinkingBar`, then (when `error`) a `Banner`, then the finished block; and, only when `state.plan` exists, `<div className="plan">` holding `PlanPanel`. The sidebar belongs to `App` (T36), which renders the `.screen` grid.
+- Banner rules: `error.kind === "stopped"` -> `kind="info"`, message `Stopped.`, action `Retry`; `error.kind === "not_found"` -> error banner, no action; any other error -> error banner with its message and `Retry`. A lesson that was interrupted (no error, not busy, `state.awaiting.who === "model"`, `session.events.length > 0`) shows an info banner `The last reply did not arrive.` with `Retry` (D31). A lesson with no events and `start === false` shows nothing.
+- Finished block (phase `done`): `<div className="summary"><span className="label">Lesson complete</span><p className="note">{n} items added to your knowledge list.{shaky}</p></div>`, where `n` = `learnedToSave(state, lastLessonDoneAction).length`, and `shaky` is empty when no node is shaky, else `" 1 step is still shaky."` / `` ` ${m} steps are still shaky.` `` The finished block replaces the card and the thinking bar.
+- Cards are `disabled` while `busy`. `scrollIntoView` does not exist in jsdom: guard calls with `el?.scrollIntoView?.(...)`.
+
+**Files**
+- Create: `src/renderer/src/components/LessonScreen.tsx`, `tests/renderer/LessonScreen.test.tsx`
+
+**Steps**
+
+1. Create the test file with 10 tests. `installApi` provides `getSession` resolving the lesson under test; `S(events)` is `session(events)` from fixtures with topic `"T"` and goal `"G"`:
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | resume_shows_pending_question | `S([act(A.probe())])`, `start=false` | topic `T`, `Goal: G`, the question prompt, an enabled `Submit` after picking an option |
+   | LessonScreen starts a new lesson | `S([])`, `start=true` | `api.advance` called once |
+   | LessonScreen shows thinking and disables the card | `isRunning` resolves true, a pending probe | `Thinking…` visible and the options are disabled |
+   | LessonScreen Stop stops the turn | busy; click `Stop` | `api.stop` called with the id |
+   | LessonScreen shows a failed call and retries | `emitEnded` failed with `Codex failed: boom`; click `Retry` | the message is shown; `api.advance` called once more |
+   | LessonScreen shows Stopped with Retry | `emitEnded` failed with kind `"stopped"`, message `"Stopped."` | the text `Stopped.` and a `Retry` button |
+   | LessonScreen shows a missing lesson without Retry | `getSession` resolves `null`, then `emitEnded` with kind `"not_found"` | `This lesson no longer exists.` shown, no `Retry` button |
+   | resume_offers_retry_for_interrupted_call | `S([act(A.probe()), pick(1)])`, `start=false`, not busy | `The last reply did not arrive.` and `Retry`; `api.advance` not called |
+   | LessonScreen shows the map only once there is a plan | `S(toPlan)`; then `S(toTeach)` (mock `PlanPanel`'s mermaid as in T30 or `vi.mock("../../src/renderer/src/components/PlanPanel", ...)` to a stub with test id `plan`) | no plan panel for the first; `plan` test id present for the second |
+   | a finished lesson shows what was saved | events through `lesson_done` where `n1` passed and `n2` shaky (`[...toTeach, ...toCheck("n1"), pick(1), ...toCheck("n2"), pick(0), act(A.explain("n2")), pick(0), act(A.explain("n2")), pick(0), act(A.done())]`) | `Lesson complete`, `1 items added to your knowledge list.`, `1 step is still shaky.`, and no `Submit` button |
+   This task adds 10 tests. For the finished lesson, with one passed node the count text is `1 items added to your knowledge list.` (the copy is not pluralised; UI.md says `<n> items added to your knowledge list.`).
+2. Run tests (fails to import). Paste.
+3. Create `LessonScreen.tsx` per the context above. `useEffect` keyed on `items.length` scrolls an end-of-list `<div ref={endRef} />` into view.
+4. Run tests: `Tests  237 passed (237)`; format, lint, typecheck exit 0. Paste.
+5. Tick T34, then `git add -A && git commit -m "feat: lesson screen"`.
+
+**Stop and report if** tests fail after two attempts, or a SPEC message is needed that is not in `UI.md` or the Banner rules above (quote it).
+
+### T35 - KnowledgeScreen
+
+**Implements**: B18 · `KnowledgeScreen`
+**Depends on**: T32 (time helper), T26 (helpers)
+
+**Context**
+- No props. Loads `window.api.listKnowledge()` on mount (`KnowledgeView[]`, newest first). Copy: title `Knowledge`; intro `What you have shown you understand. Later lessons start from here.`; empty `Nothing here yet. Finish a lesson and what you learned will appear here.`; source `Deleted lesson` when `lessonTopic` is null. Template markup: `<div class="content"><h3>Knowledge</h3><p class="note">…</p><div><div class="k-row"><div>text<br><span class="label">Derivatives · 2h ago</span></div><button class="icon-btn" aria-label="Delete item">×</button></div>…</div></div>`.
+
+**Files**
+- Create: `src/renderer/src/components/KnowledgeScreen.tsx`, `tests/renderer/KnowledgeScreen.test.tsx`
+
+**Steps**
+
+1. Create the test file with 5 tests (items built as `{ id, text, sessionId: "s", nodeId: "n1", createdAt: <2h before now>, lessonTopic: "Derivatives" }`):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | KnowledgeScreen shows its title and intro | empty list | `Knowledge` and the intro sentence |
+   | KnowledgeScreen shows the empty text | `listKnowledge` resolves `[]` | the empty text, no list rows |
+   | knowledge_listed_newest_first_with_source | two items in the order returned by the API | rows in that order, each with `Derivatives · 2h ago` |
+   | KnowledgeScreen names a deleted lesson | `lessonTopic: null` | `Deleted lesson · 2h ago` |
+   | knowledge_item_deleted | click `Delete item` on the first row | `deleteKnowledge` called with its id, then `listKnowledge` called again and the row is gone |
+2. Run tests (fails to import). Paste.
+3. Create `KnowledgeScreen.tsx` with `useEffect` loading, a `reload()` function used after deleting (no confirmation, per SPEC B18).
+4. Run tests: `Tests  242 passed (242)`; format, lint, typecheck exit 0. Paste.
+5. Tick T35, then `git add -A && git commit -m "feat: knowledge screen"`.
+
+**Stop and report if** tests fail after two attempts.
+
+### T36 - App wiring
+
+**Implements**: all screens reachable · B1, B16, B17 · `App`
+**Depends on**: T32, T33, T34, T35
+
+**Context**
+- `src/renderer/src/App.tsx` currently returns `<main><h1>lodestar</h1></main>`.
+- State: `screen: { name: "new" } | { name: "lesson"; id: string; start: boolean } | { name: "knowledge" }` (starts `new`), `sessions: SessionSummary[]`, `cli: DetectResult | null`.
+- On mount: `api.detectCli()` -> `cli`; `api.listSessions()` -> `sessions`; subscribe `api.onSessionUpdated` to reload the list (and unsubscribe on unmount). `Retry` in `CliGate` sets `cli` to `null` and re-runs detect.
+- Layout: `<div className="screen"><Sidebar … />{content}</div>`, where `content` is: for `new`, `<div className="content"><CliGate … /><NewLessonForm … /></div>`; for `knowledge`, `<KnowledgeScreen />`; for `lesson`, `<LessonScreen key={id} id={id} start={start} />` (it returns its own `.content` and, when there is a plan, `.plan` as grid children). The Codex banner is therefore shown on the new lesson screen only, as in the template.
+- Deleting the lesson that is open returns to the `new` screen. Creating a lesson (`onCreated`) opens it with `start: true` and reloads the list. Opening one from the list uses `start: false`. `newDisabled` and `NewLessonForm`'s `disabled` are both `cli?.ok !== true`.
+
+**Files**
+- Modify: `src/renderer/src/App.tsx`
+- Create: `tests/renderer/App.test.tsx`
+- Do NOT touch any other file.
+
+**Steps**
+
+1. Create the test file with 7 tests (`installApi`; the lesson screen is real, with `getSession` resolving a lesson when needed):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | App starts on the new lesson screen | defaults | `What do you want to learn?` and `New lesson` enabled |
+   | App shows the Codex banner and disables New lesson | `detectCli` resolves `{ ok: false }` | the banner text and a disabled `New lesson` |
+   | App Retry checks for Codex again | the case above, then click `Retry` with `detectCli` now resolving `{ ok: true, version: "1" }` | banner gone, `New lesson` enabled |
+   | sessions_listed_newest_first (display) | `listSessions` resolves two summaries | rows appear in the order given |
+   | App opens a lesson from the list | click a row | its topic heading appears and `getSession` was called with its id; `advance` not called |
+   | App creating a lesson opens it and starts it | `createSession` resolves `{ ok: true, session: S }` (events `[]`), `getSession` resolves `S`; fill and click `Start` | the lesson heading appears and `advance` called once |
+   | delete_session_needs_confirm | open a lesson, click `Delete lesson`, click `Delete`; separately click `Delete lesson` then `Cancel` | after `Delete`: `deleteSession` called with the id and `What do you want to learn?` is shown again; after `Cancel`: `deleteSession` not called and the lesson stays open |
+2. Run tests (fails: App is a placeholder). Paste.
+3. Implement `App.tsx` as described.
+4. Run tests: `Tests  249 passed (249)`; format, lint, typecheck, `npm run build` exit 0. Paste.
+5. Tick T36, then `git add -A && git commit -m "feat: app wiring"`.
+
+**Stop and report if** tests fail after two attempts, or the three-column grid does not behave as the CSS in T22 says (describe the DOM you see).
+
+### T37 - README
+
+**Implements**: documentation · decisions D18, D31
+**Depends on**: T36
+
+**Files**
+- Create: `README.md`
+- Do NOT touch any other file.
+
+**Steps**
+
+1. Create `README.md` with exactly these sections and facts (plain prose, no marketing):
+   - `# lodestar` and one sentence: a desktop app that teaches one reasoning step at a time using the AI command line tool you already have; inspired by LearnHarness, which it does not copy.
+   - `## How a lesson works`: probe, plan, teach (predict, explain, check), finish; learned items are saved to a knowledge list that later lessons read.
+   - `## Requirements`: macOS (other systems untested); Node 26 and npm 11; the Codex CLI installed and signed in (`codex --version` works).
+   - `## Run it`: `npm ci`, then `npm run dev`. Add: if the window does not open and the log says `Electron uninstall`, run `node node_modules/electron/install.js` once (npm may skip Electron's own download).
+   - `## Your data`: lessons are JSON files under the app's data folder (`~/Library/Application Support/lodestar` on macOS, or `LEARN_DATA_DIR`); `LEARN_CODEX_PATH` points at a Codex binary in a non-standard place.
+   - `## What goes to the model`: each turn runs `codex exec` read-only in an empty temporary folder with the lesson so far; nothing else is sent.
+   - `## Development`: `npm test`, `npm run lint`, `npm run typecheck`, `npm run eval` (spends real Codex quota); the blueprint lives in `docs/blueprint/`.
+   - `## Status`: milestone 1 supports Codex only; Gemini CLI and Claude Code are planned.
+   - `## License`: MIT.
+2. Run `npm run format && npm run lint`: exit 0. Run `npm test`: `Tests  249 passed (249)`. Paste.
+3. Tick T37, then `git add -A && git commit -m "docs: readme"`.
+
+### GATE C - A full lesson in the window
+
+The builder stops here. Nothing continues until the owner says so.
+
+**Run**: `npm test` -> expect `Tests  249 passed (249)`; `npm run lint && npm run typecheck && npm run build` -> exit 0
+**Look at**: `git diff <gate-B-commit>..HEAD --stat` -> only `src/main/ipc.ts`, `src/main/index.ts`, `src/preload/`, `src/renderer/`, `tests/`, `README.md`, `PLAN.md`
+**Fresh review**: Fable reviews T20-T37 against SPEC, ARCHITECTURE, UI and `ui-template.html` (the reviewer prompt from `references/execution.md`, plus: compare each built screen's markup and classes to the template).
+**Try it yourself** (this is the first time the app does anything):
+1. `npm run dev`. The window shows the sidebar, "What do you want to learn?", and no Codex banner.
+2. Start a lesson on a topic you know a little about. Expect: Thinking… for about 10 seconds, then a probe question.
+3. Answer with and without the reasoning box and confidence. Expect: another question, up to 8, then "What you already know" and your goal, then "Your path: N steps" and the map on the right.
+4. Answer a predict and a check wrongly on purpose. Expect: "Not yet" and the same step explained again differently; after three misses the step is marked `~` and the lesson moves on.
+5. Finish. Expect: "Lesson complete" with the counts; open Knowledge and see the items.
+6. Quit the app mid-lesson (Cmd+Q), start it again, open the lesson. Expect: the pending question is shown again, or "The last reply did not arrive." with Retry.
+7. Try a formula in a topic (for example "the quadratic formula"). Expect: rendered math, not raw `$...$`.
+8. Compare any screen with `docs/blueprint/ui-template.html` side by side.
+**Explain it back**: "When you pressed Submit on a check, which functions ran, in order, from the card to the next question on screen?" (the answer is flow 2 in ARCHITECTURE.md)
+**Then decide**: milestone 2 (Gemini and Claude adapters) / raise a change request / ship as it is
+
 
 ## Milestone 2 - Gemini CLI and Claude Code (outline)
 Planned after Gate C. Each adapter implements `CliAdapter` (`detect`, `run`) and returns the same JSON reply.

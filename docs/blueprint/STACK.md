@@ -34,7 +34,8 @@ Not in milestone 1: electron-builder 26.18.0 (packaging), Gemini CLI and Claude 
 - A schema whose root is an object with one property `action` that is an `anyOf` of object variants (each with `additionalProperties: false`, every property listed in `required`, nullable fields typed as `["integer","null"]`) is accepted and obeyed.
 - Baseline overhead: 17,302 input tokens for a one-line prompt.
 
-Unverified:
+Unverified (updated 2026-11-14):
+- Mermaid and KaTeX under a strict Content-Security-Policy: milestone 1 runs only through `npm run dev`, where the policy is intentionally off, so this stays unverified until packaging. KaTeX and Mermaid rendering in jsdom and in the dev window are checked in T27, T30 and Gate C.
 - Mermaid and KaTeX rendering under Electron's sandboxed renderer with a strict Content Security Policy.
 - Whether Codex's per-call token overhead can be reduced by configuration.
 - Gemini CLI and Claude Code structured-output flags (milestone 2).

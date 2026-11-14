@@ -64,6 +64,7 @@ src/renderer/src/lib/view.ts         - turns a session into the list of things t
 src/renderer/src/lib/shuffle.ts      - stable option shuffling
 src/renderer/src/lib/planGraph.ts    - plan -> Mermaid text
 src/renderer/src/lib/useLesson.ts    - hook: load a lesson, submit, retry, stop
+src/renderer/src/lib/time.ts         - relativeTime, phaseLabel (D31)
 src/renderer/src/components/Sidebar.tsx
 src/renderer/src/components/CliGate.tsx
 src/renderer/src/components/NewLessonForm.tsx
@@ -88,6 +89,7 @@ tests/main/ipc.test.ts
 tests/renderer/*.test.tsx            - one per component with behavior
 tests/helpers/fixtures.ts            - sample actions and event lists
 tests/helpers/fakes.ts               - fake spawn and fake adapter
+tests/helpers/dom.ts                 - jest-dom setup and window.api fake for renderer tests (D31)
 tests/smoke.test.ts                  - proves the test runner works
 evals/loop.eval.ts                   - E1-E7 against real Codex
 ```
