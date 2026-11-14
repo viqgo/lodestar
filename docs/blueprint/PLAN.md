@@ -29,7 +29,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] GATE A The lesson rules work from the test suite
 - [x] T11 Finding the CLI on disk
 - [x] T12 Reading Codex output
-- [ ] T13 Codex adapter: detect
+- [x] T13 Codex adapter: detect
 - [ ] T14 Codex adapter: run
 - [ ] T15 Store: sessions
 - [ ] T16 Store: knowledge
