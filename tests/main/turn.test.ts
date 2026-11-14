@@ -14,7 +14,7 @@ const step = async (events: SessionEvent[], ...replies: Parameters<typeof fakeAd
   const f = fakeAdapter(...replies);
   const s = session(events);
   const result = await modelStep(
-    { adapter: f.adapter, knowledge: [] },
+    { adapter: f.adapter, knowledge: [], profile: "" },
     s,
     deriveState(events),
     new AbortController().signal,
@@ -278,5 +278,19 @@ describe("createTurnRunner", () => {
     const k = await store.readKnowledge();
     expect(k).toHaveLength(1);
     expect(k[0]!.text).toBe("t1");
+  });
+});
+
+describe("turn profile", () => {
+  it("turn passes the saved profile to the prompt", async () => {
+    const { store, f, runner } = await setup([], A.probe(), A.probe());
+    await store.writeProfile("Be brief.");
+    await runner.advance(ID);
+    expect(f.prompts[0]).toContain("Be brief.");
+    await store.writeProfile("Be long.");
+    await store.writeSession(session([]));
+    await runner.advance(ID);
+    expect(f.prompts[1]).toContain("Be long.");
+    expect(f.prompts[1]).not.toContain("Be brief.");
   });
 });

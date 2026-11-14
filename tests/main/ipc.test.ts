@@ -212,3 +212,23 @@ describe("ipc", () => {
     expect(await store.readKnowledge()).toEqual([]);
   });
 });
+
+describe("ipc profile", () => {
+  it("profile channels read and save", async () => {
+    const { store, call } = await setup();
+    await store.writeProfile("Be long.");
+    expect(await call("profile:get")).toBe("Be long.");
+    expect(await call("profile:save", "Be brief.")).toEqual({ ok: true });
+    expect(await call("profile:get")).toBe("Be brief.");
+  });
+
+  it("profile save refuses text over 2000 characters", async () => {
+    const { store, call } = await setup();
+    await store.writeProfile("Be brief.");
+    expect(await call("profile:save", "x".repeat(2001))).toEqual({
+      ok: false,
+      message: "Keep it under 2000 characters.",
+    });
+    expect(await store.readProfile()).toBe("Be brief.");
+  });
+});

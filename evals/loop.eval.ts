@@ -148,7 +148,7 @@ describe("evals", () => {
       const s = { ...base, events: c.events };
       const started = Date.now();
       const r = await modelStep(
-        { adapter, knowledge: [] },
+        { adapter, knowledge: [], profile: "" },
         s,
         deriveState(c.events),
         new AbortController().signal,

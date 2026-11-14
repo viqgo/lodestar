@@ -16,7 +16,7 @@ import type { CliAdapter } from "./cli/adapter";
 import type { Store } from "./store";
 
 export async function modelStep(
-  deps: { adapter: CliAdapter; knowledge: KnowledgeItem[] },
+  deps: { adapter: CliAdapter; knowledge: KnowledgeItem[]; profile: string },
   session: Session,
   state: LessonState,
   signal: AbortSignal,
@@ -25,7 +25,13 @@ export async function modelStep(
 > {
   let retryNote: string | null = null;
   for (let attempt = 1; attempt <= 2; attempt++) {
-    const prompt = buildPrompt({ session, state, knowledge: deps.knowledge, retryNote });
+    const prompt = buildPrompt({
+      session,
+      state,
+      knowledge: deps.knowledge,
+      retryNote,
+      profile: deps.profile,
+    });
     const run = await deps.adapter.run({
       prompt,
       schema: REPLY_JSON_SCHEMA,
@@ -88,8 +94,9 @@ export function createTurnRunner(deps: {
         const state = deriveState(session.events);
         if (state.awaiting.who !== "model") return { ok: true, session };
         const knowledge = await deps.store.readKnowledge();
+        const profile = await deps.store.readProfile();
         const step = await modelStep(
-          { adapter: deps.adapter, knowledge },
+          { adapter: deps.adapter, knowledge, profile },
           session,
           state,
           controller.signal,

@@ -65,7 +65,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T41 Evals for the reading
 - [x] GATE D A lesson with readings
 - [x] T42 Profile rules and prompt section (CR-4)
-- [ ] T43 Save, load and use the profile
+- [x] T43 Save, load and use the profile
 - [ ] T44 The Profile screen
 - [ ] GATE E Tutor profile in the window
 
@@ -2330,7 +2330,7 @@ What the owner can see at the end: a Profile screen where their instructions are
 **Depends on**: T42
 
 **Files**
-- Modify: `src/main/store.ts`, `src/main/turn.ts`, `src/main/ipc.ts`, `tests/main/store.test.ts`, `tests/main/turn.test.ts`, `tests/main/ipc.test.ts`
+- Modify: `src/main/store.ts`, `src/main/turn.ts`, `src/main/ipc.ts`, `evals/loop.eval.ts` (one line: pass `profile: ""` to `modelStep`), `tests/main/store.test.ts`, `tests/main/turn.test.ts`, `tests/main/ipc.test.ts`
 - Do NOT touch other files.
 
 **Steps**

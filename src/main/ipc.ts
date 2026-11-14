@@ -1,5 +1,5 @@
 import type { IpcMain } from "electron";
-import { checkAnswer, deriveState, validateNewLesson } from "../core/engine";
+import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
 import type { Answer, KnowledgeView, Session, SessionSummary, TurnResult } from "../shared/types";
 import type { CliAdapter } from "./cli/adapter";
 import type { Store } from "./store";
@@ -117,4 +117,17 @@ export function registerIpc(deps: IpcDeps): void {
   });
 
   ipcMain.handle("knowledge:delete", (_event, id: string) => store.deleteKnowledge(id));
+
+  ipcMain.handle("profile:get", () => store.readProfile());
+
+  ipcMain.handle("profile:save", async (_event, text: string) => {
+    const reason = validateProfile(text);
+    if (reason !== null) return { ok: false as const, message: reason };
+    try {
+      await store.writeProfile(text);
+      return { ok: true as const };
+    } catch {
+      return { ok: false as const, message: "Could not save. Check free disk space." };
+    }
+  });
 }

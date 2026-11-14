@@ -138,3 +138,21 @@ describe("store knowledge", () => {
     expect((await store.readKnowledge()).map((k) => k.text)).toEqual(["t1"]);
   });
 });
+
+describe("store profile", () => {
+  it("profile reads empty when no file exists", async () => {
+    const { dir, store } = await mk();
+    expect(await store.readProfile()).toBe("");
+    await fsp.writeFile(path.join(dir, "profile.json"), '{"instructions": 5}', "utf8");
+    expect(await store.readProfile()).toBe("");
+    await fsp.writeFile(path.join(dir, "profile.json"), "garbage", "utf8");
+    expect(await store.readProfile()).toBe("");
+  });
+
+  it("profile is saved and read back", async () => {
+    const { dir, store } = await mk();
+    await store.writeProfile("Be brief.");
+    expect(await store.readProfile()).toBe("Be brief.");
+    expect((await fsp.readdir(dir)).filter((n) => n.endsWith(".tmp"))).toEqual([]);
+  });
+});

@@ -10,6 +10,8 @@ export type Store = {
   readKnowledge(): Promise<KnowledgeItem[]>;
   addKnowledge(items: KnowledgeItem[]): Promise<void>;
   deleteKnowledge(id: string): Promise<void>;
+  readProfile(): Promise<string>;
+  writeProfile(text: string): Promise<void>;
 };
 
 const ID = /^[sk]_[0-9a-f-]{36}$/;
@@ -118,6 +120,24 @@ export async function createStore(
       );
     });
 
+  const profileFile = path.join(dir, "profile.json");
+
+  const readProfile = async (): Promise<string> => {
+    try {
+      const parsed: unknown = JSON.parse(await fs.readFile(profileFile, "utf8"));
+      const text =
+        typeof parsed === "object" && parsed !== null
+          ? (parsed as { instructions?: unknown }).instructions
+          : undefined;
+      return typeof text === "string" ? text : "";
+    } catch {
+      return "";
+    }
+  };
+
+  const writeProfile = (text: string): Promise<void> =>
+    serial(profileFile, () => writeJsonAtomic(profileFile, { instructions: text }));
+
   return {
     writeJsonAtomic,
     listSessions,
@@ -127,5 +147,7 @@ export async function createStore(
     readKnowledge,
     addKnowledge,
     deleteKnowledge,
+    readProfile,
+    writeProfile,
   };
 }
