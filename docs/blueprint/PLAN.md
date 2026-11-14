@@ -41,7 +41,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T20 IPC handlers
 - [x] T21 Preload bridge and main wiring
 - [x] T22 Component styles
-- [ ] T23 Turning a lesson into things to draw
+- [x] T23 Turning a lesson into things to draw
 - [ ] T24 Stable option shuffling
 - [ ] T25 The plan as Mermaid text
 - [ ] T26 Banner, ThinkingBar, ConfirmDialog
