@@ -48,6 +48,12 @@ const setup = async (
     isRunning: vi.fn(() => subjectRunning),
   };
   const send = vi.fn();
+  const secrets = {
+    has: vi.fn(async () => false),
+    get: vi.fn(async () => null),
+    set: vi.fn(async (): Promise<{ ok: true } | { ok: false; message: string }> => ({ ok: true })),
+    remove: vi.fn(async () => undefined),
+  };
   const adapter = { detect: vi.fn(async () => ({ ok: true as const, version: "1.2.3" })) };
   let n = 0;
   registerIpc({
@@ -60,9 +66,20 @@ const setup = async (
     newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000",
     send,
     dialogs,
+    secrets,
   });
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(null, ...args);
-  return { store, turns, subjects, send, call, result, dir };
+  return {
+    store,
+    turns,
+    subjects,
+    send,
+    call,
+    result,
+    dir,
+    secrets,
+    channels: () => [...handlers.keys()],
+  };
 };
 
 const withId = (id: string, updatedAt: string, events: Session["events"]): Session => ({
@@ -577,6 +594,7 @@ describe("ipc material", () => {
       newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
       send: vi.fn(),
       dialogs: { pickFolder: async () => null, pickFiles: async () => [] },
+      secrets: { has: vi.fn(), get: vi.fn(), set: vi.fn(), remove: vi.fn() } as any,
     });
     const [a] = await makeFiles(["a.txt"]);
     const r = await handlers.get("sessions:create")!(null, {
@@ -1089,5 +1107,37 @@ describe("ipc subjects", () => {
     expect(subjects.stop).toHaveBeenCalledWith(SID);
     expect(await call("subject:running", SID)).toBe(false);
     expect(subjects.isRunning).toHaveBeenCalledWith(SID);
+  });
+});
+
+describe("ipc voice key", () => {
+  it("key_is_encrypted_and_never_sent_to_window (ipc)", async () => {
+    const { call, secrets, send, channels } = await setup();
+    secrets.has.mockResolvedValue(true as never);
+    const has = await call("voice:hasKey");
+    expect(has).toBe(true);
+    const set = await call("voice:setKey", "dg_test_key_123");
+    expect(secrets.set).toHaveBeenCalledWith("dg_test_key_123");
+    expect(set).toEqual({ ok: true });
+    const removed = await call("voice:removeKey");
+    expect(secrets.remove).toHaveBeenCalled();
+    expect(secrets.get).not.toHaveBeenCalled();
+    expect(JSON.stringify([has, set, removed])).not.toContain("dg_test_key_123");
+    expect(JSON.stringify(send.mock.calls)).not.toContain("dg_test_key_123");
+    expect(
+      channels()
+        .filter((c) => c.toLowerCase().includes("key"))
+        .sort(),
+    ).toEqual(["voice:hasKey", "voice:removeKey", "voice:setKey"]);
+  });
+
+  it("voice:setKey passes a refusal through and refuses what is not text", async () => {
+    const { call, secrets } = await setup();
+    const refusal = { ok: false as const, message: "This Mac cannot store the key safely." };
+    secrets.set.mockResolvedValueOnce(refusal);
+    expect(await call("voice:setKey", "k")).toEqual(refusal);
+    secrets.set.mockClear();
+    expect(await call("voice:setKey", 42)).toEqual({ ok: false, message: "Enter a key." });
+    expect(secrets.set).not.toHaveBeenCalled();
   });
 });

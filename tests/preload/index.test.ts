@@ -59,6 +59,9 @@ describe("preload", () => {
         "saveProfile",
         "getSettings",
         "saveSettings",
+        "voiceHasKey",
+        "voiceSetKey",
+        "voiceRemoveKey",
         "onSessionUpdated",
         "onTurnEnded",
         "listSubjects",
@@ -125,6 +128,9 @@ describe("preload", () => {
       await api.subjectStatuses("u"),
       await api.getSettings(),
       await api.saveSettings(SETTINGS),
+      await api.voiceHasKey(),
+      await api.voiceSetKey("k"),
+      await api.voiceRemoveKey(),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -161,8 +167,11 @@ describe("preload", () => {
       ["subject:statuses", "u"],
       ["settings:get"],
       ["settings:save", SETTINGS],
+      ["voice:hasKey"],
+      ["voice:setKey", "k"],
+      ["voice:removeKey"],
     ]);
-    expect(results).toEqual(Array(34).fill("R"));
+    expect(results).toEqual(Array(37).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

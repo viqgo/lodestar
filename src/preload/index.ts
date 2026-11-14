@@ -32,6 +32,9 @@ const api: Api = {
   getSettings: () => ipcRenderer.invoke("settings:get") as Promise<Settings>,
   saveSettings: (settings) =>
     ipcRenderer.invoke("settings:save", settings) as ReturnType<Api["saveSettings"]>,
+  voiceHasKey: () => ipcRenderer.invoke("voice:hasKey") as Promise<boolean>,
+  voiceSetKey: (key) => ipcRenderer.invoke("voice:setKey", key) as ReturnType<Api["voiceSetKey"]>,
+  voiceRemoveKey: () => ipcRenderer.invoke("voice:removeKey") as Promise<void>,
   getProfile: () => ipcRenderer.invoke("profile:get") as Promise<string>,
   saveProfile: (text) => ipcRenderer.invoke("profile:save", text) as ReturnType<Api["saveProfile"]>,
   listSubjects: () => ipcRenderer.invoke("subjects:list") as ReturnType<Api["listSubjects"]>,

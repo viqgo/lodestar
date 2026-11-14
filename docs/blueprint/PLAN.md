@@ -115,7 +115,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [ ] GATE H Subjects
 - [x] T79 Voice text rules
 - [x] T80 Settings file
-- [ ] T81 The key
+- [x] T81 The key
 - [ ] T82 Deepgram client
 - [ ] T83 Voice hub
 - [ ] T84 Microphone

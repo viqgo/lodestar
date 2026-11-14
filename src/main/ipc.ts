@@ -30,6 +30,7 @@ import type {
 } from "../shared/types";
 import type { CliAdapter } from "./cli/adapter";
 import { detectAll } from "./cli/registry";
+import type { Secrets } from "./secrets";
 import type { Store } from "./store";
 import type { SubjectRunner } from "./subjectTurn";
 import type { TurnRunner } from "./turn";
@@ -44,6 +45,7 @@ export type IpcDeps = {
   newId: (prefix: "s" | "k" | "u") => string;
   send: (channel: string, ...args: unknown[]) => void;
   dialogs: { pickFolder(): Promise<string | null>; pickFiles(): Promise<string[]> };
+  secrets: Secrets;
 };
 
 const chains = new Map<string, Promise<unknown>>();
@@ -62,7 +64,7 @@ const goodFolder = (folder: unknown): boolean =>
 type SessionResult = { ok: true; session: Session } | { ok: false; message: string };
 
 export function registerIpc(deps: IpcDeps): void {
-  const { ipcMain, adapters, store, turns, subjects, now, newId, send, dialogs } = deps;
+  const { ipcMain, adapters, store, turns, subjects, now, newId, send, dialogs, secrets } = deps;
 
   const runTurn = async (id: string): Promise<TurnResult> => {
     const result = turns.isRunning(id)
@@ -319,6 +321,12 @@ export function registerIpc(deps: IpcDeps): void {
       return { ok: false as const, message: "Could not save. Check free disk space." };
     }
   });
+
+  ipcMain.handle("voice:hasKey", () => secrets.has());
+  ipcMain.handle("voice:setKey", (_event, key: unknown) =>
+    typeof key === "string" ? secrets.set(key) : { ok: false as const, message: "Enter a key." },
+  );
+  ipcMain.handle("voice:removeKey", () => secrets.remove());
 
   const OUTLINE_TEXT = "An outline needs 2 to 30 units, each with a title and a goal.";
   const SAVE_TEXT = "Could not save. Check free disk space.";

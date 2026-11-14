@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, safeStorage, session } from "electron";
 import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import * as fs from "node:fs";
@@ -9,6 +9,7 @@ import { FILE_LIST_MAX } from "../shared/limits";
 import { createAdapters } from "./cli/registry";
 import { registerIpc } from "./ipc";
 import { listFolder } from "./files";
+import { createSecrets } from "./secrets";
 import { createStore } from "./store";
 import { createSubjectRunner } from "./subjectTurn";
 import { createTurnRunner } from "./turn";
@@ -80,7 +81,8 @@ async function main(): Promise<void> {
       return r.canceled ? [] : r.filePaths;
     },
   };
-  registerIpc({ ipcMain, adapters, store, turns, subjects, now, newId, send, dialogs });
+  const secrets = createSecrets({ safeStorage, fs: fsp, file: join(dataDir, "deepgram.key") });
+  registerIpc({ ipcMain, adapters, store, turns, subjects, now, newId, send, dialogs, secrets });
   if (!process.env.ELECTRON_RENDERER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({

@@ -199,6 +199,9 @@ export type Api = {
   deleteKnowledge(id: string): Promise<void>;
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: true } | { ok: false; message: string }>;
+  voiceHasKey(): Promise<boolean>;
+  voiceSetKey(key: string): Promise<{ ok: true } | { ok: false; message: string }>;
+  voiceRemoveKey(): Promise<void>;
   getProfile(): Promise<string>;
   saveProfile(text: string): Promise<{ ok: true } | { ok: false; message: string }>;
   onSessionUpdated(cb: (session: Session) => void): () => void; // returns unsubscribe
