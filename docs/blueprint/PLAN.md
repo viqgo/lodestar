@@ -53,7 +53,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T32 Sidebar, CliGate, time helpers
 - [x] T33 NewLessonForm
 - [x] T34 LessonScreen
-- [ ] T35 KnowledgeScreen
+- [x] T35 KnowledgeScreen
 - [ ] T36 App wiring
 - [ ] T37 README
 - [ ] GATE C A full lesson in the window
