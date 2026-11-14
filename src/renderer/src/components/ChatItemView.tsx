@@ -18,6 +18,23 @@ export function ChatItemView({ item, sessionId, disabled, onSubmit }: Props) {
           <MarkdownView markdown={item.markdown} />
         </div>
       );
+    case "reading":
+      return (
+        <div className="reading">
+          <MarkdownView markdown={item.markdown} />
+          {!item.answered && (
+            <button
+              className="btn is-primary"
+              disabled={disabled}
+              onClick={() =>
+                onSubmit({ choiceIndex: null, text: null, reasoning: null, confidence: null })
+              }
+            >
+              Continue
+            </button>
+          )}
+        </div>
+      );
     case "probe_summary":
       return (
         <div className="summary">

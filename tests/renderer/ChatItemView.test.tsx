@@ -111,4 +111,39 @@ describe("ChatItemView", () => {
     expect(screen.queryByRole("button", { name: "Submit" })).toBeNull();
     expect(screen.getByText("Correct")).toBeInTheDocument();
   });
+
+  const reading = (answered: boolean): ChatItem => ({
+    kind: "reading",
+    key: "rd",
+    eventIndex: 3,
+    markdown: "long reading",
+    answered,
+  });
+
+  it("a pending reading shows Continue", () => {
+    renderItem(reading(false));
+    expect(screen.getByRole("button", { name: "Continue" })).toBeInTheDocument();
+  });
+
+  it("Continue sends an empty answer", async () => {
+    const onSubmit = renderItem(reading(false));
+    await userEvent.click(screen.getByRole("button", { name: "Continue" }));
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit).toHaveBeenCalledWith({
+      choiceIndex: null,
+      text: null,
+      reasoning: null,
+      confidence: null,
+    });
+  });
+
+  it("an answered reading has no Continue", () => {
+    renderItem(reading(true));
+    expect(screen.queryByRole("button", { name: "Continue" })).toBeNull();
+  });
+
+  it("Continue is disabled while busy", () => {
+    renderItem(reading(false), { disabled: true });
+    expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+  });
 });

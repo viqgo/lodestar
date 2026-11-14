@@ -10,7 +10,9 @@ import {
   session,
   textQ,
   toCheck,
+  cont,
   toPlan,
+  toRead,
   toTeach,
 } from "../helpers/fixtures";
 
@@ -118,6 +120,45 @@ describe("buildItems", () => {
     expect(items.slice(-2)).toEqual([
       { kind: "text", key: `e${i}-fb`, markdown: "Well done" },
       { kind: "text", key: `e${i}-sum`, markdown: "s" },
+    ]);
+  });
+
+  it("view shows a teach reading as an item", () => {
+    const events = [...toTeach, ...toRead()];
+    const i = events.length - 1;
+    const items = buildItems(session(events));
+    expect(items[items.length - 1]).toEqual({
+      kind: "reading",
+      key: `e${i}-rd`,
+      eventIndex: i,
+      markdown: "reading",
+      answered: false,
+    });
+  });
+
+  it("view marks a reading answered after continue", () => {
+    const events = [...toTeach, ...toRead(), cont()];
+    const items = buildItems(session(events));
+    expect(items[items.length - 1]).toMatchObject({ kind: "reading", answered: true });
+    expect(items.filter((x) => x.kind === "question" && x.purpose === "check")).toHaveLength(0);
+    expect(
+      items.some(
+        (x) => x.kind === "question" && x.answer !== null && x.eventIndex === events.length - 2,
+      ),
+    ).toBe(false);
+  });
+
+  it("view keeps teach feedback", () => {
+    const events = [
+      ...toTeach,
+      ...toRead().slice(0, 2),
+      act({ ...A.teach(), feedback: "Nice." } as Action),
+    ];
+    const i = events.length - 1;
+    const items = buildItems(session(events));
+    expect(items.slice(-2)).toMatchObject([
+      { kind: "text", key: `e${i}-fb`, markdown: "Nice." },
+      { kind: "reading", markdown: "reading" },
     ]);
   });
 });

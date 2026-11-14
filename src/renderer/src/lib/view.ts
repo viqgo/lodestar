@@ -4,6 +4,7 @@ export type ChatItem =
   | { kind: "text"; key: string; markdown: string }
   | { kind: "probe_summary"; key: string; known: string[]; goal: string }
   | { kind: "plan_notice"; key: string; count: number }
+  | { kind: "reading"; key: string; eventIndex: number; markdown: string; answered: boolean }
   | {
       kind: "question";
       key: string;
@@ -20,6 +21,7 @@ export function buildItems(session: Session): ChatItem[] {
   const items: ChatItem[] = [];
   let pending: QuestionItem | null = null;
   let lastCheck: QuestionItem | null = null;
+  let pendingRead: Extract<ChatItem, { kind: "reading" }> | null = null;
 
   const ask = (i: number, purpose: QuestionItem["purpose"], question: Question): void => {
     const item: QuestionItem = {
@@ -37,6 +39,11 @@ export function buildItems(session: Session): ChatItem[] {
 
   session.events.forEach((event, i) => {
     if (event.kind === "answer") {
+      if (pendingRead !== null) {
+        (pendingRead as Extract<ChatItem, { kind: "reading" }>).answered = true;
+        pendingRead = null;
+        return;
+      }
       const q = pending as QuestionItem | null;
       if (q === null) return;
       q.answer = event.answer;
@@ -77,6 +84,18 @@ export function buildItems(session: Session): ChatItem[] {
       case "predict":
         ask(i, "predict", action.question);
         break;
+      case "teach": {
+        const reading = {
+          kind: "reading" as const,
+          key: `e${i}-rd`,
+          eventIndex: i,
+          markdown: action.markdown,
+          answered: false,
+        };
+        items.push(reading);
+        pendingRead = reading;
+        break;
+      }
       case "explain":
         items.push({ kind: "text", key: `e${i}-md`, markdown: action.markdown });
         ask(i, "check", action.check);
