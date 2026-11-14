@@ -157,6 +157,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T110 Theme
 - [x] T111 Profile sections: models and method
 - [x] T112 Header, evals, README
+- [ ] T112b Gate L fixes
 - [ ] GATE L Customisation, then the owner's try-out
 
 Conventions used in every task:
@@ -4807,6 +4808,24 @@ Header, evals, README
 **Expected failure**: `header_shows_model_and_effort` finds "Tutor: Claude Code" only. The second test passes before the change except for its Gemini line: say so in the report.
 **Totals**: 863 -> 865. **Commit**: `feat: the lesson header shows model and effort`
 **Stop and report**: an existing LessonScreen test fails because of the new `getSettings` call (name it); the README lacks a section "Check first" names (go on without it and say so); the eval needs a file under `src/` to change.
+
+### T112b - Gate L fixes
+**Implements**: Gate L findings 1, 2, 3, 5, 8 · D56, D64
+**Depends on**: T112
+**Files**: modify `src/core/settings.ts`, `src/main/store.ts`, `src/main/turn.ts`, `src/main/ipc.ts`, `src/renderer/src/components/ProfileScreen.tsx`, `README.md`, `tests/core/settings.test.ts`, `tests/main/store.test.ts`, `tests/main/ipc.test.ts`, `tests/main/turn.test.ts`, `tests/renderer/ProfileScreen.test.tsx`. Do NOT touch any other file.
+**Details**
+- 1 (Important): `cliChoice` returns `model: null` unless the trimmed model has at most `MODEL_MAX` characters and matches `MODEL_PATTERN` (the pattern `validateSettings` uses; export it from `settings.ts` if it is private). `mergeSettings` is NOT changed.
+- 2: in `ProfileScreen.tsx` every section save and `chooseTheme` update the screen's copy with a functional update (`setSavedSettings((s) => ({ ...s, <its fields> }))`) and send the whole `Settings` built from the latest copy through a ref (`latestRef.current`), so two overlapping saves never write back each other's old values.
+- 3: `prepare` in `turn.ts` uses `settings.method.slice(0, METHOD_MAX)` and `readProfile` in `store.ts` returns `instructions.slice(0, PROFILE_MAX)` (the constants of `limits.ts`).
+- 5: `profile:save` refuses (returns its existing refusal for a bad text) when `text` is not a string; `sessions:setWebSearch` ignores a non-boolean `on`.
+- 8: README: "Reset to default" sentence says it fills the box and Save stores it; "What is sent where" also lists the teaching method text.
+**Tests (+5)**: `a model name that fails the pattern never reaches a CLI` (core/settings: `cliChoice(mergeSettings({clis:{gemini:{model:"--yolo"}}}),"gemini").model` is `null`, a good name passes) · `an over-long stored method or instructions text is cut` (turn or store) · `profile:save refuses a text that is not a string and setWebSearch ignores a non-boolean` (ipc) · `overlapping profile saves keep each other's fields` (ProfileScreen: change the theme while a Models save is pending; the final saved Settings has both) · `a hand-edited model with a dash is dropped in the lesson call` (turn: options.model is null).
+**Expected failure**: each new test fails before its change.
+**Totals**: 882 -> 887. **Commit**: `fix: gate L fixes`
+**Stop and report**: an existing test needs an edit beyond what a new default requires.
+
+### Gate L findings not fixed (owner decides, all also in the final report)
+4 (one invalid stored value blocks every section's save with the wrong message; needs a patch-style `settings:save`), 6 (an old `profile.json` can come back if `settings.json` is lost), 7 (no `color-scheme` in tokens.css, so native parts follow the OS), 10 (flash of the dark window before a light theme loads), 11 (a corrupt `settings.json` is overwritten by the next save), 12 (light-theme contrast of accent, success and muted text is below AA; darker values are a UI.md change), 13 (a failed theme save keeps the new look until restart), 9 (a local backup ref `refs/original/refs/heads/build/codex-loop` still holds commits with the personal email; it is not on origin; the owner can delete it with `git update-ref -d refs/original/refs/heads/build/codex-loop` and must never push it).
 
 ### Where each milestone 8 SPEC test lives
 - theme_applies_and_persists, system_theme_follows_the_mac: T110 (App), with `the theme is saved when it is chosen` (Profile) and `the light theme has the ten colors of UI.md`
