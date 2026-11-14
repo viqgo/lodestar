@@ -166,4 +166,76 @@ describe("NewLessonForm", () => {
       attachPaths: [],
     });
   });
+
+  it("folder_chooser_stores_path", async () => {
+    const { api } = installApi({ pickFolder: vi.fn(async () => "/Users/me/notes") });
+    render(
+      <NewLessonForm disabled={false} statuses={STATUSES} lastUsed={null} onCreated={vi.fn()} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Choose folder" }));
+    expect(await screen.findByText("notes")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(api.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ folder: "/Users/me/notes" }),
+    );
+  });
+
+  it("NewLessonForm sends attached files and the search switch", async () => {
+    const { api } = installApi({ pickFiles: vi.fn(async () => ["/a/one.pdf", "/b/two.txt"]) });
+    render(
+      <NewLessonForm disabled={false} statuses={STATUSES} lastUsed={null} onCreated={vi.fn()} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Attach files" }));
+    expect(await screen.findByText("one.pdf")).toBeInTheDocument();
+    expect(screen.getByText("two.txt")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Web search" }));
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(api.createSession).toHaveBeenCalledWith(
+      expect.objectContaining({ webSearch: true, attachPaths: ["/a/one.pdf", "/b/two.txt"] }),
+    );
+  });
+
+  it("NewLessonForm starts with no material and search off", () => {
+    installApi();
+    render(
+      <NewLessonForm disabled={false} statuses={STATUSES} lastUsed={null} onCreated={vi.fn()} />,
+    );
+    expect(screen.getByRole("button", { name: "Choose folder" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Remove / })).not.toBeInTheDocument();
+    expect(screen.getByRole("checkbox", { name: "Web search" })).not.toBeChecked();
+  });
+
+  it("NewLessonForm keeps at most 10 files", async () => {
+    const eight = Array.from({ length: 8 }, (_, i) => `/f/a${i}.txt`);
+    const four = Array.from({ length: 4 }, (_, i) => `/f/b${i}.txt`);
+    const pickFiles = vi.fn(async () => eight);
+    const { api } = installApi({ pickFiles });
+    render(
+      <NewLessonForm disabled={false} statuses={STATUSES} lastUsed={null} onCreated={vi.fn()} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Attach files" }));
+    expect(await screen.findByText("a7.txt")).toBeInTheDocument();
+    pickFiles.mockImplementation(async () => four);
+    await userEvent.click(screen.getByRole("button", { name: "Attach files" }));
+    expect(await screen.findByText("A lesson can hold at most 10 files.")).toBeInTheDocument();
+    expect(screen.getByText("b1.txt")).toBeInTheDocument();
+    expect(screen.queryByText("b2.txt")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    const sent = vi.mocked(api.createSession).mock.calls[0][0].attachPaths;
+    expect(sent).toHaveLength(10);
+  });
+
+  it("NewLessonForm shows a refused attachment", async () => {
+    installApi({
+      pickFiles: vi.fn(async () => ["/a/one.pdf"]),
+      createSession: vi.fn(async () => ({ ok: false, message: "That file is larger than 20 MB." })),
+    });
+    render(
+      <NewLessonForm disabled={false} statuses={STATUSES} lastUsed={null} onCreated={vi.fn()} />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Attach files" }));
+    await screen.findByText("one.pdf");
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(await screen.findByText("That file is larger than 20 MB.")).toBeInTheDocument();
+  });
 });

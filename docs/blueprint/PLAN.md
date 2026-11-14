@@ -90,7 +90,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T60 The turn passes material to the tutor
 - [x] T61 Channels for folder, files and search
 - [x] T62 Material controls
-- [ ] T63 Material on the New lesson form
+- [x] T63 Material on the New lesson form
 - [ ] T64 Material in the lesson header
 - [ ] T65 Files on an answer
 - [ ] T66 Document it and check it for real

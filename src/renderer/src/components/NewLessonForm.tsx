@@ -1,6 +1,8 @@
 import { useId, useRef, useState } from "react";
 import { defaultCli } from "../../../shared/clis";
+import { ATTACH_PER_LESSON } from "../../../shared/limits";
 import type { CliId, CliStatus, Session } from "../../../shared/types";
+import { MaterialControls } from "./MaterialControls";
 import { TutorPicker } from "./TutorPicker";
 
 export function NewLessonForm(props: {
@@ -14,11 +16,27 @@ export function NewLessonForm(props: {
   const [topic, setTopic] = useState("");
   const [goal, setGoal] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [folder, setFolder] = useState<string | null>(null);
+  const [paths, setPaths] = useState<string[]>([]);
+  const [webSearch, setWebSearch] = useState(false);
+  const [limitNote, setLimitNote] = useState<string | null>(null);
   const topicId = useId();
   const goalId = useId();
   const goalRef = useRef<HTMLTextAreaElement>(null);
 
   const busy = useRef(false);
+
+  async function chooseFolder() {
+    const picked = await window.api.pickFolder();
+    if (picked !== null) setFolder(picked);
+  }
+
+  async function attach() {
+    const added = await window.api.pickFiles();
+    const all = [...paths, ...added];
+    setLimitNote(all.length > ATTACH_PER_LESSON ? "A lesson can hold at most 10 files." : null);
+    setPaths(all.slice(0, ATTACH_PER_LESSON));
+  }
 
   async function submit() {
     if (busy.current || cli === null) return;
@@ -28,9 +46,9 @@ export function NewLessonForm(props: {
         topic,
         goal,
         cli,
-        folder: null,
-        webSearch: false,
-        attachPaths: [],
+        folder,
+        webSearch,
+        attachPaths: paths,
       });
       if (result.ok) props.onCreated(result.session);
       else setError(result.message);
@@ -94,6 +112,22 @@ export function NewLessonForm(props: {
         disabled={props.disabled}
         onChange={setPicked}
       />
+      <MaterialControls
+        cli={cli}
+        folder={folder}
+        attachments={paths.map((p) => ({ name: p.split(/[\\/]/).pop() ?? p, key: p }))}
+        webSearch={webSearch}
+        disabled={props.disabled}
+        onPickFolder={() => void chooseFolder()}
+        onRemoveFolder={() => setFolder(null)}
+        onAttach={() => void attach()}
+        onRemoveAttachment={(key) => {
+          setPaths(paths.filter((p) => p !== key));
+          setLimitNote(null);
+        }}
+        onWebSearch={setWebSearch}
+      />
+      {limitNote !== null && <small>{limitNote}</small>}
       <div>
         <button
           className="btn is-primary"
