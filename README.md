@@ -43,6 +43,14 @@ A lesson can have a material folder, attached files and a web search switch. Und
 
 Attached files can be PDF, PNG, JPEG, GIF, WebP, TXT or MD, at most 20 MB each, 10 per lesson and 3 per answer. They are copied into the app's data folder. The app never writes into your material folder. Codex needs `pdftotext` installed to read PDFs. A call that uses a folder, files or web search may take up to 300 seconds.
 
+## Subjects
+
+A subject is a course folder. The senior tutor reads the folder and proposes an outline of 2 to 30 units; you edit the outline and accept it. Each unit is one lesson, started with the subject's folder and tutor. A finished unit leaves a note that the senior tutor and later units see. You can chat with the senior tutor, which may propose changes to the outline that you accept or dismiss. Deleting a subject deletes its lessons and keeps the knowledge items. The senior tutor has the same read-only access to the folder as a lesson, so the three notes under "Material, files and web search" apply:
+
+- Codex: "Codex cannot change your files, but it is able to read other files on this Mac."
+- Claude Code: "Claude Code can only read inside this folder."
+- Gemini: "Gemini is experimental: what it can read has not been verified."
+
 ## Development
 
 - `npm test` runs the tests.
