@@ -1,5 +1,14 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain, session } from "electron";
+import { spawn } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
+import os from "node:os";
 import { join } from "node:path";
+import { createCodexAdapter } from "./cli/codex";
+import { registerIpc } from "./ipc";
+import { createStore } from "./store";
+import { createTurnRunner } from "./turn";
 
 export function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -28,7 +37,42 @@ export function createWindow(): BrowserWindow {
 
 async function main(): Promise<void> {
   await app.whenReady();
-  createWindow();
+  const dataDir = process.env.LEARN_DATA_DIR ?? app.getPath("userData");
+  const store = await createStore(dataDir, fsp);
+  const adapter = createCodexAdapter({
+    spawn,
+    env: process.env,
+    home: os.homedir(),
+    tmpRoot: os.tmpdir(),
+    fs,
+  });
+  let win: BrowserWindow | null = null;
+  const send = (channel: string, ...args: unknown[]): void => {
+    win?.webContents.send(channel, ...args);
+  };
+  const now = (): string => new Date().toISOString();
+  const newId = (prefix: "s" | "k"): string => prefix + "_" + randomUUID();
+  const turns = createTurnRunner({
+    adapter,
+    store,
+    now,
+    newId,
+    notify: (s) => send("session:updated", s),
+  });
+  registerIpc({ ipcMain, adapter, store, turns, now, newId, send });
+  if (!process.env.ELECTRON_RENDERER_URL) {
+    session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: {
+          ...details.responseHeaders,
+          "Content-Security-Policy": [
+            "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:",
+          ],
+        },
+      });
+    });
+  }
+  win = createWindow();
   app.on("window-all-closed", () => app.quit());
 }
 

@@ -39,7 +39,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T19b Gate B fixes (CR-1)
 - [x] GATE B A lesson runs headless against real Codex
 - [x] T20 IPC handlers
-- [ ] T21 Preload bridge and main wiring
+- [x] T21 Preload bridge and main wiring
 - [ ] T22 Component styles
 - [ ] T23 Turning a lesson into things to draw
 - [ ] T24 Stable option shuffling
