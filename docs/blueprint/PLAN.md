@@ -117,7 +117,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T80 Settings file
 - [x] T81 The key
 - [x] T82 Deepgram client
-- [ ] T83 Voice hub
+- [x] T83 Voice hub
 - [ ] T84 Microphone
 - [ ] T85 The call logic
 - [ ] T86 Call bar

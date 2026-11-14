@@ -11,6 +11,7 @@ const expose = vi.fn();
 const invoke = vi.fn();
 const on = vi.fn();
 const removeListener = vi.fn();
+const send = vi.fn();
 
 const load = async () => {
   await import("../../src/preload/index");
@@ -24,10 +25,11 @@ describe("preload", () => {
     invoke.mockReset();
     on.mockReset();
     removeListener.mockReset();
+    send.mockReset();
     invoke.mockResolvedValue("R");
     vi.doMock("electron", () => ({
       contextBridge: { exposeInMainWorld: expose },
-      ipcRenderer: { invoke, on, removeListener },
+      ipcRenderer: { invoke, on, removeListener, send },
     }));
   });
 
@@ -62,6 +64,16 @@ describe("preload", () => {
         "voiceHasKey",
         "voiceSetKey",
         "voiceRemoveKey",
+        "voiceStart",
+        "voiceAudio",
+        "voiceSpeak",
+        "voiceSkip",
+        "voiceStop",
+        "onVoiceState",
+        "onVoiceTranscript",
+        "onVoiceUtterance",
+        "onVoiceAudio",
+        "onVoiceError",
         "onSessionUpdated",
         "onTurnEnded",
         "listSubjects",
@@ -131,6 +143,10 @@ describe("preload", () => {
       await api.voiceHasKey(),
       await api.voiceSetKey("k"),
       await api.voiceRemoveKey(),
+      await api.voiceStart("a"),
+      await api.voiceSpeak("hi"),
+      await api.voiceSkip(),
+      await api.voiceStop(),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -170,8 +186,12 @@ describe("preload", () => {
       ["voice:hasKey"],
       ["voice:setKey", "k"],
       ["voice:removeKey"],
+      ["voice:start", "a"],
+      ["voice:say", "hi"],
+      ["voice:skip"],
+      ["voice:stop"],
     ]);
-    expect(results).toEqual(Array(37).fill("R"));
+    expect(results).toEqual(Array(41).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {
@@ -215,5 +235,33 @@ describe("preload", () => {
     expect(cb2).toHaveBeenCalledWith("u", r);
     off2();
     expect(removeListener).toHaveBeenCalledWith("subject:ended", handler2);
+  });
+
+  it("preload forwards the voice events and sends audio one way", async () => {
+    const api = await load();
+    const subs: [string, string, unknown[]][] = [
+      ["onVoiceState", "voice:state", ["listening"]],
+      ["onVoiceTranscript", "voice:transcript", ["hi", true]],
+      ["onVoiceUtterance", "voice:utterance", []],
+      ["onVoiceAudio", "voice:audio", [new Uint8Array([1])]],
+      ["onVoiceError", "voice:error", ["boom"]],
+    ];
+    for (const [name, channel, args] of subs) {
+      on.mockClear();
+      removeListener.mockClear();
+      const cb = vi.fn();
+      const off = api[name](cb);
+      expect(on.mock.calls[0][0]).toBe(channel);
+      const handler = on.mock.calls[0][1];
+      handler({}, ...args);
+      expect(cb).toHaveBeenCalledWith(...args);
+      off();
+      expect(removeListener).toHaveBeenCalledWith(channel, handler);
+    }
+    invoke.mockClear();
+    const buf = new ArrayBuffer(4);
+    api.voiceAudio(buf);
+    expect(send).toHaveBeenCalledWith("voice:audio", buf);
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

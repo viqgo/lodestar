@@ -29,10 +29,23 @@ const setup = async (
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-ipc-"));
   const store = await createStore(dir, fsp);
   const handlers = new Map<string, (...a: any[]) => any>();
+  const listeners = new Map<string, (...a: any[]) => any>();
   const ipcMain = {
     handle: (c: string, f: (...a: any[]) => any) => {
       handlers.set(c, f);
     },
+    on: ((c: string, f: (...a: any[]) => any) => {
+      listeners.set(c, f);
+    }) as any,
+  };
+  const voice = {
+    start: vi.fn(async (): Promise<{ ok: true } | { ok: false; message: string }> => ({
+      ok: true,
+    })),
+    audio: vi.fn(),
+    say: vi.fn(async () => undefined),
+    skip: vi.fn(),
+    stop: vi.fn(),
   };
   const result: TurnResult = { ok: true, session: session() };
   const turns = {
@@ -67,6 +80,7 @@ const setup = async (
     send,
     dialogs,
     secrets,
+    voice,
   });
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(null, ...args);
   return {
@@ -78,6 +92,8 @@ const setup = async (
     result,
     dir,
     secrets,
+    voice,
+    emit: (channel: string, ...args: unknown[]) => listeners.get(channel)!(null, ...args),
     channels: () => [...handlers.keys()],
   };
 };
@@ -580,7 +596,10 @@ describe("ipc material", () => {
     };
     const handlers = new Map<string, (...a: any[]) => any>();
     registerIpc({
-      ipcMain: { handle: (c: string, f: (...a: any[]) => any) => void handlers.set(c, f) },
+      ipcMain: {
+        handle: (c: string, f: (...a: any[]) => any) => void handlers.set(c, f),
+        on: (() => undefined) as any,
+      },
       adapters: fakeAdapters({ detect: vi.fn() } as any),
       store,
       turns: { advance: vi.fn(), stop: vi.fn(), isRunning: vi.fn(() => false) } as any,
@@ -595,6 +614,13 @@ describe("ipc material", () => {
       send: vi.fn(),
       dialogs: { pickFolder: async () => null, pickFiles: async () => [] },
       secrets: { has: vi.fn(), get: vi.fn(), set: vi.fn(), remove: vi.fn() } as any,
+      voice: {
+        start: vi.fn(),
+        audio: vi.fn(),
+        say: vi.fn(),
+        skip: vi.fn(),
+        stop: vi.fn(),
+      } as any,
     });
     const [a] = await makeFiles(["a.txt"]);
     const r = await handlers.get("sessions:create")!(null, {
@@ -1139,5 +1165,35 @@ describe("ipc voice key", () => {
     secrets.set.mockClear();
     expect(await call("voice:setKey", 42)).toEqual({ ok: false, message: "Enter a key." });
     expect(secrets.set).not.toHaveBeenCalled();
+  });
+});
+
+describe("ipc voice", () => {
+  it("voice channels pass through to the hub", async () => {
+    const { call, voice } = await setup();
+    expect(await call("voice:start", "s_1")).toEqual({ ok: true });
+    expect(voice.start).toHaveBeenCalledWith("s_1");
+    await call("voice:say", "hello");
+    expect(voice.say).toHaveBeenCalledWith("hello");
+    voice.say.mockClear();
+    await call("voice:say", 42);
+    expect(voice.say).not.toHaveBeenCalled();
+    expect(await call("voice:skip")).toBeUndefined();
+    expect(voice.skip).toHaveBeenCalledTimes(1);
+    expect(await call("voice:stop")).toBeUndefined();
+    expect(voice.stop).toHaveBeenCalledTimes(1);
+  });
+
+  it("voice:audio forwards binary chunks only", async () => {
+    const { emit, voice } = await setup();
+    emit("voice:audio", new Uint8Array([1, 2]).buffer);
+    emit("voice:audio", new Uint8Array([3, 4]));
+    expect(voice.audio).toHaveBeenCalledTimes(2);
+    expect(voice.audio.mock.calls[0][0]).toEqual(Buffer.from([1, 2]));
+    expect(voice.audio.mock.calls[1][0]).toEqual(Buffer.from([3, 4]));
+    voice.audio.mockClear();
+    emit("voice:audio", "text");
+    emit("voice:audio", null);
+    expect(voice.audio).not.toHaveBeenCalled();
   });
 });

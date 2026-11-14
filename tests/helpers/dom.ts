@@ -1,7 +1,14 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
-import type { Api, Session, Subject, SubjectResult, TurnResult } from "../../src/shared/types";
+import type {
+  Api,
+  CallState,
+  Session,
+  Subject,
+  SubjectResult,
+  TurnResult,
+} from "../../src/shared/types";
 
 afterEach(cleanup);
 
@@ -11,6 +18,11 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
   const ended = new Set<(id: string, r: TurnResult) => void>();
   const subjectUpdated = new Set<(s: Subject) => void>();
   const subjectEnded = new Set<(id: string, r: SubjectResult) => void>();
+  const voiceState = new Set<(s: CallState) => void>();
+  const voiceTranscript = new Set<(text: string, final: boolean) => void>();
+  const voiceUtterance = new Set<() => void>();
+  const voiceAudio = new Set<(audio: Uint8Array) => void>();
+  const voiceError = new Set<(message: string) => void>();
   const subjectBusy: SubjectResult = {
     ok: false,
     error: { kind: "busy", message: "A reply is already on the way." },
@@ -49,6 +61,31 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     voiceHasKey: vi.fn(async () => false),
     voiceSetKey: vi.fn(async () => ({ ok: true })),
     voiceRemoveKey: vi.fn(async () => undefined),
+    voiceStart: vi.fn(async () => ({ ok: false, message: "unused" })),
+    voiceAudio: vi.fn(),
+    voiceSpeak: vi.fn(async () => undefined),
+    voiceSkip: vi.fn(async () => undefined),
+    voiceStop: vi.fn(async () => undefined),
+    onVoiceState: vi.fn((cb: (s: CallState) => void) => {
+      voiceState.add(cb);
+      return () => voiceState.delete(cb);
+    }),
+    onVoiceTranscript: vi.fn((cb: (text: string, final: boolean) => void) => {
+      voiceTranscript.add(cb);
+      return () => voiceTranscript.delete(cb);
+    }),
+    onVoiceUtterance: vi.fn((cb: () => void) => {
+      voiceUtterance.add(cb);
+      return () => voiceUtterance.delete(cb);
+    }),
+    onVoiceAudio: vi.fn((cb: (audio: Uint8Array) => void) => {
+      voiceAudio.add(cb);
+      return () => voiceAudio.delete(cb);
+    }),
+    onVoiceError: vi.fn((cb: (message: string) => void) => {
+      voiceError.add(cb);
+      return () => voiceError.delete(cb);
+    }),
     getProfile: vi.fn(async () => ""),
     saveProfile: vi.fn(async () => ({ ok: true })),
     onSessionUpdated: vi.fn((cb: (s: Session) => void) => {
@@ -88,6 +125,12 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     emitEnded: (id: string, r: TurnResult) => ended.forEach((cb) => cb(id, r)),
     emitSubjectUpdated: (s: Subject) => subjectUpdated.forEach((cb) => cb(s)),
     emitSubjectEnded: (id: string, r: SubjectResult) => subjectEnded.forEach((cb) => cb(id, r)),
+    emitVoiceState: (s: CallState) => voiceState.forEach((cb) => cb(s)),
+    emitVoiceTranscript: (text: string, final: boolean) =>
+      voiceTranscript.forEach((cb) => cb(text, final)),
+    emitVoiceUtterance: () => voiceUtterance.forEach((cb) => cb()),
+    emitVoiceAudio: (bytes: Uint8Array) => voiceAudio.forEach((cb) => cb(bytes)),
+    emitVoiceError: (message: string) => voiceError.forEach((cb) => cb(message)),
     listenerCounts: () => ({ updated: updated.size, ended: ended.size }),
   };
 }

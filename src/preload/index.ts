@@ -1,5 +1,13 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Api, Session, Settings, Subject, SubjectResult, TurnResult } from "../shared/types";
+import type {
+  Api,
+  CallState,
+  Session,
+  Settings,
+  Subject,
+  SubjectResult,
+  TurnResult,
+} from "../shared/types";
 
 const api: Api = {
   detectClis: () => ipcRenderer.invoke("clis:detect") as ReturnType<Api["detectClis"]>,
@@ -35,6 +43,14 @@ const api: Api = {
   voiceHasKey: () => ipcRenderer.invoke("voice:hasKey") as Promise<boolean>,
   voiceSetKey: (key) => ipcRenderer.invoke("voice:setKey", key) as ReturnType<Api["voiceSetKey"]>,
   voiceRemoveKey: () => ipcRenderer.invoke("voice:removeKey") as Promise<void>,
+  voiceStart: (lessonId) =>
+    ipcRenderer.invoke("voice:start", lessonId) as ReturnType<Api["voiceStart"]>,
+  voiceAudio: (pcm) => {
+    ipcRenderer.send("voice:audio", pcm);
+  },
+  voiceSpeak: (text) => ipcRenderer.invoke("voice:say", text) as Promise<void>,
+  voiceSkip: () => ipcRenderer.invoke("voice:skip") as Promise<void>,
+  voiceStop: () => ipcRenderer.invoke("voice:stop") as Promise<void>,
   getProfile: () => ipcRenderer.invoke("profile:get") as Promise<string>,
   saveProfile: (text) => ipcRenderer.invoke("profile:save", text) as ReturnType<Api["saveProfile"]>,
   listSubjects: () => ipcRenderer.invoke("subjects:list") as ReturnType<Api["listSubjects"]>,
@@ -80,6 +96,51 @@ const api: Api = {
     ipcRenderer.on("subject:updated", handler);
     return () => {
       ipcRenderer.removeListener("subject:updated", handler);
+    };
+  },
+  onVoiceState: (cb) => {
+    const handler = (_event: unknown, state: CallState): void => {
+      cb(state);
+    };
+    ipcRenderer.on("voice:state", handler);
+    return () => {
+      ipcRenderer.removeListener("voice:state", handler);
+    };
+  },
+  onVoiceTranscript: (cb) => {
+    const handler = (_event: unknown, text: string, final: boolean): void => {
+      cb(text, final);
+    };
+    ipcRenderer.on("voice:transcript", handler);
+    return () => {
+      ipcRenderer.removeListener("voice:transcript", handler);
+    };
+  },
+  onVoiceUtterance: (cb) => {
+    const handler = (): void => {
+      cb();
+    };
+    ipcRenderer.on("voice:utterance", handler);
+    return () => {
+      ipcRenderer.removeListener("voice:utterance", handler);
+    };
+  },
+  onVoiceAudio: (cb) => {
+    const handler = (_event: unknown, audio: Uint8Array): void => {
+      cb(audio);
+    };
+    ipcRenderer.on("voice:audio", handler);
+    return () => {
+      ipcRenderer.removeListener("voice:audio", handler);
+    };
+  },
+  onVoiceError: (cb) => {
+    const handler = (_event: unknown, message: string): void => {
+      cb(message);
+    };
+    ipcRenderer.on("voice:error", handler);
+    return () => {
+      ipcRenderer.removeListener("voice:error", handler);
     };
   },
   onSubjectEnded: (cb) => {

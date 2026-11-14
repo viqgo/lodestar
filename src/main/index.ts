@@ -9,10 +9,13 @@ import { FILE_LIST_MAX } from "../shared/limits";
 import { createAdapters } from "./cli/registry";
 import { registerIpc } from "./ipc";
 import { listFolder } from "./files";
+import { WebSocket } from "ws";
 import { createSecrets } from "./secrets";
 import { createStore } from "./store";
 import { createSubjectRunner } from "./subjectTurn";
 import { createTurnRunner } from "./turn";
+import { createListener, speak } from "./voice/deepgram";
+import { createVoiceHub } from "./voice/hub";
 
 export function createWindow(): BrowserWindow {
   const win = new BrowserWindow({
@@ -82,7 +85,29 @@ async function main(): Promise<void> {
     },
   };
   const secrets = createSecrets({ safeStorage, fs: fsp, file: join(dataDir, "deepgram.key") });
-  registerIpc({ ipcMain, adapters, store, turns, subjects, now, newId, send, dialogs, secrets });
+  const voice = createVoiceHub({
+    secrets,
+    settings: () => store.readSettings(),
+    listen: (key, language, on) => createListener({ WebSocket }, key, language, on),
+    speak: (key, v, text) => speak({ fetch }, key, v, text),
+    send,
+  });
+  registerIpc({
+    ipcMain,
+    adapters,
+    store,
+    turns,
+    subjects,
+    now,
+    newId,
+    send,
+    dialogs,
+    secrets,
+    voice,
+  });
+  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+    callback(permission === "media" && win !== null && webContents === win.webContents);
+  });
   if (!process.env.ELECTRON_RENDERER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({

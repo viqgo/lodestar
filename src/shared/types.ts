@@ -154,6 +154,8 @@ export type TurnError = {
 export type TurnResult =
   { ok: true; session: Session } | { ok: false; error: TurnError; session: Session | null };
 
+export type CallState = "off" | "listening" | "thinking" | "speaking";
+
 export type Settings = { voice: { language: string; voice: string } };
 
 export type Api = {
@@ -202,6 +204,16 @@ export type Api = {
   voiceHasKey(): Promise<boolean>;
   voiceSetKey(key: string): Promise<{ ok: true } | { ok: false; message: string }>;
   voiceRemoveKey(): Promise<void>;
+  voiceStart(lessonId: string): Promise<{ ok: true } | { ok: false; message: string }>;
+  voiceAudio(pcm: ArrayBuffer): void;
+  voiceSpeak(text: string): Promise<void>;
+  voiceSkip(): Promise<void>;
+  voiceStop(): Promise<void>;
+  onVoiceState(cb: (state: CallState) => void): () => void;
+  onVoiceTranscript(cb: (text: string, final: boolean) => void): () => void;
+  onVoiceUtterance(cb: () => void): () => void;
+  onVoiceAudio(cb: (audio: Uint8Array) => void): () => void;
+  onVoiceError(cb: (message: string) => void): () => void;
   getProfile(): Promise<string>;
   saveProfile(text: string): Promise<{ ok: true } | { ok: false; message: string }>;
   onSessionUpdated(cb: (session: Session) => void): () => void; // returns unsubscribe
