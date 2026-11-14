@@ -81,3 +81,47 @@ export function fakeAdapters(
 ): Record<CliId, CliAdapter> {
   return { codex, claude: others.claude ?? codex, gemini: others.gemini ?? codex };
 }
+
+export function fakeWebSocket() {
+  const sockets: FakeSocket[] = [];
+  class FakeSocket extends EventEmitter {
+    url: string;
+    options: unknown;
+    readyState = 0;
+    sent: (string | Buffer)[] = [];
+    closed = false;
+    terminated = false;
+    constructor(url: string, options?: unknown) {
+      super();
+      this.url = url;
+      this.options = options;
+      sockets.push(this);
+    }
+    send(d: string | Buffer) {
+      this.sent.push(d);
+    }
+    close() {
+      this.closed = true;
+      this.readyState = 3;
+    }
+    terminate() {
+      this.terminated = true;
+      this.readyState = 3;
+    }
+    open() {
+      this.readyState = 1;
+      this.emit("open");
+    }
+    message(m: unknown) {
+      this.emit("message", Buffer.from(typeof m === "string" ? m : JSON.stringify(m)));
+    }
+    fail(text: string) {
+      this.emit("error", new Error(text));
+    }
+    drop() {
+      this.readyState = 3;
+      this.emit("close", 1006, Buffer.alloc(0));
+    }
+  }
+  return { WebSocket: FakeSocket, sockets };
+}
