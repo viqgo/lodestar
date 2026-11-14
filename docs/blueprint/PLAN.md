@@ -2239,7 +2239,7 @@ What the owner can see at the end: tutor text and question cards look clearly di
    | prompt asks for a reading before the check | prompt.test.ts | the built prompt contains `Then teach: a full reading` and, for a `need_teach` state, `Write the reading for node n1` |
 2. Run tests. Expected: the 11 new tests fail; existing tests that build predict -> explain by hand also fail (corrupt session / not allowed). Paste the failing run. Fix those existing tests only by inserting `act(A.teach(id)), cont()` between the predict answer and the `explain` (use `toCheck` where it fits). If an existing test needs any other change, stop and report.
 3. Implement the source changes listed in Context.
-4. Run `npm test` -> `Tests  273 passed (273)`; `npm run format && npm run lint && npm run typecheck && npm run build` -> exit 0. Paste. (`typecheck` will fail in the renderer until you handle the new `Action`/`Awaiting` variants in `src/renderer/src/lib/view.ts` and `QuestionCard`/`ChatItemView` call sites. Make the smallest possible type-only fix: in `view.ts` skip `teach` like `plan` is skipped for the verdict logic is NOT allowed; instead add `case "teach": break;` and where `awaiting.question` is read, guard `awaiting.purpose === "read"`. Report exactly what you touched under NOT IN THE PLAN; T40 replaces it.)
+4. Run `npm test` -> `Tests  273 passed (273)`; `npm run format && npm run lint && npm run typecheck && npm run build` -> exit 0. Paste. (`typecheck` will fail in the renderer until you handle the new `Action`/`Awaiting` variants in `src/renderer/src/lib/view.ts` and `QuestionCard`/`ChatItemView` call sites. Make the smallest possible type-only fix: in `view.ts` add `case "teach": break;` to the action switch (leave the verdict/feedback logic as it is) and, wherever `awaiting.question` is read, guard for `awaiting.purpose === "read"`. Report exactly what you touched under NOT IN THE PLAN; T40 replaces it.)
 5. Tick T39, stage by name, commit `feat: teach step rules, schema and prompt`.
 
 **Stop and report if** more than the listed existing tests break, the typecheck fix needs more than the lines described, or tests fail after two attempts.
@@ -2254,7 +2254,7 @@ What the owner can see at the end: tutor text and question cards look clearly di
 - Do NOT touch other files, add dependencies, or change other copy.
 
 **Steps**
-1. Add 6 tests:
+1. Add 7 tests:
 
    | Test | File | Expect |
    |------|------|--------|
@@ -2263,8 +2263,8 @@ What the owner can see at the end: tutor text and question cards look clearly di
    | view keeps teach feedback | view.test.ts | a teach with `feedback: "Nice."` puts a `text` item with `Nice.` before the reading |
    | a pending reading shows Continue | ChatItemView.test.tsx | `reading` item, `answered: false` -> button `Continue` |
    | Continue sends an empty answer | ChatItemView.test.tsx | click -> `onSubmit` called once with `{ choiceIndex: null, text: null, reasoning: null, confidence: null }` |
-   | an answered reading has no Continue / Continue is disabled while busy | split into two tests with exactly these names: `an answered reading has no Continue`, `Continue is disabled while busy` | no button / button disabled when `disabled` |
-   (That is 3 + 4 = 7 rows counting the split; add all seven tests: expected total 280 = 273 + 7.)
+   | an answered reading has no Continue | ChatItemView.test.tsx | `answered: true` -> no `Continue` button |
+   | Continue is disabled while busy | ChatItemView.test.tsx | `disabled` true -> the button is disabled |
 2. Run tests: the seven new tests fail only. Paste.
 3. Implement: `ChatItem` gains `{ kind: "reading"; key; eventIndex: number; markdown: string; answered: boolean }`. In `buildItems`, `teach` pushes its feedback (existing logic) then a reading item (`key: e${i}-rd`) and remembers it as pending-read; the next answer event sets `answered = true` on it (a pending-read answer is not a question answer). `ChatItemView` renders a reading as `<div className="reading"><MarkdownView/>…</div>` with, when not answered, `<button className="btn is-primary" disabled={disabled} onClick={...}>Continue</button>`. Remove the T39 stop-gap in `view.ts`.
 4. Run `npm test` -> `Tests  280 passed (280)`; format, lint, typecheck, build exit 0. Paste.
