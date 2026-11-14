@@ -80,7 +80,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T54 The tutor in a lesson, and switching
 - [x] T55 Clean up, document, and check Claude Code for real
 - [x] T55b Review fixes in the main process (CR-5)
-- [ ] T55c Review fixes in the window (CR-5)
+- [x] T55c Review fixes in the window (CR-5)
 - [ ] GATE F Three CLIs
 - [ ] OWNER TASK Gemini live run
 

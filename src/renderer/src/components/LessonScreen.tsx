@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { learnedToSave } from "../../../core/engine";
-import { CLI_INFO } from "../../../shared/clis";
+import { CLI_INFO, isCliId } from "../../../shared/clis";
 import type { Action, CliId, CliStatus } from "../../../shared/types";
 import { useLesson } from "../lib/useLesson";
 import { buildItems } from "../lib/view";
@@ -30,19 +30,20 @@ export function LessonScreen(props: {
     endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
   }, [items.length, busy, error]);
 
+  const cli: CliId = session !== null && isCliId(session.cli) ? session.cli : "codex";
   const missing =
     session !== null &&
     props.statuses !== null &&
-    !props.statuses.some((s) => s.id === session.cli && s.installed);
+    !props.statuses.some((s) => s.id === cli && s.installed);
+  const blocked = session !== null && (props.statuses === null || missing);
+  const switching = useRef(false);
 
   let banner: React.ReactNode = null;
   if (session && missing) {
     banner = (
       <Banner
         kind="error"
-        message={
-          CLI_INFO[session.cli].label + " not found. Install it and sign in, then press Retry."
-        }
+        message={CLI_INFO[cli].label + " not found. Install it and sign in, then press Retry."}
         actionLabel="Retry"
         onAction={props.onRetryDetect}
       />
@@ -87,15 +88,23 @@ export function LessonScreen(props: {
   const isDone = finished !== null;
 
   const confirmSwitch = async () => {
-    if (ask === null) return;
-    const result = await window.api.setSessionCli(props.id, ask);
-    if (result.ok) {
-      setSwitchError(null);
+    if (ask === null || switching.current) return;
+    switching.current = true;
+    try {
+      const result = await window.api.setSessionCli(props.id, ask);
+      if (result.ok) {
+        setSwitchError(null);
+        setAsk(null);
+        setOpen(false);
+      } else {
+        setSwitchError(result.message);
+        setAsk(null);
+      }
+    } catch {
+      setSwitchError("Could not save. Check free disk space.");
       setAsk(null);
-      setOpen(false);
-    } else {
-      setSwitchError(result.message);
-      setAsk(null);
+    } finally {
+      switching.current = false;
     }
   };
 
@@ -107,9 +116,13 @@ export function LessonScreen(props: {
             <h3>{session.topic}</h3>
             <p className="note">Goal: {session.goal}</p>
             <div className="row">
-              <span className="note">Tutor: {CLI_INFO[session.cli].label}</span>
+              <span className="note">Tutor: {CLI_INFO[cli].label}</span>
               {!isDone && (
-                <button className="btn" disabled={busy} onClick={() => setOpen(!open)}>
+                <button
+                  className="btn"
+                  disabled={busy || props.statuses === null}
+                  onClick={() => setOpen(!open)}
+                >
                   Change tutor
                 </button>
               )}
@@ -118,9 +131,9 @@ export function LessonScreen(props: {
             {open && (
               <TutorPicker
                 statuses={props.statuses ?? []}
-                value={session.cli}
+                value={cli}
                 disabled={busy}
-                onChange={(cli) => (cli === session.cli ? setOpen(false) : setAsk(cli))}
+                onChange={(next) => (next === cli ? setOpen(false) : setAsk(next))}
               />
             )}
           </>
@@ -130,7 +143,7 @@ export function LessonScreen(props: {
             key={item.key}
             item={item}
             sessionId={props.id}
-            disabled={busy || missing}
+            disabled={busy || blocked}
             onSubmit={submit}
           />
         ))}
