@@ -44,6 +44,8 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     isRunning: vi.fn(async () => false),
     listKnowledge: vi.fn(async () => []),
     deleteKnowledge: vi.fn(async () => undefined),
+    getSettings: vi.fn(async () => ({ voice: { language: "en", voice: "aura-2-thalia-en" } })),
+    saveSettings: vi.fn(async () => ({ ok: true })),
     getProfile: vi.fn(async () => ""),
     saveProfile: vi.fn(async () => ({ ok: true })),
     onSessionUpdated: vi.fn((cb: (s: Session) => void) => {

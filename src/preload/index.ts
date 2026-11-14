@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Api, Session, Subject, SubjectResult, TurnResult } from "../shared/types";
+import type { Api, Session, Settings, Subject, SubjectResult, TurnResult } from "../shared/types";
 
 const api: Api = {
   detectClis: () => ipcRenderer.invoke("clis:detect") as ReturnType<Api["detectClis"]>,
@@ -29,6 +29,9 @@ const api: Api = {
   isRunning: (id) => ipcRenderer.invoke("lesson:running", id) as Promise<boolean>,
   listKnowledge: () => ipcRenderer.invoke("knowledge:list") as ReturnType<Api["listKnowledge"]>,
   deleteKnowledge: (id) => ipcRenderer.invoke("knowledge:delete", id) as Promise<void>,
+  getSettings: () => ipcRenderer.invoke("settings:get") as Promise<Settings>,
+  saveSettings: (settings) =>
+    ipcRenderer.invoke("settings:save", settings) as ReturnType<Api["saveSettings"]>,
   getProfile: () => ipcRenderer.invoke("profile:get") as Promise<string>,
   saveProfile: (text) => ipcRenderer.invoke("profile:save", text) as ReturnType<Api["saveProfile"]>,
   listSubjects: () => ipcRenderer.invoke("subjects:list") as ReturnType<Api["listSubjects"]>,

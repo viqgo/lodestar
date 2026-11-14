@@ -154,6 +154,8 @@ export type TurnError = {
 export type TurnResult =
   { ok: true; session: Session } | { ok: false; error: TurnError; session: Session | null };
 
+export type Settings = { voice: { language: string; voice: string } };
+
 export type Api = {
   detectClis(): Promise<CliStatus[]>;
   listSessions(): Promise<SessionSummary[]>;
@@ -195,6 +197,8 @@ export type Api = {
   isRunning(id: string): Promise<boolean>;
   listKnowledge(): Promise<KnowledgeView[]>;
   deleteKnowledge(id: string): Promise<void>;
+  getSettings(): Promise<Settings>;
+  saveSettings(settings: Settings): Promise<{ ok: true } | { ok: false; message: string }>;
   getProfile(): Promise<string>;
   saveProfile(text: string): Promise<{ ok: true } | { ok: false; message: string }>;
   onSessionUpdated(cb: (session: Session) => void): () => void; // returns unsubscribe

@@ -3,6 +3,7 @@ import type { Answer, Session, TurnResult } from "../../src/shared/types";
 import { UNITS, session, subject } from "../helpers/fixtures";
 
 const ANSWER: Answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
+const SETTINGS = { voice: { language: "en", voice: "aura-2-thalia-en" } };
 const SESSION: Session = session();
 const RESULT: TurnResult = { ok: true, session: SESSION };
 
@@ -56,6 +57,8 @@ describe("preload", () => {
         "deleteKnowledge",
         "getProfile",
         "saveProfile",
+        "getSettings",
+        "saveSettings",
         "onSessionUpdated",
         "onTurnEnded",
         "listSubjects",
@@ -120,6 +123,8 @@ describe("preload", () => {
       await api.stopSubject("u"),
       await api.isSubjectRunning("u"),
       await api.subjectStatuses("u"),
+      await api.getSettings(),
+      await api.saveSettings(SETTINGS),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -154,8 +159,10 @@ describe("preload", () => {
       ["subject:stop", "u"],
       ["subject:running", "u"],
       ["subject:statuses", "u"],
+      ["settings:get"],
+      ["settings:save", SETTINGS],
     ]);
-    expect(results).toEqual(Array(32).fill("R"));
+    expect(results).toEqual(Array(34).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

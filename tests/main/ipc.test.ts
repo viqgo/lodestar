@@ -655,6 +655,34 @@ describe("ipc profile", () => {
   });
 });
 
+describe("ipc settings", () => {
+  const DEFAULTS = { voice: { language: "en", voice: "aura-2-thalia-en" } };
+
+  it("settings channels read and save", async () => {
+    const { call } = await setup();
+    expect(await call("settings:get")).toEqual(DEFAULTS);
+    const next = { voice: { language: "de", voice: "aura-2-x" } };
+    expect(await call("settings:save", next)).toEqual({ ok: true });
+    expect(await call("settings:get")).toEqual(next);
+  });
+
+  it("settings:save refuses bad values and stores nothing", async () => {
+    const { store, call } = await setup();
+    expect(await call("settings:save", { voice: { language: "en US", voice: "x" } })).toEqual({
+      ok: false,
+      message: "Enter a speech language and a voice.",
+    });
+    expect(await call("settings:get")).toEqual(DEFAULTS);
+    store.writeSettings = async () => {
+      throw new Error("disk");
+    };
+    expect(await call("settings:save", DEFAULTS)).toEqual({
+      ok: false,
+      message: "Could not save. Check free disk space.",
+    });
+  });
+});
+
 const SID = "u_00000001-0000-0000-0000-000000000000";
 const SID2 = "u_00000002-0000-0000-0000-000000000000";
 const withSubject = (id: string, events: ReturnType<typeof subject>["events"], at = NOW) => ({

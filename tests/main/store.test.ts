@@ -377,3 +377,23 @@ describe("store subjects", () => {
     expect((await store.listSessions())[0]).toMatchObject(want);
   });
 });
+
+describe("store settings", () => {
+  it("settings_file_round_trips", async () => {
+    const { dir, store } = await mk();
+    const value = { voice: { language: "de", voice: "aura-2-x" } };
+    await store.writeSettings(value);
+    expect(await store.readSettings()).toEqual(value);
+    await expect(fsp.access(path.join(dir, "settings.json"))).resolves.toBeUndefined();
+  });
+
+  it("settings are the defaults for a missing or broken file", async () => {
+    const { dir, store } = await mk();
+    const defaults = { voice: { language: "en", voice: "aura-2-thalia-en" } };
+    expect(await store.readSettings()).toEqual(defaults);
+    await fsp.writeFile(path.join(dir, "settings.json"), "not json", "utf8");
+    expect(await store.readSettings()).toEqual(defaults);
+    await fsp.writeFile(path.join(dir, "settings.json"), "[1]", "utf8");
+    expect(await store.readSettings()).toEqual(defaults);
+  });
+});

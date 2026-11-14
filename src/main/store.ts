@@ -1,6 +1,7 @@
 import path from "node:path";
+import { mergeSettings } from "../core/settings";
 import { attachmentKind, checkAttachment } from "../core/material";
-import type { Attachment, KnowledgeItem, Session, Subject } from "../shared/types";
+import type { Attachment, KnowledgeItem, Session, Settings, Subject } from "../shared/types";
 
 export type Store = {
   writeJsonAtomic(file: string, data: unknown): Promise<void>;
@@ -25,6 +26,8 @@ export type Store = {
   deleteKnowledge(id: string): Promise<void>;
   readProfile(): Promise<string>;
   writeProfile(text: string): Promise<void>;
+  readSettings(): Promise<Settings>;
+  writeSettings(settings: Settings): Promise<void>;
 };
 
 const ID = /^[sk]_[0-9a-f-]{36}$/;
@@ -258,6 +261,19 @@ export async function createStore(
   const writeProfile = (text: string): Promise<void> =>
     serial(profileFile, () => writeJsonAtomic(profileFile, { instructions: text }));
 
+  const settingsFile = path.join(dir, "settings.json");
+
+  const readSettings = async (): Promise<Settings> => {
+    try {
+      return mergeSettings(JSON.parse(await fs.readFile(settingsFile, "utf8")));
+    } catch {
+      return mergeSettings(null);
+    }
+  };
+
+  const writeSettings = (settings: Settings): Promise<void> =>
+    serial(settingsFile, () => writeJsonAtomic(settingsFile, settings));
+
   return {
     writeJsonAtomic,
     listSessions,
@@ -273,6 +289,8 @@ export async function createStore(
     deleteSubject,
     readKnowledge,
     addKnowledge,
+    readSettings,
+    writeSettings,
     deleteKnowledge,
     readProfile,
     writeProfile,

@@ -3,6 +3,7 @@ import { isCliId } from "../shared/clis";
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
 import { plain } from "../core/material";
+import { mergeSettings, validateSettings } from "../core/settings";
 import {
   checkChange,
   deriveSubject,
@@ -299,6 +300,20 @@ export function registerIpc(deps: IpcDeps): void {
     if (reason !== null) return { ok: false as const, message: reason };
     try {
       await store.writeProfile(text);
+      return { ok: true as const };
+    } catch {
+      return { ok: false as const, message: "Could not save. Check free disk space." };
+    }
+  });
+
+  ipcMain.handle("settings:get", () => store.readSettings());
+
+  ipcMain.handle("settings:save", async (_event, input: unknown) => {
+    const s = mergeSettings(input);
+    const reason = validateSettings(s);
+    if (reason !== null) return { ok: false as const, message: reason };
+    try {
+      await store.writeSettings(s);
       return { ok: true as const };
     } catch {
       return { ok: false as const, message: "Could not save. Check free disk space." };
