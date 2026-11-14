@@ -37,7 +37,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T18 The advance loop
 - [x] T19 Evals against real Codex
 - [x] T19b Gate B fixes (CR-1)
-- [ ] GATE B A lesson runs headless against real Codex
+- [x] GATE B A lesson runs headless against real Codex
 - [ ] T20-T37 Stage C (outline)
 - [ ] GATE C A full lesson in the window
 
