@@ -7,6 +7,7 @@ import { buildItems } from "../lib/view";
 import { Banner } from "./Banner";
 import { ChatItemView } from "./ChatItemView";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { MaterialControls } from "./MaterialControls";
 import { PlanPanel } from "./PlanPanel";
 import { ThinkingBar } from "./ThinkingBar";
 import { TutorPicker } from "./TutorPicker";
@@ -25,6 +26,7 @@ export function LessonScreen(props: {
   const [open, setOpen] = useState(false);
   const [ask, setAsk] = useState<CliId | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
+  const [materialError, setMaterialError] = useState<string | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
@@ -51,7 +53,7 @@ export function LessonScreen(props: {
   } else if (error) {
     if (error.kind === "stopped") {
       banner = <Banner kind="info" message="Stopped." actionLabel="Retry" onAction={retry} />;
-    } else if (error.kind === "not_found") {
+    } else if (error.kind === "folder_missing" || error.kind === "not_found") {
       banner = <Banner kind="error" message={error.message} />;
     } else {
       banner = <Banner kind="error" message={error.message} actionLabel="Retry" onAction={retry} />;
@@ -108,6 +110,35 @@ export function LessonScreen(props: {
     }
   };
 
+  const material = async (
+    call: () => Promise<{ ok: true; session: unknown } | { ok: false; message: string }>,
+  ) => {
+    try {
+      const result = await call();
+      setMaterialError(result.ok ? null : result.message);
+    } catch {
+      setMaterialError("Could not save. Check free disk space.");
+    }
+  };
+
+  const pickFolder = async () => {
+    try {
+      const picked = await window.api.pickFolder();
+      if (picked !== null) await material(() => window.api.setSessionFolder(props.id, picked));
+    } catch {
+      setMaterialError("Could not save. Check free disk space.");
+    }
+  };
+
+  const attach = async () => {
+    try {
+      const picked = await window.api.pickFiles();
+      if (picked.length > 0) await material(() => window.api.addAttachments(props.id, picked));
+    } catch {
+      setMaterialError("Could not save. Check free disk space.");
+    }
+  };
+
   return (
     <>
       <div className="content">
@@ -128,6 +159,21 @@ export function LessonScreen(props: {
               )}
             </div>
             {switchError && <small>{switchError}</small>}
+            <MaterialControls
+              cli={cli}
+              folder={session.folder ?? null}
+              attachments={(session.attachments ?? []).map((a) => ({ key: a.file, name: a.name }))}
+              webSearch={session.webSearch ?? false}
+              disabled={busy || isDone}
+              onPickFolder={pickFolder}
+              onRemoveFolder={() => material(() => window.api.setSessionFolder(props.id, null))}
+              onAttach={attach}
+              onRemoveAttachment={(file) =>
+                material(() => window.api.removeAttachment(props.id, file))
+              }
+              onWebSearch={(on) => material(() => window.api.setSessionWebSearch(props.id, on))}
+            />
+            {materialError && <small>{materialError}</small>}
             {open && (
               <TutorPicker
                 statuses={props.statuses ?? []}

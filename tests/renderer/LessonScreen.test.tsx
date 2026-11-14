@@ -338,4 +338,100 @@ describe("LessonScreen", () => {
     expect(await screen.findByText("Could not save. Check free disk space.")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
+
+  const withMaterial = (over: Partial<Session> = {}): Session => ({
+    ...S([act(A.probe())]),
+    folder: "/Users/x/notes",
+    attachments: [{ file: "a1-paper.pdf", name: "paper.pdf", bytes: 10, kind: "pdf" }],
+    webSearch: false,
+    ...over,
+  });
+
+  it("the lesson header shows its material", async () => {
+    installApi({ getSession: vi.fn(async () => withMaterial()) });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    expect(await screen.findByText("notes")).toBeInTheDocument();
+    expect(screen.getByText("paper.pdf")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change" })).toBeEnabled();
+    expect(screen.getByRole("checkbox", { name: "Web search" })).not.toBeChecked();
+  });
+
+  it("changing and removing the folder call the api", async () => {
+    const next = withMaterial({ folder: "/Users/x/other" });
+    const { api } = installApi({
+      getSession: vi.fn(async () => withMaterial()),
+      pickFolder: vi.fn(async () => "/Users/x/other"),
+      setSessionFolder: vi.fn(async () => ({ ok: true, session: next })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Change" }));
+    expect(api.setSessionFolder).toHaveBeenCalledWith(ID, "/Users/x/other");
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    expect(api.setSessionFolder).toHaveBeenLastCalledWith(ID, null);
+  });
+
+  it("attaching and removing files call the api", async () => {
+    const { api } = installApi({
+      getSession: vi.fn(async () => withMaterial()),
+      pickFiles: vi.fn(async () => ["/tmp/b.txt"]),
+      addAttachments: vi.fn(async () => ({
+        ok: false,
+        message: "That file type is not supported.",
+      })),
+      removeAttachment: vi.fn(async () => ({
+        ok: true,
+        session: withMaterial({ attachments: [] }),
+      })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Attach files" }));
+    expect(api.addAttachments).toHaveBeenCalledWith(ID, ["/tmp/b.txt"]);
+    expect(await screen.findByText("That file type is not supported.")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Remove paper.pdf" }));
+    expect(api.removeAttachment).toHaveBeenCalledWith(ID, "a1-paper.pdf");
+  });
+
+  it("the search switch calls the api", async () => {
+    const { api } = installApi({
+      getSession: vi.fn(async () => withMaterial()),
+      setSessionWebSearch: vi.fn(async () => ({
+        ok: true,
+        session: withMaterial({ webSearch: true }),
+      })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await userEvent.click(await screen.findByRole("checkbox", { name: "Web search" }));
+    expect(api.setSessionWebSearch).toHaveBeenCalledWith(ID, true);
+  });
+
+  it("header_controls_disabled_while_running", async () => {
+    installApi({
+      getSession: vi.fn(async () => withMaterial()),
+      isRunning: vi.fn(async () => true),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await screen.findByText("Thinking…");
+    expect(screen.getByRole("button", { name: "Change" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Attach files" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Remove paper.pdf" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Web search" })).toBeDisabled();
+  });
+
+  it("missing_folder_blocks_call_with_banner (display)", async () => {
+    const { api, emitEnded } = installApi({
+      getSession: vi.fn(async () => withMaterial()),
+    });
+    const message = "The material folder was not found. Choose it again or remove it.";
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await screen.findByText("notes");
+    rtlAct(() =>
+      emitEnded(ID, { ok: false, error: { kind: "folder_missing", message }, session: null }),
+    );
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    expect(screen.queryByText("The last reply did not arrive.")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change" })).toBeEnabled();
+    expect(api.advance).not.toHaveBeenCalled();
+  });
 });
