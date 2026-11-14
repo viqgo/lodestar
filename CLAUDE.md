@@ -26,6 +26,7 @@ Gemini CLI 0.68.0 or newer. Plain CSS, no styling framework.
 - Install: `npm ci` (T1 alone uses `npm install` to create the lockfile)
 - Run: `npm run dev`
 - Build: `npm run build`
+- Package (unsigned macOS disk images, needs network the first time): `npm run dist` -> `dist/lodestar-<version>-arm64.dmg` and `-x64.dmg`. Never publish a release or push a tag unless the owner says so.
 - Test (all): `npm test`
 - Test (one): `npx vitest run <path> -t "<test name>"`
 - Lint: `npm run lint` (fix formatting first with `npm run format`)

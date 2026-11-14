@@ -112,7 +112,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T78 Evals and README
 - [x] T78b Gate H fixes: prompt safety and data rules
 - [x] T78c Gate H fixes: subject screen
-- [ ] GATE H Subjects
+- [x] GATE H Subjects
 - [x] T79 Voice text rules
 - [x] T80 Settings file
 - [x] T81 The key
@@ -125,7 +125,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T88 README
 - [x] T88b Gate I fixes: main process
 - [x] T88c Gate I fixes: call logic in the window
-- [ ] GATE I Voice
+- [x] GATE I Voice
 - [x] T89 The schedule
 - [x] T90 Review storage
 - [x] T91 Practice prompts and schemas
@@ -140,7 +140,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T100 Evals and README
 - [x] T100b Gate J fixes: data and main process
 - [x] T100c Gate J fixes: window and the aside end signal
-- [ ] GATE J Learning modes
+- [x] GATE J Learning modes
 - [x] T101 Policy and paths
 - [x] T102 Deferred fixes: CLI and lesson files
 - [x] T102b Deferred fixes: subject writes and folder
@@ -150,7 +150,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T105 Build and check
 - [x] T106 User README
 - [x] T106b Gate K fixes
-- [ ] GATE K Packaging
+- [x] GATE K Packaging
 - [x] T107 Settings grow
 - [x] T108 Method text
 - [x] T109 Model and effort reach the CLI
@@ -158,7 +158,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T111 Profile sections: models and method
 - [x] T112 Header, evals, README
 - [x] T112b Gate L fixes
-- [ ] GATE L Customisation, then the owner's try-out
+- [x] GATE L Customisation (reviewed and fixed); the owner's try-out is still to do
 
 Conventions used in every task:
 - "Run tests" means `npm test`. The expected line is the vitest summary line, e.g. `Tests  9 passed (9)`.
