@@ -3118,7 +3118,7 @@ Owner setup before the stage: none for the build (all tests use fakes). The live
 | T86 Call bar | `CallBar`, wired into `LessonScreen`; "Start call" disabled without a key | renderer, tests | start_call_disabled_without_key, deepgram_failure_ends_call_lesson_continues (display), mic_refused_message (display) |
 | T87 Voice settings | Profile gains the Voice section (key field with "Key saved"/Remove, Speech language, Voice) | `ProfileScreen.tsx`, tests | key shown only as saved, settings saved |
 | T88 README | what voice sends where, cost, how to get a key | `README.md` | - |
-| GATE I | tests etc.; Fable review of B57-B67 with focus on the key never reaching the window or a log, and on audio never being written; planner fixes; wait for "check" | | |
+| GATE I | tests, lint, typecheck and build; Fable review of B57-B67 with focus on the key never reaching the window or a log, and on audio never being written; planner fixes; wait for "check" | | |
 
 ## Stage J - milestone 6: learning modes (outline)
 
@@ -3136,7 +3136,7 @@ Owner setup before the stage: none for the build (all tests use fakes). The live
 | T98 Asides in the rules | `aside` event; `deriveState` skips it; `renderTranscript` shows it; `view.ts` item; `turn.aside`; channel `lesson:aside` | shared, core, main, ipc, preload, lib, tests | aside_never_changes_lesson_state, aside_appears_in_later_prompts, aside_refused_while_running, aside_is_saved_and_shown (data part) |
 | T99 Aside box | `AsideBox`, `.aside` CSS, shown in `LessonScreen` and `ChatItemView` | renderer, tests | aside_is_saved_and_shown |
 | T100 Evals and README | the two milestone 6 evals; README section | evals, README | one real run with Claude Code |
-| GATE J | tests etc.; Fable review of B68-B75; planner fixes; wait for "check" | | |
+| GATE J | tests, lint, typecheck and build; Fable review of B68-B75; planner fixes; wait for "check" | | |
 
 ## Stage K - milestone 7: packaging and release (outline)
 
@@ -3148,7 +3148,7 @@ Owner setup before the stage: none for the build (all tests use fakes). The live
 | T104 Build config | add `electron-builder` 26.18.0; `version` 0.2.0; the `build` block and `dist` script from ARCHITECTURE; `.gitignore` gains `dist` (already) | `package.json`, lockfile, tests reading `package.json` | dist_config_names_both_targets, plist_has_microphone_text |
 | T105 Build and check | run `npm run dist`; open the built app; run the manual checklist (opens from Finder, a Claude Code lesson works, math and map render, no CSP errors in the console) and paste the result. Runs on the owner's Mac; if the build needs a download, the builder stops and reports first. | none | manual checklist |
 | T106 User README | download, first open, requirements, data location, what is sent where | `README.md` | - |
-| GATE K | tests etc.; Fable review of B76-B81; planner fixes; wait for "check". The GitHub release is created only when the owner says so. | | |
+| GATE K | tests, lint, typecheck and build; Fable review of B76-B81; planner fixes; wait for "check". The GitHub release is created only when the owner says so. | | |
 
 ## Stage L - milestone 8: customisation (outline)
 
@@ -3160,7 +3160,7 @@ Owner setup before the stage: none for the build (all tests use fakes). The live
 | T110 Theme | `[data-theme="light"]` tokens; `App` applies the theme and follows the system | `tokens.css`, `App.tsx`, tests | theme_applies_and_persists, system_theme_follows_the_mac |
 | T111 Profile sections | Theme, Models (per CLI: Model, Effort), Teaching method with "Reset to default" | `ProfileScreen.tsx`, tests | method_reset_restores_default, controls save their section |
 | T112 Header, evals, README | the lesson header shows model and effort; the two milestone 8 evals; README | renderer, evals, README | header_shows_model_and_effort; one real run each with Claude Code and Codex |
-| GATE L | tests etc.; Fable review of B82-B86; planner fixes; then the owner's one try-out of the whole app (Gates E, F and G-L) | | |
+| GATE L | tests, lint, typecheck and build; Fable review of B82-B86; planner fixes; then the owner's one try-out of the whole app (Gates E, F and G-L) | | |
 
 ## Backlog (owner requests after Gate D, not yet planned)
 - Spike result (2026-11-14): `codex exec --json` sends NO partial text: only `thread.started`, `turn.started`, then one `item.completed` with the whole reply, then `turn.completed`. A 400-word reading took 43.8 s at the default reasoning effort (1444 of 1949 output tokens were reasoning) and 19.6 s with `-c model_reasoning_effort=low` (one sample each). Claude Code has `--output-format stream-json --include-partial-messages`; Gemini CLI is unchecked. So real streaming is possible only with the Claude/Gemini adapters.

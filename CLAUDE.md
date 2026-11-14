@@ -40,6 +40,7 @@ Gemini CLI 0.68.0 or newer. Plain CSS, no styling framework.
 - `src/renderer/` - `index.html`, `src/App.tsx`, `src/components/`, `src/lib/`, `src/styles/`
 - `tests/` - mirrors `src/` (`tests/core/engine.test.ts` tests `src/core/engine.ts`); `tests/helpers/` holds fixtures and fakes
 - `evals/` - checks against a real CLI
+- Milestones 3-8 add files listed in `ARCHITECTURE.md` under "Milestones 3-8" (for example `src/core/material.ts`, `src/main/files.ts`, `src/main/call.ts`, `src/main/voice/`).
 
 ## Conventions
 - A lesson is stored only as its event list. Never store derived state; call `deriveState(events)`.
@@ -47,7 +48,9 @@ Gemini CLI 0.68.0 or newer. Plain CSS, no styling framework.
   `src/renderer` imports only from `src/shared`, `src/core` and itself. Only `src/main` uses `fs`, `child_process`, Electron main APIs.
 - Expected failures are returned as values (`string | null` reasons, `{ ok: false, ... }` results). `throw` only for a corrupt session.
 - Anything that touches the outside world (spawn, fs, clock, ids) is passed in as a dependency so tests can fake it.
-- Never spawn with a shell. Never call a real CLI (Codex, Claude Code, Gemini) from `tests/`.
+- Never spawn with a shell. Never call a real CLI (Codex, Claude Code, Gemini) or Deepgram from `tests/`.
+- The app never writes into a material folder, and no CLI is ever given a write, edit or shell tool. An adapter gets its extra abilities only from `RunOptions`.
+- The Deepgram key lives only in the main process: never in the window, a log, a test snapshot or an error message.
 - Every CLI is started through `runProcess` in `src/main/cli/process.ts`; an adapter never calls `spawn` itself.
 - User-facing messages are copied character for character from `SPEC.md` / `UI.md`.
 - Named exports only. Relative imports without file extensions. Tests import `describe/it/expect` from `vitest`.
@@ -69,6 +72,9 @@ sizes, components or wording. Copy text exactly from `UI.md`.
 7. After the verify step passes: tick the task in `PLAN.md`, commit with the given message.
    Never push, merge, rebase, force or delete branches.
 8. If the blueprint looks wrong, say so in the report. Do not work around it.
+
+## Stages G-L (milestones 3-8)
+Tasks in these stages follow the "Standard steps" block at the start of "Stages G-L" in `PLAN.md`: test counts are relative (old total plus the task's count), and a task lists only what is specific to it.
 
 ## Report format
 ```
