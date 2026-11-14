@@ -137,7 +137,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T97 Graph screen
 - [x] T98 Asides in the rules
 - [x] T99 Aside box
-- [ ] T100 Evals and README
+- [x] T100 Evals and README
 - [ ] GATE J Learning modes
 - [ ] T101 Policy and paths
 - [ ] T102 Deferred fixes: CLI and lesson files

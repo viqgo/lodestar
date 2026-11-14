@@ -31,6 +31,8 @@ If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PA
 
 `settings.json` (voice settings) and `deepgram.key` (the encrypted key) live in the same folder.
 
+`reviews.json` (boxes, due dates and flashcard questions) lives in the same folder.
+
 ## What goes to the model
 
 Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far and the tutor instructions from the Profile screen are sent. Nothing else is sent.
@@ -64,6 +66,20 @@ During a call the microphone audio (16 kHz, mono) and the text that is read alou
 Cost: listening is about $0.29 per hour of speech and reading aloud is $0.03 per 1,000 characters, billed by Deepgram to your key.
 
 Limits: voice is tested against a stand-in for Deepgram only until the first live run. Formulas are spoken as "a formula on screen". You cannot talk over the tutor.
+
+## Learning modes
+
+Review: every item of the knowledge list has a box from 1 to 5 and a due date. A new item is due at once. A right answer moves it up one box and it comes back after 3, 7, 14 or 30 days (boxes 2 to 5); a wrong one puts it back in box 1 for the next day. "Review" in the sidebar shows how many items are due; the list can be narrowed to one subject or one lesson.
+
+Flashcards: the tutor writes one question per item, once (one call for every 20 items); after that a flashcard review makes no call. "Show answer", then "I knew it" or "I did not".
+
+Practice: up to 10 due items; for each the chosen tutor asks one new question. A choice is graded by the app, a written answer by the tutor. A practice run is not saved, only its effect on the boxes.
+
+Graph: the knowledge items as a map, grouped by lesson and subject, with arrows from each lesson's plan and the box of every item; a list is shown if the map cannot be drawn.
+
+Side questions: the box "Ask a side question" under a lesson; the answer is saved in the lesson as an aside and never changes its progress.
+
+What goes where: flashcard and practice calls send only the item's text (and your tutor instructions) to the chosen CLI, with no file access and no web search; a side question is sent with the lesson, like any lesson call.
 
 ## Development
 
