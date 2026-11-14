@@ -35,7 +35,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T16 Store: knowledge
 - [x] T17 One model step with retry
 - [x] T18 The advance loop
-- [ ] T19 Evals against real Codex
+- [x] T19 Evals against real Codex
 - [ ] GATE B A lesson runs headless against real Codex
 - [ ] T20-T37 Stage C (outline)
 - [ ] GATE C A full lesson in the window
