@@ -27,8 +27,8 @@ Lessons are JSON files, one per lesson, plus one `knowledge.json`. The window ne
 package.json                         - scripts and pinned dependencies
 electron.vite.config.ts              - build config for main, preload, renderer
 tsconfig.json                        - one strict TypeScript config for all code
-vitest.config.ts                     - unit test config (tests/**)
-vitest.eval.config.ts                - eval config (evals/**), real Codex
+vitest.config.mts                    - unit test config (tests/**)
+vitest.eval.config.mts               - eval config (evals/**), real Codex
 eslint.config.mjs                    - lint rules
 .prettierignore
 .prettierrc.json                     - format rules
@@ -396,7 +396,7 @@ Private helpers of a few lines may be added inside a file. No new exported funct
 | `tests/helpers/fakes.ts` | `fakeSpawn` (T13), `fakeAdapter` (T17) | T13, T17 |
 | `src/main/store.ts` | sessions (T15); knowledge (T16) | T15, T16 |
 | `src/main/turn.ts` | `modelStep` (T17); `createTurnRunner`, `advance`, `stop`, `isRunning` (T18) | T17, T18 |
-| `evals/loop.eval.ts`, `vitest.eval.config.ts` | E1-E7 | T19 (config in T1) |
+| `evals/loop.eval.ts`, `vitest.eval.config.mts` | E1-E7 | T19 (config in T1) |
 | `src/main/ipc.ts` | `registerIpc`, all channels | T20 |
 | `src/preload/index.ts` | `window.api` | T21 (stub in T2) |
 | `src/renderer/src/styles/app.css` | component styles | T22 (base in T2) |
