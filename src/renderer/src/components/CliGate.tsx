@@ -1,12 +1,12 @@
-import type { DetectResult } from "../../../shared/types";
+import type { CliStatus } from "../../../shared/types";
 import { Banner } from "./Banner";
 
-export function CliGate(props: { cli: DetectResult | null; onRetry(): void }) {
-  if (props.cli === null || props.cli.ok) return null;
+export function CliGate(props: { clis: CliStatus[] | null; onRetry(): void }) {
+  if (props.clis === null || props.clis.some((c) => c.installed)) return null;
   return (
     <Banner
       kind="error"
-      message="Codex CLI not found. Install it and sign in, then press Retry."
+      message="No AI CLI found. Install Codex, Claude Code or Gemini CLI and sign in, then press Retry."
       actionLabel="Retry"
       onAction={props.onRetry}
     />

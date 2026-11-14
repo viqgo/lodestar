@@ -30,25 +30,39 @@ describe("App", () => {
   });
 
   it("App shows the Codex banner and disables New lesson", async () => {
-    installApi({ detectCli: vi.fn(async () => ({ ok: false })) });
+    installApi({
+      detectClis: vi.fn(async () => [
+        { id: "codex", installed: false, version: null },
+        { id: "claude", installed: false, version: null },
+        { id: "gemini", installed: false, version: null },
+      ]),
+    });
     render(<App />);
     expect(
-      await screen.findByText("Codex CLI not found. Install it and sign in, then press Retry."),
+      await screen.findByText(
+        "No AI CLI found. Install Codex, Claude Code or Gemini CLI and sign in, then press Retry.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "New lesson" })).toBeDisabled();
   });
 
   it("App Retry checks for Codex again", async () => {
-    const detectCli = vi
+    const detectClis = vi
       .fn()
-      .mockResolvedValueOnce({ ok: false })
-      .mockResolvedValue({ ok: true, version: "1" });
-    installApi({ detectCli });
+      .mockResolvedValueOnce([
+        { id: "codex", installed: false, version: null },
+        { id: "claude", installed: false, version: null },
+        { id: "gemini", installed: false, version: null },
+      ])
+      .mockResolvedValue([{ id: "codex", installed: true, version: "1" }]);
+    installApi({ detectClis });
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
     expect(await screen.findByRole("button", { name: "New lesson", hidden: false })).toBeEnabled();
     expect(
-      screen.queryByText("Codex CLI not found. Install it and sign in, then press Retry."),
+      screen.queryByText(
+        "No AI CLI found. Install Codex, Claude Code or Gemini CLI and sign in, then press Retry.",
+      ),
     ).not.toBeInTheDocument();
   });
 
@@ -109,12 +123,20 @@ describe("App", () => {
   });
 
   it("App shows the Codex banner on every screen", async () => {
-    installApi({ detectCli: vi.fn(async () => ({ ok: false })) });
+    installApi({
+      detectClis: vi.fn(async () => [
+        { id: "codex", installed: false, version: null },
+        { id: "claude", installed: false, version: null },
+        { id: "gemini", installed: false, version: null },
+      ]),
+    });
     render(<App />);
     await userEvent.click(await screen.findByRole("button", { name: "Knowledge" }));
     await screen.findByText("What you have shown you understand. Later lessons start from here.");
     expect(
-      screen.getByText("Codex CLI not found. Install it and sign in, then press Retry."),
+      screen.getByText(
+        "No AI CLI found. Install Codex, Claude Code or Gemini CLI and sign in, then press Retry.",
+      ),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
   });
@@ -126,5 +148,13 @@ describe("App", () => {
     expect(await screen.findByText("Tutor instructions")).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Profile" })).toBeInTheDocument();
     expect(api.getProfile).toHaveBeenCalled();
+  });
+
+  it("App passes the last used tutor to the form", async () => {
+    installApi({
+      listSessions: vi.fn(async () => [{ ...summary("a", "Alpha"), cli: "claude" as const }]),
+    });
+    render(<App />);
+    expect(await screen.findByRole("radio", { name: "Claude Code" })).toBeChecked();
   });
 });

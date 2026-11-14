@@ -1,7 +1,16 @@
 import { useId, useRef, useState } from "react";
-import type { Session } from "../../../shared/types";
+import { defaultCli } from "../../../shared/clis";
+import type { CliId, CliStatus, Session } from "../../../shared/types";
+import { TutorPicker } from "./TutorPicker";
 
-export function NewLessonForm(props: { disabled: boolean; onCreated(session: Session): void }) {
+export function NewLessonForm(props: {
+  disabled: boolean;
+  statuses: CliStatus[];
+  lastUsed: CliId | null;
+  onCreated(session: Session): void;
+}) {
+  const [picked, setPicked] = useState<CliId | null>(null);
+  const cli = picked ?? defaultCli(props.statuses, props.lastUsed);
   const [topic, setTopic] = useState("");
   const [goal, setGoal] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -12,10 +21,10 @@ export function NewLessonForm(props: { disabled: boolean; onCreated(session: Ses
   const busy = useRef(false);
 
   async function submit() {
-    if (busy.current) return;
+    if (busy.current || cli === null) return;
     busy.current = true;
     try {
-      const result = await window.api.createSession({ topic, goal });
+      const result = await window.api.createSession({ topic, goal, cli });
       if (result.ok) props.onCreated(result.session);
       else setError(result.message);
     } catch {
@@ -72,8 +81,18 @@ export function NewLessonForm(props: { disabled: boolean; onCreated(session: Ses
         />
         {error !== null && <small>{error}</small>}
       </div>
+      <TutorPicker
+        statuses={props.statuses}
+        value={cli}
+        disabled={props.disabled}
+        onChange={setPicked}
+      />
       <div>
-        <button className="btn is-primary" disabled={props.disabled} onClick={() => void submit()}>
+        <button
+          className="btn is-primary"
+          disabled={props.disabled || cli === null}
+          onClick={() => void submit()}
+        >
           Start
         </button>
       </div>

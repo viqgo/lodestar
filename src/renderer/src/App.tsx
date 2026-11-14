@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { DetectResult, SessionSummary } from "../../shared/types";
+import type { CliStatus, SessionSummary } from "../../shared/types";
 import { CliGate } from "./components/CliGate";
 import { KnowledgeScreen } from "./components/KnowledgeScreen";
 import { LessonScreen } from "./components/LessonScreen";
@@ -16,7 +16,7 @@ type Screen =
 export function App() {
   const [screen, setScreen] = useState<Screen>({ name: "new" });
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [cli, setCli] = useState<DetectResult | null>(null);
+  const [clis, setClis] = useState<CliStatus[] | null>(null);
 
   const reload = () => {
     window.api.listSessions().then(setSessions);
@@ -24,23 +24,23 @@ export function App() {
 
   useEffect(() => {
     let live = true;
-    if (cli === null) {
-      window.api.detectCli().then((r) => {
-        if (live) setCli(r);
+    if (clis === null) {
+      window.api.detectClis().then((r) => {
+        if (live) setClis(r);
       });
     }
     return () => {
       live = false;
     };
-  }, [cli]);
+  }, [clis]);
 
   useEffect(() => {
     reload();
     return window.api.onSessionUpdated(() => reload());
   }, []);
 
-  const retry = () => setCli(null);
-  const disabled = cli?.ok !== true;
+  const retry = () => setClis(null);
+  const disabled = clis === null || !clis.some((c) => c.installed);
   const activeId = screen.name === "lesson" ? screen.id : null;
 
   let content;
@@ -55,6 +55,8 @@ export function App() {
       <div className="content">
         <NewLessonForm
           disabled={disabled}
+          statuses={clis ?? []}
+          lastUsed={sessions[0]?.cli ?? null}
           onCreated={(s) => {
             setScreen({ name: "lesson", id: s.id, start: true });
             reload();
@@ -81,7 +83,7 @@ export function App() {
         onProfile={() => setScreen({ name: "profile" })}
       />
       <div className="main">
-        <CliGate cli={cli} onRetry={retry} />
+        <CliGate clis={clis} onRetry={retry} />
         {content}
       </div>
     </div>
