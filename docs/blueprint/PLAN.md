@@ -55,6 +55,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T34 LessonScreen
 - [x] T35 KnowledgeScreen
 - [x] T36 App wiring
+- [ ] T36b Keyboard access, double-click guard, map fallback symbol
 - [ ] T37 README
 - [ ] GATE C A full lesson in the window
 
@@ -2023,6 +2024,43 @@ Conventions for every Stage C task (in addition to the ones at the top):
 
 **Stop and report if** tests fail after two attempts, or the three-column grid does not behave as the CSS in T22 says (describe the DOM you see).
 
+### T36b - Keyboard access, double-click guard, map fallback symbol
+
+**Implements**: UI.md accessibility ("Tab order follows the visual order"), B2, B6 · fixes found while building T30, T32 and T33 (decision D33)
+**Depends on**: T36
+
+**Context**
+- `Sidebar` (`src/renderer/src/components/Sidebar.tsx`) renders each lesson as `<div className="lesson-row …" onClick={() => props.onOpen(s.id)}>` holding a `<div><b>{topic}</b><small>…</small></div>` and the delete button. A keyboard user cannot reach or open a lesson.
+- `NewLessonForm` (`NewLessonForm.tsx`) has `async function submit()` that awaits `window.api.createSession(...)`. Clicking Start twice before it resolves creates two lessons.
+- `PlanPanel` (`PlanPanel.tsx`) has a helper `prefix(id, nodes, currentNodeId)` that returns `"→ "` whenever the node is current, even when it is passed or shaky. The Mermaid text in `planToMermaid` shows `✓ ` / `~ ` for those states and `current` only for a `todo` node, so the plain-list fallback disagrees with the map.
+
+**Files**
+- Modify: `src/renderer/src/components/Sidebar.tsx`, `src/renderer/src/components/NewLessonForm.tsx`, `src/renderer/src/components/PlanPanel.tsx`, `src/renderer/src/styles/app.css`, `tests/renderer/Sidebar.test.tsx`, `tests/renderer/NewLessonForm.test.tsx`, `tests/renderer/PlanPanel.test.tsx`
+- Do NOT touch any other file. Do NOT change any text shown to the user.
+
+**Steps**
+
+1. Add 3 tests (names exactly as shown; existing tests must keep passing unchanged):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | Sidebar lets a lesson be opened with the keyboard | the one-lesson `sessions` of the existing Sidebar tests; `await userEvent.tab()` until the element with accessible name containing `Derivatives` has focus (it must be reachable: at most 3 Tab presses starting from the document body, the order is `New lesson`, the lesson, `Delete lesson`); then `await userEvent.keyboard("{Enter}")` | `onOpen` called once with `"s_1"` |
+   | NewLessonForm creates a lesson only once when Start is clicked twice | `createSession` returns a promise you resolve later; click `Start` twice quickly (`await userEvent.dblClick(startButton)` or two clicks without awaiting the resolution) | `createSession` called once; after resolving `{ ok: true, session: S }`, `onCreated` called once |
+   | PlanPanel fallback shows a passed current node as passed | plan `PLAN`, `nodes` `{ n1: { status: "passed", fails: 0 }, n2: { status: "todo", fails: 0 } }`, `currentNodeId` `"n1"`, mermaid mock rejecting so the list shows | text `✓ One` present and `→ One` absent |
+2. Run tests. Expected: `Tests  3 failed | 249 passed (252)`: exactly the three new ones fail. Paste.
+3. Fix:
+   - `Sidebar.tsx`: replace the clickable row `div` behavior with a real button: keep `<div className={"lesson-row" + …}>` but without `onClick`; inside it the text block becomes `<button type="button" className="row-main" onClick={() => props.onOpen(s.id)}><b>{s.topic}</b><small>{status}</small></button>` (the `<b>` and `<small>` stay exactly as they are, inside the button, so existing click tests on the topic text keep working); the delete button stays after it. Remove the `stopPropagation` call on the delete button only if the tests still pass without it (it is harmless; keep it if unsure).
+   - `app.css`: add one rule `.row-main { background: none; border: 0; padding: 0; color: inherit; font: inherit; text-align: left; cursor: pointer; flex: 1; min-width: 0; } .row-main b, .row-main small { display: block; }` and `.row-main:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }`. (`.lesson-row` already sets `display: flex; justify-content: space-between`.)
+   - `NewLessonForm.tsx`: add `const busy = useRef(false);` and at the top of `submit()`: `if (busy.current) return; busy.current = true;` and `try { … } finally { busy.current = false; }` around the `createSession` call and its handling. Do not change anything else.
+   - `PlanPanel.tsx`: in `prefix`, check status first: return `"✓ "` for passed, `"~ "` for shaky, then `"→ "` only when `id === currentNodeId` (status todo), else `""`.
+4. Run tests: `Tests  252 passed (252)`. Run `npm run format && npm run lint && npm run typecheck && npm run build`: exit 0. Paste.
+5. Tick T36b, then `git add -A && git commit -m "fix: keyboard access to lessons, double-click guard, map fallback symbols"` (stage only the files listed plus the PLAN.md tick; check `git status --short` first).
+
+**Stop and report instead of continuing if**
+- a test other than the three new ones fails in step 2,
+- `userEvent.tab()` cannot reach the new button (paste the DOM around it),
+- tests fail after two attempts.
+
 ### T37 - README
 
 **Implements**: documentation · decisions D18, D31
@@ -2044,14 +2082,14 @@ Conventions for every Stage C task (in addition to the ones at the top):
    - `## Development`: `npm test`, `npm run lint`, `npm run typecheck`, `npm run eval` (spends real Codex quota); the blueprint lives in `docs/blueprint/`.
    - `## Status`: milestone 1 supports Codex only; Gemini CLI and Claude Code are planned.
    - `## License`: MIT.
-2. Run `npm run format && npm run lint`: exit 0. Run `npm test`: `Tests  249 passed (249)`. Paste.
+2. Run `npm run format && npm run lint`: exit 0. Run `npm test`: `Tests  252 passed (252)`. Paste.
 3. Tick T37, then `git add -A && git commit -m "docs: readme"`.
 
 ### GATE C - A full lesson in the window
 
 The builder stops here. Nothing continues until the owner says so.
 
-**Run**: `npm test` -> expect `Tests  249 passed (249)`; `npm run lint && npm run typecheck && npm run build` -> exit 0
+**Run**: `npm test` -> expect `Tests  252 passed (252)`; `npm run lint && npm run typecheck && npm run build` -> exit 0
 **Look at**: `git diff <gate-B-commit>..HEAD --stat` -> only `src/main/ipc.ts`, `src/main/index.ts`, `src/preload/`, `src/renderer/`, `tests/`, `README.md`, `PLAN.md`
 **Fresh review**: Fable reviews T20-T37 against SPEC, ARCHITECTURE, UI and `ui-template.html` (the reviewer prompt from `references/execution.md`, plus: compare each built screen's markup and classes to the template).
 **Try it yourself** (this is the first time the app does anything):
