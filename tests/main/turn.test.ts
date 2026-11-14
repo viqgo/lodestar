@@ -5,7 +5,9 @@ import { describe, expect, it } from "vitest";
 import { deriveState } from "../../src/core/engine";
 import type { CliAdapter } from "../../src/main/cli/adapter";
 import { createStore } from "../../src/main/store";
-import { createTurnRunner, modelStep } from "../../src/main/turn";
+import { NO_OPTIONS } from "../../src/shared/clis";
+import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../../src/shared/limits";
+import { createTurnRunner, modelStep, runOptions } from "../../src/main/turn";
 import type { RunResult, Session, SessionEvent } from "../../src/shared/types";
 import { fakeAdapter, fakeAdapters } from "../helpers/fakes";
 import { A, act, pick, session, toCheck, toTeach } from "../helpers/fixtures";
@@ -14,7 +16,13 @@ const step = async (events: SessionEvent[], ...replies: Parameters<typeof fakeAd
   const f = fakeAdapter(...replies);
   const s = session(events);
   const result = await modelStep(
-    { adapter: f.adapter, knowledge: [], profile: "" },
+    {
+      adapter: f.adapter,
+      knowledge: [],
+      profile: "",
+      options: NO_OPTIONS,
+      timeoutMs: CALL_TIMEOUT_MS,
+    },
     s,
     deriveState(events),
     new AbortController().signal,
@@ -82,6 +90,7 @@ const setup = async (events: SessionEvent[], ...replies: Parameters<typeof fakeA
     store,
     now: () => NOW,
     newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000",
+    listFolder: async () => ({ files: [], more: 0 }),
     notify: (s) => notified.push(s),
   });
   return { dir, store, f, notified, runner };
@@ -104,6 +113,7 @@ const withAdapter = async (adapter: CliAdapter) => {
     store,
     now: () => NOW,
     newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+    listFolder: async () => ({ files: [], more: 0 }),
     notify: () => {},
   });
   return { runner };
@@ -143,6 +153,7 @@ const setupFailing = async () => {
     store,
     now: () => NOW,
     newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000",
+    listFolder: async () => ({ files: [], more: 0 }),
     notify: () => {},
   });
   return { store: real, runner };
@@ -307,6 +318,7 @@ describe("turn per-lesson cli", () => {
       store,
       now: () => NOW,
       newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+      listFolder: async () => ({ files: [], more: 0 }),
       notify: () => {},
     });
   };
@@ -341,7 +353,13 @@ describe("turn per-lesson cli", () => {
     const run = async (retries: number, ...replies: string[]) => {
       const f = fakeAdapter(...replies);
       const result = await modelStep(
-        { adapter: { ...f.adapter, retries }, knowledge: [], profile: "" },
+        {
+          adapter: { ...f.adapter, retries },
+          knowledge: [],
+          profile: "",
+          options: NO_OPTIONS,
+          timeoutMs: CALL_TIMEOUT_MS,
+        },
         session([]),
         deriveState([]),
         new AbortController().signal,
@@ -362,7 +380,13 @@ describe("turn per-lesson cli", () => {
   it("a failed call names the CLI", async () => {
     const f = fakeAdapter({ ok: false, kind: "failed", message: "boom" });
     const result = await modelStep(
-      { adapter: { ...f.adapter, label: "Claude Code" }, knowledge: [], profile: "" },
+      {
+        adapter: { ...f.adapter, label: "Claude Code" },
+        knowledge: [],
+        profile: "",
+        options: NO_OPTIONS,
+        timeoutMs: CALL_TIMEOUT_MS,
+      },
       session([]),
       deriveState([]),
       new AbortController().signal,
@@ -371,5 +395,128 @@ describe("turn per-lesson cli", () => {
       ok: false,
       error: { kind: "cli", message: "Claude Code failed: boom" },
     });
+  });
+});
+
+describe("turn material", () => {
+  const FOLDER = "/tmp/lh-material";
+  const setupMaterial = async (
+    patch: Partial<Session>,
+    listing: { files: { path: string; bytes: number }[]; more: number } | null,
+    ...replies: Parameters<typeof fakeAdapter>
+  ) => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+    const store = await createStore(dir, fsp);
+    const base = { ...session([]), ...patch };
+    await store.writeSession(base);
+    const f = fakeAdapter(...replies);
+    const runner = createTurnRunner({
+      adapters: fakeAdapters(f.adapter),
+      store,
+      now: () => NOW,
+      newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+      notify: () => {},
+      listFolder: async () => listing,
+    });
+    return { dir, store, f, runner, base };
+  };
+  const att = (file: string, kind: "pdf" | "image" | "text") => ({
+    file,
+    name: file.replace(/^a\d+-/, ""),
+    bytes: 1,
+    kind,
+  });
+
+  it("missing_folder_blocks_call_with_banner", async () => {
+    const { store, f, runner, base } = await setupMaterial({ folder: FOLDER }, null, A.probe());
+    const result = await runner.advance(ID);
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        kind: "folder_missing",
+        message: "The material folder was not found. Choose it again or remove it.",
+      },
+      session: base,
+    });
+    expect(f.prompts).toHaveLength(0);
+    expect(await store.readSession(ID)).toEqual(base);
+  });
+
+  it("turn puts the material section in the prompt", async () => {
+    const { f, runner } = await setupMaterial(
+      { folder: FOLDER, attachments: [att("a1-notes.txt", "text")] },
+      { files: [{ path: "ch1.md", bytes: 12 }], more: 0 },
+      A.probe(),
+    );
+    await runner.advance(ID);
+    expect(f.prompts[0]).toContain(
+      "# Material\nFolder: " + FOLDER + "\nFiles in the folder:\n- ch1.md (12 bytes)",
+    );
+    expect(f.prompts[0]).toContain("Attached files:\n- notes.txt: ");
+    expect(f.prompts[0]).toContain("a1-notes.txt");
+  });
+
+  it("turn passes read dirs, images and web search to the adapter", async () => {
+    const { store, f, runner } = await setupMaterial(
+      { folder: FOLDER, webSearch: true, attachments: [att("a1-pic.png", "image")] },
+      { files: [], more: 0 },
+      A.probe(),
+    );
+    await runner.advance(ID);
+    const dirA = store.attachmentsDir(ID);
+    expect(f.requests[0]!.options).toEqual({
+      readDirs: [FOLDER, dirA],
+      images: [path.join(dirA, "a1-pic.png")],
+      webSearch: true,
+      model: null,
+      effort: null,
+    });
+  });
+
+  it("tools_calls_get_300_seconds", async () => {
+    const withTools = await setupMaterial({ webSearch: true }, null, A.probe());
+    await withTools.runner.advance(ID);
+    expect(withTools.f.requests[0]!.timeoutMs).toBe(CALL_TIMEOUT_TOOLS_MS);
+    const folder = await setupMaterial({ folder: FOLDER }, { files: [], more: 0 }, A.probe());
+    await folder.runner.advance(ID);
+    expect(folder.f.requests[0]!.timeoutMs).toBe(300_000);
+    const plain = await setupMaterial({}, null, A.probe());
+    await plain.runner.advance(ID);
+    expect(plain.f.requests[0]!.timeoutMs).toBe(180_000);
+  });
+});
+
+describe("runOptions", () => {
+  const DIR = "/data/attachments/s1";
+  const answer = (attachments?: string[]): SessionEvent => ({
+    kind: "answer",
+    at: NOW,
+    answer: { choiceIndex: null, text: "x", reasoning: null, confidence: null, attachments },
+  });
+
+  it("runOptions adds the attachments dir only when something is attached", () => {
+    expect(runOptions(session([]), DIR, null).readDirs).toEqual([]);
+    expect(runOptions({ ...session([]), folder: "/m" }, DIR, null).readDirs).toEqual(["/m"]);
+    const withMaterial = {
+      ...session([]),
+      attachments: [{ file: "a1-x.pdf", name: "x.pdf", bytes: 1, kind: "pdf" as const }],
+    };
+    expect(runOptions(withMaterial, DIR, null).readDirs).toEqual([DIR]);
+    expect(runOptions(session([answer(["a1-y.txt"])]), DIR, null).readDirs).toEqual([DIR]);
+    expect(runOptions(session([answer([])]), DIR, null).readDirs).toEqual([]);
+  });
+
+  it("runOptions passes images of the material and of the last answer only", () => {
+    const s = {
+      ...session([answer(["a1-old.png"]), answer(["a2-new.jpg", "a3-doc.pdf"])]),
+      attachments: [
+        { file: "a1-m.png", name: "m.png", bytes: 1, kind: "image" as const },
+        { file: "a2-m.pdf", name: "m.pdf", bytes: 1, kind: "pdf" as const },
+      ],
+    };
+    expect(runOptions(s, DIR, null).images).toEqual([
+      "/data/attachments/s1/a1-m.png",
+      "/data/attachments/s1/a2-new.jpg",
+    ]);
   });
 });

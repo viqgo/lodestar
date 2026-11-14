@@ -5,8 +5,10 @@ import * as fs from "node:fs";
 import * as fsp from "node:fs/promises";
 import os from "node:os";
 import { join } from "node:path";
+import { FILE_LIST_MAX } from "../shared/limits";
 import { createAdapters } from "./cli/registry";
 import { registerIpc } from "./ipc";
+import { listFolder } from "./files";
 import { createStore } from "./store";
 import { createTurnRunner } from "./turn";
 
@@ -58,6 +60,7 @@ async function main(): Promise<void> {
     now,
     newId,
     notify: (s) => send("session:updated", s),
+    listFolder: (f) => listFolder(fsp, f, FILE_LIST_MAX),
   });
   registerIpc({ ipcMain, adapters, store, turns, now, newId, send });
   if (!process.env.ELECTRON_RENDERER_URL) {

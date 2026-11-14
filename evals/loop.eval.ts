@@ -4,7 +4,8 @@ import os from "node:os";
 import { describe, expect, it } from "vitest";
 import { deriveState } from "../src/core/engine";
 import { createAdapters } from "../src/main/cli/registry";
-import { isCliId } from "../src/shared/clis";
+import { NO_OPTIONS, isCliId } from "../src/shared/clis";
+import { CALL_TIMEOUT_MS } from "../src/shared/limits";
 import { modelStep } from "../src/main/turn";
 import type { Action, Question, SessionEvent } from "../src/shared/types";
 import { act, ans, cont, pick, say, session } from "../tests/helpers/fixtures";
@@ -151,7 +152,7 @@ describe("evals", () => {
       const s = { ...base, events: c.events };
       const started = Date.now();
       const r = await modelStep(
-        { adapter, knowledge: [], profile: "" },
+        { adapter, knowledge: [], profile: "", options: NO_OPTIONS, timeoutMs: CALL_TIMEOUT_MS },
         s,
         deriveState(c.events),
         new AbortController().signal,

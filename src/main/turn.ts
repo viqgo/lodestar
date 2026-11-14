@@ -1,12 +1,16 @@
+import path from "node:path";
 import { allowedActions, checkAction, deriveState, learnedToSave } from "../core/engine";
 import { buildPrompt } from "../core/prompt";
-import { CALL_TIMEOUT_MS } from "../shared/limits";
+import { attachmentKind, renderMaterial } from "../core/material";
+import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../shared/limits";
 import { REPLY_JSON_SCHEMA, parseReply } from "../shared/schema";
 import type {
   Action,
   CliId,
+  FileEntry,
   KnowledgeItem,
   LessonState,
+  RunOptions,
   Session,
   SessionEvent,
   TurnError,
@@ -16,8 +20,32 @@ import type {
 import type { CliAdapter } from "./cli/adapter";
 import type { Store } from "./store";
 
+export function runOptions(session: Session, attachmentsDir: string, settings: null): RunOptions {
+  void settings;
+  const answers = session.events.flatMap((e) => (e.kind === "answer" ? [e.answer] : []));
+  const last = answers[answers.length - 1];
+  const anyAnswerFiles = answers.some((a) => (a.attachments?.length ?? 0) > 0);
+  const readDirs = [
+    ...(session.folder !== null ? [session.folder] : []),
+    ...(session.attachments.length > 0 || anyAnswerFiles ? [attachmentsDir] : []),
+  ];
+  const images = [
+    ...session.attachments.filter((a) => a.kind === "image").map((a) => a.file),
+    ...(last?.attachments ?? []).filter((f) => attachmentKind(f) === "image"),
+  ].map((f) => path.join(attachmentsDir, f));
+  return { readDirs, images, webSearch: session.webSearch, model: null, effort: null };
+}
+
 export async function modelStep(
-  deps: { adapter: CliAdapter; knowledge: KnowledgeItem[]; profile: string },
+  deps: {
+    adapter: CliAdapter;
+    knowledge: KnowledgeItem[];
+    profile: string;
+    options: RunOptions;
+    timeoutMs: number;
+    material?: string | null;
+    attachmentsDir?: string;
+  },
   session: Session,
   state: LessonState,
   signal: AbortSignal,
@@ -32,12 +60,16 @@ export async function modelStep(
       knowledge: deps.knowledge,
       retryNote,
       profile: deps.profile,
+      material: deps.material ?? null,
+      webSearch: deps.options.webSearch,
+      ...(deps.attachmentsDir !== undefined ? { attachmentsDir: deps.attachmentsDir } : {}),
     });
     const run = await deps.adapter.run({
       prompt,
       schema: REPLY_JSON_SCHEMA,
       signal,
-      timeoutMs: CALL_TIMEOUT_MS,
+      timeoutMs: deps.timeoutMs,
+      options: deps.options,
     });
     if (!run.ok) {
       if (run.kind === "aborted")
@@ -72,6 +104,7 @@ export function createTurnRunner(deps: {
   now: () => string;
   newId: (prefix: "s" | "k") => string;
   notify: (session: Session) => void;
+  listFolder: (folder: string) => Promise<{ files: FileEntry[]; more: number } | null>;
 }): TurnRunner {
   const running = new Map<string, AbortController>();
 
@@ -99,9 +132,35 @@ export function createTurnRunner(deps: {
         if (state.awaiting.who !== "model") return { ok: true, session };
         const knowledge = await deps.store.readKnowledge();
         const profile = await deps.store.readProfile();
+        const listing = session.folder !== null ? await deps.listFolder(session.folder) : null;
+        if (session.folder !== null && listing === null) {
+          return {
+            ok: false,
+            error: {
+              kind: "folder_missing",
+              message: "The material folder was not found. Choose it again or remove it.",
+            },
+            session,
+          };
+        }
+        const attachmentsDir = deps.store.attachmentsDir(session.id);
+        const material = renderMaterial({
+          folder: session.folder,
+          files: listing?.files ?? [],
+          more: listing?.more ?? 0,
+          attachments: session.attachments.map((a) => ({
+            name: a.name,
+            path: path.join(attachmentsDir, a.file),
+          })),
+        });
+        const options = runOptions(session, attachmentsDir, null);
+        const timeoutMs =
+          options.readDirs.length > 0 || options.webSearch
+            ? CALL_TIMEOUT_TOOLS_MS
+            : CALL_TIMEOUT_MS;
         const adapter = deps.adapters[session.cli] ?? deps.adapters.codex;
         const step = await modelStep(
-          { adapter, knowledge, profile },
+          { adapter, knowledge, profile, options, timeoutMs, material, attachmentsDir },
           session,
           state,
           controller.signal,

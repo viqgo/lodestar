@@ -87,7 +87,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T57 Listing a folder and storing attachments
 - [x] T58 Adapters turn options into flags
 - [x] T59 The prompt and the answer rule
-- [ ] T60 The turn passes material to the tutor
+- [x] T60 The turn passes material to the tutor
 - [ ] T61 Channels for folder, files and search
 - [ ] T62 Material controls
 - [ ] T63 Material on the New lesson form
@@ -3016,7 +3016,7 @@ What exists at the end: a lesson can have a material folder, attached files (on 
 ### T60 - The turn passes material to the tutor
 **Implements**: B37, B38, B42, B45 · ARCHITECTURE: flow 1, `main/turn.ts` (M3)
 **Depends on**: T57, T58, T59
-**Files**: modify `src/main/turn.ts`, `src/main/ipc.ts` (only the `IpcDeps`/wiring types if needed), `src/main/index.ts`, `tests/main/turn.test.ts`, `tests/helpers/fakes.ts`
+**Files**: modify `src/main/turn.ts`, `evals/loop.eval.ts` (only: pass `options: NO_OPTIONS, timeoutMs: CALL_TIMEOUT_MS` to its `modelStep` call), `src/main/ipc.ts` (only the `IpcDeps`/wiring types if needed), `src/main/index.ts`, `tests/main/turn.test.ts`, `tests/helpers/fakes.ts`
 **Details**
 - `fakes.ts` `fakeAdapter`: also record each `RunRequest` in `requests`.
 - `createTurnRunner` deps gain `listFolder: (folder: string) => Promise<{ files: FileEntry[]; more: number } | null>` (`index.ts` passes `(f) => listFolder(fsp, f, FILE_LIST_MAX)`).

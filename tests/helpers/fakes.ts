@@ -52,6 +52,7 @@ export function fakeSpawn(...plans: FakePlan[]) {
 /** Replies in order. An Action is wrapped as a good reply; a string is returned as raw text; a RunResult is returned as is. */
 export function fakeAdapter(...replies: (Action | string | RunResult)[]) {
   const prompts: string[] = [];
+  const requests: RunRequest[] = [];
   const adapter: CliAdapter = {
     id: "codex",
     label: "Codex",
@@ -59,6 +60,7 @@ export function fakeAdapter(...replies: (Action | string | RunResult)[]) {
     detect: async () => ({ ok: true, version: "0.0.0" }),
     run: async (req: RunRequest): Promise<RunResult> => {
       prompts.push(req.prompt);
+      requests.push(req);
       const r = replies[prompts.length - 1];
       if (r === undefined) return { ok: false, kind: "failed", message: "no more fake replies" };
       if (typeof r === "string") return { ok: true, text: r, usage: null };
@@ -70,7 +72,7 @@ export function fakeAdapter(...replies: (Action | string | RunResult)[]) {
       };
     },
   };
-  return { adapter, prompts };
+  return { adapter, prompts, requests };
 }
 
 export function fakeAdapters(
