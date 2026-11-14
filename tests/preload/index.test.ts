@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Answer, Session, TurnResult } from "../../src/shared/types";
 import { UNITS, session, subject } from "../helpers/fixtures";
 
+const QUESTION = { kind: "text" as const, prompt: "Say", options: [], correctIndex: null };
 const FILTER = { subjectId: null, sessionId: null };
 const ANSWER: Answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
 const SETTINGS = { voice: { language: "en", voice: "aura-2-thalia-en" } };
@@ -72,6 +73,10 @@ describe("preload", () => {
         "voiceSpeak",
         "voiceSkip",
         "voiceStop",
+        "practiceFronts",
+        "practiceAsk",
+        "practiceGrade",
+        "practiceStop",
         "onVoiceState",
         "onVoiceTranscript",
         "onVoiceUtterance",
@@ -152,6 +157,10 @@ describe("preload", () => {
       await api.voiceStop(),
       await api.dueItems(FILTER),
       await api.recordReview("k", true),
+      await api.practiceFronts(["k"], "claude"),
+      await api.practiceAsk("k", "claude"),
+      await api.practiceGrade("k", QUESTION, "words", "claude"),
+      await api.practiceStop(),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -197,8 +206,12 @@ describe("preload", () => {
       ["voice:stop"],
       ["review:due", FILTER],
       ["review:record", "k", true],
+      ["practice:fronts", ["k"], "claude"],
+      ["practice:ask", "k", "claude"],
+      ["practice:grade", "k", QUESTION, "words", "claude"],
+      ["practice:stop"],
     ]);
-    expect(results).toEqual(Array(43).fill("R"));
+    expect(results).toEqual(Array(47).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

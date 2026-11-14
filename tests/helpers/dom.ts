@@ -58,6 +58,16 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     deleteKnowledge: vi.fn(async () => undefined),
     dueItems: vi.fn(async () => ({ due: [], nextDue: null })),
     recordReview: vi.fn(async () => undefined),
+    practiceFronts: vi.fn(async () => ({ ok: true })),
+    practiceAsk: vi.fn(async () => ({
+      ok: false,
+      error: { kind: "busy", message: "A reply is already on the way." },
+    })),
+    practiceGrade: vi.fn(async () => ({
+      ok: false,
+      error: { kind: "busy", message: "A reply is already on the way." },
+    })),
+    practiceStop: vi.fn(async () => undefined),
     getSettings: vi.fn(async () => ({ voice: { language: "en", voice: "aura-2-thalia-en" } })),
     saveSettings: vi.fn(async () => ({ ok: true })),
     voiceHasKey: vi.fn(async () => false),

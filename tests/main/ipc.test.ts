@@ -9,6 +9,7 @@ import type {
   KnowledgeItem,
   Session,
   SubjectResult,
+  TurnError,
   TurnResult,
 } from "../../src/shared/types";
 import { fakeAdapters } from "../helpers/fakes";
@@ -19,11 +20,13 @@ import {
   SE,
   UNITS,
   act,
+  choiceQ,
   pick,
   readySubject,
   review,
   session,
   subject,
+  textQ,
 } from "../helpers/fixtures";
 
 const NOW = "2026-03-03T00:00:00.000Z";
@@ -72,6 +75,14 @@ const setup = async (
     stop: vi.fn(),
     isRunning: vi.fn(() => subjectRunning),
   };
+  const practice = {
+    fronts: vi.fn(async (): Promise<{ ok: true } | { ok: false; error: TurnError }> => ({
+      ok: true,
+    })),
+    ask: vi.fn(async () => ({ ok: true as const, question: textQ })),
+    grade: vi.fn(async () => ({ ok: true as const, verdict: "pass" as const, feedback: "f" })),
+    stop: vi.fn(),
+  };
   const send = vi.fn();
   const secrets = {
     has: vi.fn(async () => false),
@@ -93,6 +104,7 @@ const setup = async (
     dialogs,
     secrets,
     voice,
+    practice,
   });
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(null, ...args);
   return {
@@ -105,6 +117,7 @@ const setup = async (
     dir,
     secrets,
     voice,
+    practice,
     emit: (channel: string, ...args: unknown[]) => listeners.get(channel)!(null, ...args),
     channels: () => [...handlers.keys()],
   };
@@ -633,6 +646,7 @@ describe("ipc material", () => {
         skip: vi.fn(),
         stop: vi.fn(),
       } as any,
+      practice: { fronts: vi.fn(), ask: vi.fn(), grade: vi.fn(), stop: vi.fn() } as any,
     });
     const [a] = await makeFiles(["a.txt"]);
     const r = await handlers.get("sessions:create")!(null, {
@@ -1318,6 +1332,7 @@ describe("ipc review", () => {
       dialogs: { pickFolder: async () => null, pickFiles: async () => [] },
       secrets: ctx.secrets,
       voice: ctx.voice,
+      practice: { fronts: vi.fn(), ask: vi.fn(), grade: vi.fn(), stop: vi.fn() } as any,
     });
     expect(await handlers.get("review:record")!(null, K(1).id, true)).toBe(undefined);
     expect(failing.writeReviews).toHaveBeenCalled();
@@ -1330,5 +1345,47 @@ describe("ipc review", () => {
     expect((await store.readKnowledge()).map((k) => k.id)).toEqual([K(2).id]);
     expect((await store.readReviews()).map((r) => r.itemId)).toEqual([K(2).id]);
     expect((await call("review:due", all)).due.map((d: any) => d.item.id)).toEqual([K(2).id]);
+  });
+});
+
+describe("ipc practice", () => {
+  it("practice channels pass their arguments to the service with the tutor first", async () => {
+    const { call, practice } = await setup();
+    expect(await call("practice:fronts", ["k", 7], "claude")).toEqual({ ok: true });
+    expect(practice.fronts).toHaveBeenCalledWith("claude", ["k"]);
+    expect(await call("practice:ask", "k", "claude")).toEqual({ ok: true, question: textQ });
+    expect(practice.ask).toHaveBeenCalledWith("claude", "k");
+    expect(await call("practice:grade", "k", textQ, " words ", "claude")).toEqual({
+      ok: true,
+      verdict: "pass",
+      feedback: "f",
+    });
+    expect(practice.grade).toHaveBeenCalledWith("claude", "k", textQ, "words");
+  });
+
+  it("practice channels refuse an unknown tutor, a bad question and a bad answer", async () => {
+    const { call, practice } = await setup();
+    const tutor = { ok: false, error: { kind: "invalid_answer", message: "Choose a tutor." } };
+    const answer = { ok: false, error: { kind: "invalid_answer", message: "Write an answer." } };
+    expect(await call("practice:fronts", ["k"], "gpt")).toEqual(tutor);
+    expect(await call("practice:ask", "k", "gpt")).toEqual(tutor);
+    expect(await call("practice:grade", "k", textQ, "words", "gpt")).toEqual(tutor);
+    expect(await call("practice:grade", "k", choiceQ, "words", "claude")).toEqual(answer);
+    expect(await call("practice:grade", "k", {}, "words", "claude")).toEqual(answer);
+    expect(await call("practice:grade", "k", textQ, "  ", "claude")).toEqual(answer);
+    expect(await call("practice:grade", "k", textQ, "x".repeat(4001), "claude")).toEqual(answer);
+    expect(await call("practice:ask", 42, "claude")).toEqual({
+      ok: false,
+      error: { kind: "not_found", message: "This item no longer exists." },
+    });
+    expect(practice.fronts).not.toHaveBeenCalled();
+    expect(practice.ask).not.toHaveBeenCalled();
+    expect(practice.grade).not.toHaveBeenCalled();
+  });
+
+  it("practice:stop stops the service", async () => {
+    const { call, practice } = await setup();
+    expect(await call("practice:stop")).toBe(undefined);
+    expect(practice.stop).toHaveBeenCalledTimes(1);
   });
 });

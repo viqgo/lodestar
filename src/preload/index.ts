@@ -40,6 +40,15 @@ const api: Api = {
   dueItems: (filter) => ipcRenderer.invoke("review:due", filter) as ReturnType<Api["dueItems"]>,
   recordReview: (itemId, correct) =>
     ipcRenderer.invoke("review:record", itemId, correct) as Promise<void>,
+  practiceFronts: (itemIds, cli) =>
+    ipcRenderer.invoke("practice:fronts", itemIds, cli) as ReturnType<Api["practiceFronts"]>,
+  practiceAsk: (itemId, cli) =>
+    ipcRenderer.invoke("practice:ask", itemId, cli) as ReturnType<Api["practiceAsk"]>,
+  practiceGrade: (itemId, question, text, cli) =>
+    ipcRenderer.invoke("practice:grade", itemId, question, text, cli) as ReturnType<
+      Api["practiceGrade"]
+    >,
+  practiceStop: () => ipcRenderer.invoke("practice:stop") as Promise<void>,
   getSettings: () => ipcRenderer.invoke("settings:get") as Promise<Settings>,
   saveSettings: (settings) =>
     ipcRenderer.invoke("settings:save", settings) as ReturnType<Api["saveSettings"]>,

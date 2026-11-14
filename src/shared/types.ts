@@ -201,6 +201,21 @@ export type Api = {
   deleteKnowledge(id: string): Promise<void>;
   dueItems(filter: ReviewFilter): Promise<{ due: DueItem[]; nextDue: string | null }>;
   recordReview(itemId: string, correct: boolean): Promise<void>;
+  practiceFronts(
+    itemIds: string[],
+    cli: CliId,
+  ): Promise<{ ok: true } | { ok: false; error: TurnError }>;
+  practiceAsk(
+    itemId: string,
+    cli: CliId,
+  ): Promise<{ ok: true; question: Question } | { ok: false; error: TurnError }>;
+  practiceGrade(
+    itemId: string,
+    question: Question,
+    text: string,
+    cli: CliId,
+  ): Promise<{ ok: true; verdict: Verdict; feedback: string } | { ok: false; error: TurnError }>;
+  practiceStop(): Promise<void>;
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: true } | { ok: false; message: string }>;
   voiceHasKey(): Promise<boolean>;

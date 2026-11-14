@@ -13,6 +13,7 @@ import {
   validateOutline,
 } from "../core/subject";
 import {
+  ANSWER_TEXT_MAX,
   ATTACH_PER_ANSWER,
   ATTACH_PER_LESSON,
   CHAT_TEXT_MAX,
@@ -20,6 +21,7 @@ import {
   VOICE_CHUNK_MAX,
   VOICE_SAY_MAX,
 } from "../shared/limits";
+import { parseAsk } from "../shared/schema";
 import type {
   Answer,
   Attachment,
@@ -39,6 +41,7 @@ import type {
 } from "../shared/types";
 import type { CliAdapter } from "./cli/adapter";
 import { detectAll } from "./cli/registry";
+import type { Practice } from "./practice";
 import type { Secrets } from "./secrets";
 import type { Store } from "./store";
 import type { SubjectRunner } from "./subjectTurn";
@@ -57,6 +60,7 @@ export type IpcDeps = {
   dialogs: { pickFolder(): Promise<string | null>; pickFiles(): Promise<string[]> };
   secrets: Secrets;
   voice: VoiceHub;
+  practice: Practice;
 };
 
 const chains = new Map<string, Promise<unknown>>();
@@ -77,6 +81,7 @@ type SessionResult = { ok: true; session: Session } | { ok: false; message: stri
 export function registerIpc(deps: IpcDeps): void {
   const { ipcMain, adapters, store, turns, subjects, now, newId, send, dialogs, secrets, voice } =
     deps;
+  const { practice } = deps;
 
   const runTurn = async (id: string): Promise<TurnResult> => {
     const result = turns.isRunning(id)
@@ -633,6 +638,56 @@ export function registerIpc(deps: IpcDeps): void {
       return { ok: true as const, session };
     }),
   );
+
+  const badTutor = {
+    ok: false as const,
+    error: { kind: "invalid_answer" as const, message: "Choose a tutor." },
+  };
+  const badAnswer = {
+    ok: false as const,
+    error: { kind: "invalid_answer" as const, message: "Write an answer." },
+  };
+  const gone = {
+    ok: false as const,
+    error: { kind: "not_found" as const, message: "This item no longer exists." },
+  };
+  ipcMain.handle("practice:fronts", (_event, itemIds: unknown, cli: unknown) =>
+    !isCliId(cli)
+      ? badTutor
+      : practice.fronts(
+          cli,
+          Array.isArray(itemIds) ? itemIds.filter((x): x is string => typeof x === "string") : [],
+        ),
+  );
+  ipcMain.handle("practice:ask", (_event, itemId: unknown, cli: unknown) =>
+    !isCliId(cli) ? badTutor : typeof itemId !== "string" ? gone : practice.ask(cli, itemId),
+  );
+  ipcMain.handle(
+    "practice:grade",
+    (_event, itemId: unknown, question: unknown, text: unknown, cli: unknown) => {
+      if (!isCliId(cli)) return badTutor;
+      let q: ReturnType<typeof parseAsk> = { ok: false, reason: "bad question" };
+      try {
+        q = parseAsk(JSON.stringify({ question }));
+      } catch {
+        // a throw counts as not ok
+      }
+      if (
+        typeof itemId !== "string" ||
+        !q.ok ||
+        q.value.question.kind !== "text" ||
+        typeof text !== "string" ||
+        text.trim().length < 1 ||
+        text.trim().length > ANSWER_TEXT_MAX
+      ) {
+        return badAnswer;
+      }
+      return practice.grade(cli, itemId, q.value.question, text.trim());
+    },
+  );
+  ipcMain.handle("practice:stop", () => {
+    practice.stop();
+  });
 
   ipcMain.handle("subject:stop", (_event, id: string) => {
     subjects.stop(id);

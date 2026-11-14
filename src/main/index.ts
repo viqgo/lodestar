@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { FILE_LIST_MAX } from "../shared/limits";
 import { createAdapters } from "./cli/registry";
 import { registerIpc } from "./ipc";
+import { createPractice } from "./practice";
 import { listFolder } from "./files";
 import { WebSocket } from "ws";
 import { createSecrets } from "./secrets";
@@ -74,6 +75,7 @@ async function main(): Promise<void> {
     now,
     notify: (s) => send("subject:updated", s),
   });
+  const practice = createPractice({ adapters, store, now });
   const dialogs = {
     pickFolder: async (): Promise<string | null> => {
       const r = await dialog.showOpenDialog({ properties: ["openDirectory"] });
@@ -104,6 +106,7 @@ async function main(): Promise<void> {
     dialogs,
     secrets,
     voice,
+    practice,
   });
   session.defaultSession.setPermissionRequestHandler(
     (webContents, permission, callback, details) => {
