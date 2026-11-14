@@ -68,6 +68,19 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T43 Save, load and use the profile
 - [x] T44 The Profile screen
 - [ ] GATE E Tutor profile in the window
+- [ ] T45 CLI names and defaults (milestone 2)
+- [ ] T46 Shared process runner
+- [ ] T47 Codex adapter on the shared runner
+- [ ] T48 Claude Code adapter
+- [ ] T49 Gemini adapter (experimental)
+- [ ] T50 A registry, and one adapter per lesson
+- [ ] T51 Channels for the CLI list, the choice and the switch
+- [ ] T52 The tutor picker
+- [ ] T53 Pick a tutor for a new lesson
+- [ ] T54 The tutor in a lesson, and switching
+- [ ] T55 Clean up, document, and check Claude Code for real
+- [ ] GATE F Three CLIs
+- [ ] OWNER TASK Gemini live run
 
 Conventions used in every task:
 - "Run tests" means `npm test`. The expected line is the vitest summary line, e.g. `Tests  9 passed (9)`.
@@ -2384,18 +2397,454 @@ What the owner can see at the end: a Profile screen where their instructions are
 **Try it yourself**: `npm run dev`; open Profile, write "Keep readings under 300 words and use a cooking analogy", Save; start a lesson (or continue one); the next reading should be shorter and use that style. Clear the text, save, and the next call should be back to normal.
 **Then decide**: streaming spike / milestone 2 (Gemini and Claude adapters) / tune.
 
+## Stage F - milestone 2: more CLIs (D41-D45)
+What the owner can see at the end: a Tutor picker with Codex, Claude Code and Gemini (experimental) on the New lesson form, the tutor named in every lesson with a "Change tutor" button, and a full lesson run through Claude Code.
+
+Conventions for this stage (in addition to the ones at the top of this file):
+- Test count before T45: 294. Each task states the count after it. Before implementing, run the new tests and paste the failing run: the new tests must fail (a test file whose import does not exist yet shows as one failed file, not as failed tests). If an existing test fails at that point, stop and report.
+- Renderer tests start with `// @vitest-environment jsdom` and `import "../helpers/dom";` and use `installApi` from `tests/helpers/dom.ts`.
+- Process tests use `fakeSpawn` from `tests/helpers/fakes.ts` (see `tests/main/codex.test.ts` for the pattern: a real temp dir from `fs.mkdtempSync`, real `node:fs`, `env` with `PATH: ""`).
+- Commit trailer on every commit: `Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>`. Stage files by name. Never push.
+
+### T45 - CLI names and defaults
+
+**Implements**: B25, B26 · ARCHITECTURE "Milestone 2" (`clis.ts`, `CliId`, `CliStatus`) · D44
+**Depends on**: T44
+
+**Files**
+- Create: `src/shared/clis.ts`, `tests/shared/clis.test.ts`
+- Modify: `src/shared/types.ts`
+- Do NOT touch any other file.
+
+**Steps**
+1. In `types.ts` add `export type CliId = "codex" | "claude" | "gemini";` and `export type CliStatus = { id: CliId; installed: boolean; version: string | null };`, and change `Session.cli` from `"codex"` to `CliId`. Nothing else.
+2. Write `tests/shared/clis.test.ts` with 5 tests:
+
+   | Test | Expect |
+   |------|--------|
+   | cliName adds experimental to Gemini only | `CLI_ORDER` equals `["codex","claude","gemini"]`; `cliName("codex")` `"Codex"`, `cliName("claude")` `"Claude Code"`, `cliName("gemini")` `"Gemini (experimental)"`; `CLI_INFO.gemini.label` `"Gemini"` |
+   | isCliId accepts the three ids only | true for the three; false for `"gpt"`, `""`, `null`, `5` |
+   | defaultCli prefers the last used CLI when installed | statuses all installed, `lastUsed: "claude"` -> `"claude"` |
+   | defaultCli falls back to the first installed | codex missing, claude installed, `lastUsed: "codex"` -> `"claude"`; `lastUsed: null` with gemini only -> `"gemini"` |
+   | defaultCli is null when nothing is installed | all `installed: false` -> `null` |
+3. Run tests, paste the failing run. Implement `clis.ts` with the five exports from ARCHITECTURE (`CLI_ORDER`, `CLI_INFO`, `isCliId`, `cliName`, `defaultCli`). `clis.ts` imports only types from `./types`.
+4. `npm test` -> `Tests  299 passed (299)`; `npm run format && npm run lint && npm run typecheck && npm run build` -> exit 0. Paste.
+5. Tick T45, commit `feat: cli names and defaults`.
+
+**Stop and report if** widening `Session.cli` breaks typecheck anywhere.
+
+### T46 - Shared process runner
+
+**Implements**: B32 · ARCHITECTURE "Milestone 2" (`process.ts`) · D45
+**Depends on**: T45
+
+**Files**
+- Create: `src/main/cli/process.ts`, `tests/main/process.test.ts`
+- Do NOT touch `codex.ts` or any other file (T47 moves Codex onto this).
+
+**Context**: this is the generic form of what `src/main/cli/codex.ts` does today. Read that file first; `detect` and `run` there are the reference for every edge (settled flag, kill on abort, timer, `rmSync`, stdin error ignored, `setEncoding("utf8")`, PATH extension with `extraPathDirs`). Skeleton (complete the marked parts from `codex.ts`):
+
+```ts
+import path from "node:path";
+import { DETECT_TIMEOUT_MS, STDERR_MAX } from "../../shared/limits";
+import type { DetectResult, RunResult } from "../../shared/types";
+import { extraPathDirs, resolveCommand } from "./adapter";
+
+export type ProcessDeps = {
+  spawn: typeof import("node:child_process").spawn;
+  env: NodeJS.ProcessEnv;
+  home: string;
+  tmpRoot: string;
+  fs: typeof import("node:fs");
+  detectTimeoutMs?: number;
+};
+export type Dirs = { root: string; work: string };
+export type ProcessResult =
+  | { kind: "exit"; code: number | null; stdout: string; stderr: string }
+  | { kind: "missing" }
+  | { kind: "aborted" }
+  | { kind: "timeout" };
+export type ProcessSpec = {
+  command: string | null;
+  args(dirs: Dirs): string[];
+  stdin: string;
+  signal: AbortSignal;
+  timeoutMs: number;
+  prepare?(dirs: Dirs): void;
+  dropEnv?: string[];
+};
+
+export function findCommand(deps: ProcessDeps, name: string, envVar: string): string | null {
+  const fromEnv = deps.env[envVar];
+  if (fromEnv) return fromEnv;
+  return resolveCommand(name, deps.env.PATH ?? "", extraPathDirs(deps.home), deps.fs.existsSync);
+}
+
+export function lastStderrLine(stderr: string): string { /* same body as in codex.ts */ }
+
+export function detectVersion(deps: ProcessDeps, command: string | null): Promise<DetectResult> {
+  /* body of codex.ts detect(), with `command` passed in */
+}
+
+export function runProcess(deps: ProcessDeps, spec: ProcessSpec): Promise<ProcessResult> {
+  if (!spec.command) return Promise.resolve({ kind: "missing" });
+  if (spec.signal.aborted) return Promise.resolve({ kind: "aborted" });
+  const root = deps.fs.mkdtempSync(path.join(deps.tmpRoot, "lh-"));
+  const work = path.join(root, "work");
+  deps.fs.mkdirSync(work);
+  const dirs = { root, work };
+  spec.prepare?.(dirs);
+  const env: NodeJS.ProcessEnv = {
+    ...deps.env,
+    PATH: [deps.env.PATH ?? "", ...extraPathDirs(deps.home)].filter(Boolean).join(":"),
+  };
+  for (const name of spec.dropEnv ?? []) delete env[name];
+  /* then exactly the Promise from codex.ts run(): spawn(spec.command, spec.args(dirs), { cwd: work, shell: false, stdio: ["pipe","pipe","pipe"], env }),
+     finish() removes `root`, clears the timer, removes the abort listener;
+     abort -> kill + { kind: "aborted" }; timer -> kill + { kind: "timeout" };
+     child "error" -> { kind: "missing" }; child "close" -> { kind: "exit", code, stdout, stderr };
+     child.stdin.end(spec.stdin) last. */
+}
+
+export function failureResult(
+  r: Exclude<ProcessResult, { kind: "exit" }>,
+  label: string,
+  timeoutMs: number,
+): RunResult {
+  if (r.kind === "missing") return { ok: false, kind: "failed", message: label + " CLI not found" };
+  if (r.kind === "aborted") return { ok: false, kind: "aborted", message: "stopped" };
+  return { ok: false, kind: "timeout", message: "no reply after " + timeoutMs / 1000 + " seconds" };
+}
+```
+
+**Steps**
+1. Write `tests/main/process.test.ts` with 10 tests:
+
+   | Test | Expect |
+   |------|--------|
+   | findCommand prefers the env override | env `{ X_PATH: "/fake/x", PATH: "" }` -> `"/fake/x"`; without it and with an `existsSync` that is true only for `/opt/homebrew/bin/x` -> that path; nothing found -> `null` |
+   | detectVersion returns the version | stdout `tool 1.2.3\n`, code 0 -> `{ ok: true, version: "1.2.3" }` |
+   | detectVersion fails on a missing command, a non-zero exit and a timeout | `null` command; `{ missing: true }`; `{ code: 1 }`; `{ hang: true }` with `detectTimeoutMs: 20` -> each `{ ok: false }` |
+   | runProcess runs without a shell in a new empty folder | `opts.shell` is `false`; `opts.cwd` ends with `/work`, is inside `tmpRoot`, and was an empty directory at spawn time (check inside a custom `args` or with `fs.readdirSync` captured in `prepare`) |
+   | runProcess calls prepare before spawning and passes dirs to args | `prepare` writes `root/x.txt`; `args: (d) => ["--file", path.join(d.root, "x.txt")]`; the spawn call's args equal that and `prepare` ran before `args` |
+   | runProcess writes stdin and returns stdout, stderr and the exit code | plan `{ stdout: "out", stderr: "err", code: 3 }`, stdin `"PROMPT"` -> `{ kind: "exit", code: 3, stdout: "out", stderr: "err" }` and the call's `stdin` is `"PROMPT"` |
+   | temp_dir_removed_for_every_cli | after a normal exit, after an abort (`AbortController.abort()` on a `{ hang: true }` plan) and after a timeout (`timeoutMs: 20`), `tmpRoot` contains no entry |
+   | runProcess reports missing, aborted and timeout | `command: null` -> `missing` and no spawn; `{ missing: true }` -> `missing`; already-aborted signal -> `aborted`, no spawn, no folder; hang + abort -> `aborted` and the call was killed; hang + `timeoutMs: 20` -> `timeout` and killed |
+   | runProcess drops the named env variables and extends PATH | env `{ A: "1", B: "2", PATH: "/bin" }`, `dropEnv: ["A"]` -> spawn env has no `A`, has `B`, and `PATH` starts with `/bin:` and contains `/opt/homebrew/bin` |
+   | failureResult maps the three kinds | `missing` -> failed `"Claude Code CLI not found"` (label `"Claude Code"`); `aborted` -> aborted `"stopped"`; `timeout` with 180000 -> timeout `"no reply after 180 seconds"` |
+2. Run tests, paste the failing run. Implement `process.ts`.
+3. `npm test` -> `Tests  309 passed (309)`; format, lint, typecheck, build exit 0. Paste.
+4. Tick T46, commit `feat: shared cli process runner`.
+
+**Stop and report if** `fakeSpawn` cannot express a case above without changing `tests/helpers/fakes.ts`.
+
+### T47 - Codex adapter on the shared runner
+
+**Implements**: B32 · ARCHITECTURE "Milestone 2" (`CliAdapter`, `createCodexAdapter`) · D45
+**Depends on**: T46
+
+**Files**
+- Modify: `src/main/cli/adapter.ts`, `src/main/cli/codex.ts`, `tests/helpers/fakes.ts`, `tests/main/codex.test.ts`, `tests/main/turn.test.ts` (only the `slowAdapter` object), `evals/loop.eval.ts` (only if typecheck needs it)
+- Do NOT change any behavior of the Codex adapter. Do NOT edit the existing tests in `codex.test.ts`: they are the proof that nothing changed.
+
+**Steps**
+1. Add 1 test to `codex.test.ts`: `codex adapter has a label and one retry` -> `adapter.id` `"codex"`, `adapter.label` `"Codex"`, `adapter.retries` `1`. Run, paste the failure.
+2. `adapter.ts`: `CliAdapter` becomes `{ id: CliId; label: string; retries: number; detect(); run(req) }` (import `CliId` from `../../shared/types`).
+3. `codex.ts`: `createCodexAdapter(deps: ProcessDeps)`; `detect` = `detectVersion(deps, findCommand(deps, "codex", "LEARN_CODEX_PATH"))`; `run` = `runProcess` with `prepare: (d) => deps.fs.writeFileSync(path.join(d.root, "schema.json"), JSON.stringify(req.schema))`, `args: (d) => ["exec", "--json", "--output-schema", path.join(d.root, "schema.json"), "--ephemeral", "--sandbox", "read-only", "--skip-git-repo-check", "-"]`, `stdin: req.prompt`; a non-`exit` result -> `failureResult(r, "Codex", req.timeoutMs)`; exit code 0 -> `parseCodexEvents` (text null -> failed `"Codex returned no message"`); other code -> failed `lastStderrLine(stderr)`. Replace the local `lastStderrLine` with `export { lastStderrLine } from "./process";`. Keep `parseCodexEvents` as is.
+4. `fakes.ts` `fakeAdapter`: add `label: "Codex", retries: 1`. `turn.test.ts` `slowAdapter`: add the same two fields.
+5. `npm test` -> `Tests  310 passed (310)`; format, lint, typecheck, build exit 0. Paste.
+6. Tick T47, commit `refactor: codex adapter on the shared runner`.
+
+**Stop and report if** any existing test in `codex.test.ts` fails after the rewrite and the cause is not a mistake in your new code (for example the order of `writeFileSync` and `mkdirSync` matters to a test): report the test and the difference, do not edit the test.
+
+### T48 - Claude Code adapter
+
+**Implements**: B29, B32, B33 · ARCHITECTURE "Milestone 2" (`claude.ts`) · STACK "Milestone 2 additions"
+**Depends on**: T47
+
+**Files**
+- Create: `src/main/cli/claude.ts`, `tests/main/claude.test.ts`
+- Do NOT touch any other file.
+
+**Context**: real stdout of `claude -p --output-format json` is one JSON object, for example
+`{"type":"result","is_error":false,"result":"{\"action\":{\"type\":\"probe\"}}","structured_output":{"action":{"type":"probe"}},"usage":{"input_tokens":2,"cache_creation_input_tokens":7317,"cache_read_input_tokens":0,"output_tokens":207}}`.
+Arguments, in this order: `["-p", "--output-format", "json", "--json-schema", JSON.stringify(req.schema), "--tools", "", "--setting-sources", "", "--strict-mcp-config", "--no-session-persistence", "--disable-slash-commands"]`. `dropEnv: ["CLAUDECODE", "CLAUDE_CODE_ENTRYPOINT"]`. Command: `findCommand(deps, "claude", "LEARN_CLAUDE_PATH")`. `id: "claude"`, `label: "Claude Code"`, `retries: 1`.
+
+`parseClaudeResult(stdout)`: `JSON.parse` in try/catch; not an object -> `{ text: null, usage: null, error: "unreadable output" }`. `is_error === true` -> `error` = `String(result ?? "error").slice(0, STDERR_MAX)`. `text` = `JSON.stringify(structured_output)` when `structured_output` is a non-null object, else `result` when it is a string, else `null`. `usage` = `{ inputTokens: input_tokens + cache_creation_input_tokens + cache_read_input_tokens (missing fields count as 0), outputTokens: output_tokens }` when `usage` is an object, else `null`.
+
+`run`: non-`exit` -> `failureResult(r, "Claude Code", req.timeoutMs)`. Otherwise `const p = parseClaudeResult(stdout)` and, in this order: (1) `p.error` is not null and not `"unreadable output"` -> failed with `p.error`; (2) exit code not 0 -> failed `lastStderrLine(stderr)`; (3) `p.error` not null -> failed `"unreadable output"`; (4) `p.text` null -> failed `"Claude Code returned no message"`; (5) else `{ ok: true, text: p.text, usage: p.usage }`.
+
+**Steps**
+1. Write 8 tests in `claude.test.ts`:
+
+   | Test | Expect |
+   |------|--------|
+   | claude_reads_structured_output | the sample above -> `text` equals `JSON.stringify({ action: { type: "probe" } })`, `usage` `{ inputTokens: 7319, outputTokens: 207 }`, `error` null |
+   | parseClaudeResult falls back to result | no `structured_output` -> `text` is the `result` string |
+   | parseClaudeResult reports unreadable output and is_error | `"not json"` -> error `"unreadable output"`; `{"is_error":true,"result":"Credit balance is too low"}` -> error `"Credit balance is too low"` |
+   | claude_spawn_uses_safe_flags | the exact argument list above with `JSON.stringify(schema)` in place; `opts.shell` false; stdin equals the prompt; `opts.cwd` ends with `/work` |
+   | claude adapter drops the Claude Code env markers | env with `CLAUDECODE: "1"` -> spawn env has no `CLAUDECODE` |
+   | claude_error_names_the_cli | `adapter.label` `"Claude Code"`; plan `{ code: 1, stderr: "boom\n" }` -> failed `"boom"`; plan `{ code: 1, stdout: '{"is_error":true,"result":"Not logged in"}' }` -> failed `"Not logged in"`; `{ missing: true }` -> failed `"Claude Code CLI not found"` |
+   | claude adapter reports no message | code 0, stdout `{"is_error":false}` -> failed `"Claude Code returned no message"` |
+   | claude adapter uses LEARN_CLAUDE_PATH | env `{ LEARN_CLAUDE_PATH: "/fake/claude", PATH: "" }` -> the spawned command is `/fake/claude`, for `detect` and for `run`; `retries` is 1 |
+2. Run tests, paste the failing run. Implement.
+3. `npm test` -> `Tests  318 passed (318)`; format, lint, typecheck, build exit 0. Paste.
+4. Tick T48, commit `feat: claude code adapter`.
+
+**Stop and report if** tests fail after two attempts.
+
+### T49 - Gemini adapter (experimental)
+
+**Implements**: B30, B31, B32, B33 · ARCHITECTURE "Milestone 2" (`gemini.ts`, "LLM calls (milestone 2)") · STACK "Milestone 2 additions"
+**Depends on**: T48
+
+**Files**
+- Create: `src/main/cli/gemini.ts`, `tests/main/gemini.test.ts`
+- Do NOT touch any other file.
+
+**Context**: Gemini has no schema flag. Success stdout: `{"session_id":"s","response":"<text>","stats":{}}`. Failure: non-zero exit and on stderr `{"session_id":"s","error":{"type":"Error","message":"Please set an Auth method","code":41}}` (possibly with other lines around it).
+- Arguments: `["-p", "", "-o", "json", "--approval-mode", "plan", "--skip-trust"]`. Command: `findCommand(deps, "gemini", "LEARN_GEMINI_PATH")`. `id: "gemini"`, `label: "Gemini"`, `retries: 2`.
+- `prepare`: `deps.fs.mkdirSync(path.join(d.work, ".gemini"))` then write `path.join(d.work, ".gemini", "settings.json")` with `JSON.stringify({ tools: { exclude: GEMINI_EXCLUDED_TOOLS } })`.
+- `GEMINI_EXCLUDED_TOOLS` = `["run_shell_command", "replace", "write_file", "read_file", "read_many_files", "glob", "grep_search", "list_directory", "web_fetch", "google_web_search", "invoke_agent", "activate_skill", "ask_user", "write_todos", "list_mcp_resources", "read_mcp_resource"]`.
+- `geminiPrompt(prompt, schema)` = `prompt + "\n# Reply format\nReply with exactly one JSON object and nothing else: no code fence, no text before or after it. It must match this JSON Schema:\n" + JSON.stringify(schema) + "\n"`. This is the stdin.
+- `extractJsonObject` (use exactly this):
+  ```ts
+  export function extractJsonObject(text: string): string | null {
+    const start = text.indexOf("{");
+    if (start === -1) return null;
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+    for (let i = start; i < text.length; i++) {
+      const c = text[i];
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (c === "\\") escaped = true;
+        else if (c === '"') inString = false;
+        continue;
+      }
+      if (c === '"') inString = true;
+      else if (c === "{") depth++;
+      else if (c === "}") {
+        depth--;
+        if (depth === 0) return text.slice(start, i + 1);
+      }
+    }
+    return null;
+  }
+  ```
+- `geminiErrorMessage(stderr)`: `const obj = extractJsonObject(stderr)`; if it parses and `error.message` is a string -> that, cut to `STDERR_MAX`; else `lastStderrLine(stderr)`.
+- `run`: non-`exit` -> `failureResult(r, "Gemini", req.timeoutMs)`; code not 0 -> failed `geminiErrorMessage(stderr)`; code 0: parse stdout (try/catch); no string `response` -> failed `"Gemini returned no message"`; else `{ ok: true, text: extractJsonObject(response) ?? response, usage: null }` (unusable text is passed on so the normal bad-reply retry handles it).
+
+**Steps**
+1. Write 10 tests in `gemini.test.ts`:
+
+   | Test | Expect |
+   |------|--------|
+   | gemini_reads_fenced_or_plain_json | `extractJsonObject` on `{"a":1}`, on a ```` ```json ```` fenced `{"a":1}`, and on `Here you go: {"a":{"b":2}} thanks` -> `{"a":1}`, `{"a":1}`, `{"a":{"b":2}}` |
+   | extractJsonObject ignores braces inside strings | `{"a":"} {"}` -> the whole text; `{"a":"x\"}"}` -> the whole text; `no json` and `{"a":1` -> `null` |
+   | gemini_error_uses_json_message | stderr `warn\n{"session_id":"s","error":{"type":"Error","message":"Please set an Auth method","code":41}}\n` -> `"Please set an Auth method"`; a 300-character message is cut to 200 |
+   | geminiErrorMessage falls back to the last stderr line | `"a\nboom\n"` -> `"boom"` |
+   | gemini_prompt_carries_the_schema | `geminiPrompt("P", { type: "object" })` starts with `P\n# Reply format\n` and ends with `{"type":"object"}\n`; the adapter's stdin equals `geminiPrompt(req.prompt, req.schema)` |
+   | gemini_spawn_uses_safe_flags | exact argument list; `opts.shell` false; `opts.cwd` ends with `/work` |
+   | gemini_writes_tool_exclusion_settings | wrap `fakeSpawn`'s `spawn` so that at spawn time the test reads `<cwd>/.gemini/settings.json`: it parses to `{ tools: { exclude: GEMINI_EXCLUDED_TOOLS } }`, and the list contains `run_shell_command`, `write_file` and `google_web_search` |
+   | gemini adapter returns the JSON object from response | stdout `{"response":"```json\n{\"action\":1}\n```"}` -> `{ ok: true, text: "{\"action\":1}", usage: null }` |
+   | gemini adapter passes unusable text on and reports no message | response `"I cannot"` -> ok with text `"I cannot"`; stdout `{}` or `junk` -> failed `"Gemini returned no message"`; `{ code: 41, stderr: <the JSON error> }` -> failed `"Please set an Auth method"` |
+   | gemini adapter has two retries and uses LEARN_GEMINI_PATH | `retries` 2, `label` `"Gemini"`, `id` `"gemini"`; env `{ LEARN_GEMINI_PATH: "/fake/gemini", PATH: "" }` -> spawned command `/fake/gemini` for `detect` and `run` |
+2. Run tests, paste the failing run. Implement.
+3. `npm test` -> `Tests  328 passed (328)`; format, lint, typecheck, build exit 0. Paste.
+4. Tick T49, commit `feat: gemini adapter (experimental)`.
+
+**Stop and report if** tests fail after two attempts.
+
+### T50 - A registry, and one adapter per lesson
+
+**Implements**: B23, B27, B31, B32 · ARCHITECTURE "Milestone 2" (`registry.ts`, `turn.ts`, `IpcDeps.adapters`)
+**Depends on**: T49
+
+**Files**
+- Create: `src/main/cli/registry.ts`, `tests/main/registry.test.ts`
+- Modify: `src/main/turn.ts`, `src/main/ipc.ts`, `src/main/index.ts`, `tests/helpers/fakes.ts`, `tests/main/turn.test.ts`, `tests/main/ipc.test.ts`
+- Do NOT change any IPC channel or the `Api` type (T51).
+
+**Steps**
+1. `fakes.ts`: add `export function fakeAdapters(codex: CliAdapter, others: Partial<Record<CliId, CliAdapter>> = {}): Record<CliId, CliAdapter>` returning `{ codex, claude: others.claude ?? codex, gemini: others.gemini ?? codex }`.
+2. Tests. `registry.test.ts` (2):
+
+   | Test | Expect |
+   |------|--------|
+   | createAdapters builds one adapter per CLI | keys `codex`, `claude`, `gemini`; each `adapters[id].id === id`; labels `Codex`, `Claude Code`, `Gemini` |
+   | detect_checks_all_three_clis | three hand-made adapters whose `detect` resolve `{ ok: true, version: "1.0.0" }`, `{ ok: false }`, and reject -> `detectAll` returns `[{ id: "codex", installed: true, version: "1.0.0" }, { id: "claude", installed: false, version: null }, { id: "gemini", installed: false, version: null }]`, and each `detect` was called once |
+   `turn.test.ts` (4 new; first change the existing `createTurnRunner({ adapter: X, ... })` calls to `adapters: fakeAdapters(X)`):
+
+   | Test | Expect |
+   |------|--------|
+   | lesson_keeps_its_cli | a session with `cli: "claude"`, `adapters = fakeAdapters(codexFake, { claude: claudeFake })` -> after `advance`, `claudeFake.prompts` has 1 entry and `codexFake.prompts` has 0 |
+   | old_lessons_stay_on_codex | a session whose `cli` is `"codex"`, and one whose `cli` is an unknown string (cast) -> both use the codex fake |
+   | gemini_gets_two_retries_others_one | `modelStep` with an adapter `{ ...fake, retries: 2 }` and three unusable replies -> 3 prompts, result `bad_reply`; two unusable then a good one -> ok with `calls: 3`; with `retries: 1` and two unusable -> 2 prompts, `bad_reply` |
+   | a failed call names the CLI | adapter with `label: "Claude Code"` returning `{ ok: false, kind: "failed", message: "boom" }` -> error message `"Claude Code failed: boom"` |
+3. Run tests, paste the failing run.
+4. Implement: `registry.ts` as in ARCHITECTURE (`detectAll` uses `Promise.all` over `CLI_ORDER`, each wrapped so a rejection gives not installed). `turn.ts`: `modelStep` loops `for (let attempt = 1; attempt <= deps.adapter.retries + 1; attempt++)` and builds the failure message with `deps.adapter.label + " failed: "`; `createTurnRunner` takes `adapters` and picks `deps.adapters[session.cli] ?? deps.adapters.codex` after reading the session. `ipc.ts`: `IpcDeps.adapter` becomes `adapters`; `cli:detect` stays and returns `adapters.codex.detect()`. `index.ts`: `const adapters = createAdapters({ spawn, env: process.env, home: os.homedir(), tmpRoot: os.tmpdir(), fs })`, passed to `createTurnRunner` and `registerIpc`. `ipc.test.ts` setup: pass `adapters: fakeAdapters(adapter as any)`.
+5. `npm test` -> `Tests  334 passed (334)`; format, lint, typecheck, build exit 0. Paste.
+6. Tick T50, commit `feat: adapter registry and per-lesson cli`.
+
+**Stop and report if** `evals/loop.eval.ts` stops type-checking (report the error; the fix belongs in T55).
+
+### T51 - Channels for the CLI list, the choice and the switch
+
+**Implements**: B23, B25, B27, B34 · ARCHITECTURE "Milestone 2" (`clis:detect`, `sessions:create`, `sessions:list`, `sessions:setCli`, `Api`)
+**Depends on**: T50
+
+**Files**
+- Modify: `src/shared/types.ts`, `src/main/ipc.ts`, `src/preload/index.ts`, `tests/main/ipc.test.ts`, `tests/preload/index.test.ts`, `tests/helpers/dom.ts`, and any test file that builds a `SessionSummary` literal (find with `grep -rn "phase:" tests`), only to add `cli: "codex"` to it
+- Do NOT touch the renderer source. `detectCli` and `cli:detect` stay for now (T55 removes them), so the window keeps working.
+
+**Steps**
+1. `types.ts`: `SessionSummary` gains `cli: CliId`. `Api` gains `detectClis(): Promise<CliStatus[]>` and `setSessionCli(id: string, cli: CliId): Promise<{ ok: true; session: Session } | { ok: false; message: string }>`; `createSession`'s input becomes `{ topic: string; goal: string; cli?: CliId }` (optional until T55).
+2. Add 6 tests to `ipc.test.ts`:
+
+   | Test | Expect |
+   |------|--------|
+   | clis:detect returns a status per CLI | returns three statuses in order `codex`, `claude`, `gemini` |
+   | sessions:create stores the chosen CLI | input with `cli: "claude"` -> the returned and the stored session have `cli: "claude"`; without `cli` -> `"codex"` |
+   | sessions:create refuses an unknown CLI | `cli: "gpt"` -> `{ ok: false, message: "Choose a tutor." }`, nothing stored |
+   | sessions:list carries the CLI | a stored session with `cli: "gemini"` -> its summary has `cli: "gemini"` |
+   | switch_tutor_asks_then_stores (ipc part) | `sessions:setCli(id, "claude")` -> `{ ok: true, session }` with `cli: "claude"` and `updatedAt` = NOW; stored; `send` called with `"session:updated"` and that session; `turns.advance` not called; unknown CLI -> `"Choose a tutor."`; unknown id -> `"This lesson no longer exists."` |
+   | switch_tutor_refused_while_running | `isRunning` true -> `{ ok: false, message: "A reply is already on the way." }`, session unchanged |
+3. Run tests, paste the failing run.
+4. Implement in `ipc.ts` (order of checks in `sessions:setCli`: `isCliId` -> running -> session exists). In `preload/index.ts` add `detectClis` (`"clis:detect"`) and `setSessionCli` (`"sessions:setCli"`, id, cli). Update `tests/preload/index.test.ts` (key list, call list, channel table, the `Array(n)` length). In `tests/helpers/dom.ts` add defaults `detectClis: vi.fn(async () => [{ id: "codex", installed: true, version: "0.0.0" }, { id: "claude", installed: true, version: "0.0.0" }, { id: "gemini", installed: false, version: null }])` and `setSessionCli: vi.fn(async () => ({ ok: false, message: "unused" }))`.
+5. `npm test` -> `Tests  340 passed (340)`; format, lint, typecheck, build exit 0. Paste.
+6. Tick T51, commit `feat: cli list, choice and switch channels`.
+
+**Stop and report if** a file under `src/renderer` stops type-checking.
+
+### T52 - The tutor picker
+
+**Implements**: B25 · UI.md "Tutor picker" · ARCHITECTURE "Milestone 2" (`TutorPicker`)
+**Depends on**: T51
+
+**Files**
+- Create: `src/renderer/src/components/TutorPicker.tsx`, `tests/renderer/TutorPicker.test.tsx`
+- Modify: `src/renderer/src/styles/app.css`, `tests/renderer/styles.test.ts`
+- Do NOT touch other files.
+
+**Context**: copy the radio markup of `QuestionCard.tsx` (a `div role="radiogroup" className="options"`, each row a `label` with class `option` plus `is-selected`, containing a visually hidden `input type="radio"` and an `<i>` marker). The group is labelled by a `<span className="label">Tutor</span>` via `aria-labelledby`. Rows come from `CLI_ORDER`; the text is `cliName(id)`, and for a CLI whose status has `installed: false` (or has no status) the row gets class `is-disabled`, its input is `disabled`, and the text is `cliName(id) + " · not installed"`. All inputs are disabled when `props.disabled`. Choosing a row calls `onChange(id)`.
+
+**Steps**
+1. Tests (5):
+
+   | Test | File | Expect |
+   |------|------|--------|
+   | picker_lists_three_and_greys_missing | TutorPicker.test.tsx | statuses codex+claude installed, gemini not -> radios named `Codex`, `Claude Code`, `Gemini (experimental) · not installed`; the third is disabled and its row has class `is-disabled` |
+   | TutorPicker marks the current value | TutorPicker.test.tsx | `value: "claude"` -> only that radio is checked; `value: null` -> none |
+   | TutorPicker reports a choice | TutorPicker.test.tsx | click `Claude Code` -> `onChange("claude")` once; clicking the disabled row calls nothing |
+   | TutorPicker can be disabled | TutorPicker.test.tsx | `disabled` -> all three radios disabled |
+   | styles have the disabled option and row rules | styles.test.ts | `app.css` contains `.option.is-disabled` with `color: var(--color-muted)` and a `.row` rule with `display: flex` |
+2. Run tests, paste the failing run. Implement; add to `app.css` exactly: `.option.is-disabled { color: var(--color-muted); cursor: default; }`, `.option.is-disabled:hover { background: transparent; }`, `.row { display: flex; align-items: center; gap: var(--space-3); }`.
+3. `npm test` -> `Tests  345 passed (345)`; format, lint, typecheck, build exit 0. Paste.
+4. Tick T52, commit `feat: tutor picker`.
+
+### T53 - Pick a tutor for a new lesson
+
+**Implements**: B24, B25, B26 · UI.md copy "No CLI", "Tutor"
+**Depends on**: T52
+
+**Files**
+- Modify: `src/renderer/src/components/CliGate.tsx`, `NewLessonForm.tsx`, `src/renderer/src/App.tsx`, `tests/renderer/CliGate.test.tsx`, `NewLessonForm.test.tsx`, `App.test.tsx`
+- Do NOT touch `LessonScreen` (T54).
+
+**Steps**
+1. Tests. Update the existing tests to the new props and API (keep their names; `installApi({ detectClis: ... })` replaces `detectCli` overrides; "not found" now means every status has `installed: false`; the banner text is the B24 text). New tests (4):
+
+   | Test | File | Expect |
+   |------|------|--------|
+   | no_cli_shows_install_banner | CliGate.test.tsx | `clis` all not installed -> `No AI CLI found. Install Codex, Claude Code or Gemini CLI and sign in, then press Retry.` and a `Retry` button; `clis: null` -> nothing; one installed -> nothing |
+   | picker_defaults_to_last_used_then_first_installed | NewLessonForm.test.tsx | statuses codex+claude installed: `lastUsed: "claude"` -> `Claude Code` checked; `lastUsed: null` -> `Codex` checked; codex missing and `lastUsed: "codex"` -> `Claude Code` checked |
+   | NewLessonForm sends the chosen tutor | NewLessonForm.test.tsx | type topic and goal, click `Claude Code`, `Start` -> `createSession` called with `{ topic, goal, cli: "claude" }` |
+   | App passes the last used tutor to the form | App.test.tsx | `listSessions` resolves a newest summary with `cli: "claude"` -> on the New lesson screen `Claude Code` is checked |
+2. Run tests, paste the failing run.
+3. Implement. `CliGate`: props `{ clis: CliStatus[] | null; onRetry }`, shows the banner when `clis !== null && !clis.some((c) => c.installed)`. `NewLessonForm`: props `{ disabled, statuses, lastUsed, onCreated }`; state `picked: CliId | null` (null until the user chooses); the value shown and sent is `picked ?? defaultCli(statuses, lastUsed)`; `<TutorPicker>` between the Goal field and the Start row; Start is also disabled when that value is null; `createSession({ topic, goal, cli })`. `App`: state `clis: CliStatus[] | null` loaded with `window.api.detectClis()` (same effect shape as today, Retry sets it back to null); `disabled = clis === null || !clis.some((c) => c.installed)`; passes `statuses={clis ?? []}` and `lastUsed={sessions[0]?.cli ?? null}` to the form and `clis` to `CliGate`.
+4. `npm test` -> `Tests  349 passed (349)`; format, lint, typecheck, build exit 0. Paste.
+5. Tick T53, commit `feat: choose a tutor for a new lesson`.
+
+**Stop and report if** an existing test cannot be migrated without changing what it checks.
+
+### T54 - The tutor in a lesson, and switching
+
+**Implements**: B27, B28, B34 · UI.md "Tutor picker", copy "Tutor"
+**Depends on**: T53
+
+**Files**
+- Modify: `src/renderer/src/components/LessonScreen.tsx`, `src/renderer/src/App.tsx`, `tests/renderer/LessonScreen.test.tsx`, `tests/renderer/App.test.tsx` (only to pass the new props)
+- Do NOT touch `useLesson.ts`: the switched session arrives through the existing `session:updated` subscription.
+
+**Steps**
+1. New tests in `LessonScreen.test.tsx` (6); existing renders get `statuses` with all three installed and `onRetryDetect={() => {}}`:
+
+   | Test | Expect |
+   |------|--------|
+   | lesson_header_names_the_tutor | session with `cli: "claude"` -> text `Tutor: Claude Code` and a button `Change tutor` |
+   | missing_cli_blocks_lesson_with_banner | session `cli: "gemini"`, gemini not installed, a pending question -> `Gemini not found. Install it and sign in, then press Retry.`; its `Retry` calls `onRetryDetect` (not `api.advance`); the card's `Submit` is disabled; no "The last reply did not arrive." banner |
+   | switch_tutor_asks_then_stores | click `Change tutor`, choose `Claude Code` (lesson is on codex) -> dialog `Switch this lesson to Claude Code? It will read the whole lesson so far and continue from there.` with `Cancel` and `Switch`; `Switch` -> `api.setSessionCli(id, "claude")` once, `api.advance` not called, the picker closes |
+   | switch cancel keeps the tutor | same, `Cancel` -> `setSessionCli` not called, dialog gone |
+   | Change tutor is disabled while a reply is on the way | `isRunning` true -> the button is disabled |
+   | Change tutor is hidden when the lesson is done | a finished lesson -> no `Change tutor` button; `Tutor: Codex` still shown |
+2. Run tests, paste the failing run.
+3. Implement in `LessonScreen` (props `{ id, start, statuses: CliStatus[] | null, onRetryDetect(): void }`):
+   - under the goal line: `<div className="row"><span className="note">Tutor: {CLI_INFO[session.cli].label}</span>{!isDone && <button className="btn" disabled={busy} onClick={toggle}>Change tutor</button>}</div>`;
+   - when open: `<TutorPicker statuses={statuses ?? []} value={session.cli} disabled={busy} onChange={(cli) => cli === session.cli ? close() : setAsk(cli)} />`;
+   - `ask !== null`: `<ConfirmDialog message={"Switch this lesson to " + CLI_INFO[ask].label + "? It will read the whole lesson so far and continue from there."} confirmLabel="Switch" onConfirm={...} onCancel={...} />`; confirm calls `window.api.setSessionCli(id, ask)`, then closes the dialog and the picker; a `{ ok: false }` result shows its `message` in a `<small>` under the row;
+   - `missing = statuses !== null && !statuses.some((s) => s.id === session.cli && s.installed)`; when `missing`, the banner is `<Banner kind="error" message={CLI_INFO[session.cli].label + " not found. Install it and sign in, then press Retry."} actionLabel="Retry" onAction={onRetryDetect} />` in place of every other banner, and `ChatItemView` gets `disabled={busy || missing}`.
+   `App` passes `statuses={clis}` and `onRetryDetect={retry}`.
+4. `npm test` -> `Tests  355 passed (355)`; format, lint, typecheck, build exit 0. Paste.
+5. Tick T54, commit `feat: tutor in the lesson header, with switching`.
+
+**Stop and report if** `ConfirmDialog` cannot take the label `Switch` without a change to its file.
+
+### T55 - Clean up, document, and check Claude Code for real
+
+**Implements**: B23, B33 · SPEC evals (milestone 2) · D43
+**Depends on**: T54
+
+**Files**
+- Modify: `src/shared/types.ts`, `src/main/ipc.ts`, `src/preload/index.ts`, `tests/main/ipc.test.ts`, `tests/preload/index.test.ts`, `tests/helpers/dom.ts`, `evals/loop.eval.ts`, `README.md`
+- Do NOT touch other files.
+
+**Steps**
+1. Remove the old path: delete `Api.detectCli`, the `cli:detect` handler, the preload method, its `dom.ts` default, and the ipc test `cli:detect passes the adapter result through`; update the preload test lists. Make `cli` required in `createSession`'s input type and in `sessions:create` (a missing `cli` is refused with `"Choose a tutor."`); change the ipc test `sessions:create stores the chosen CLI` so its second half expects that refusal, and give every other `sessions:create` call in the tests a `cli`. Check with `grep -rn "detectCli\|cli:detect" src tests evals` -> no output.
+2. `evals/loop.eval.ts`: choose the adapter with `const cli = process.env.LEARN_EVAL_CLI ?? "codex"`; if `!isCliId(cli)` throw `new Error("LEARN_EVAL_CLI must be codex, claude or gemini")`; `const adapter = createAdapters({ ... the same deps as today ... })[cli]`; print the CLI name in the score line (`EVAL SCORE <cli> first-try ...`).
+3. `README.md`: Requirements lists the three CLIs ("at least one of: Codex CLI, Claude Code, Gemini CLI (experimental: not yet run against a real Gemini account), installed and signed in"); "What goes to the model" names all three commands from STACK and says the lesson so far and the tutor instructions from the Profile screen are sent; document `LEARN_CLAUDE_PATH`, `LEARN_GEMINI_PATH`, `LEARN_EVAL_CLI`; Status: "Milestone 2: choose Codex, Claude Code or Gemini per lesson and switch mid-lesson."
+4. `npm test` -> `Tests  354 passed (354)` (one test was deleted in step 1); format, lint, typecheck, build exit 0. Paste.
+5. Run `LEARN_EVAL_CLI=claude npm run eval` exactly once (real Claude Code, uses the owner's Claude quota; the owner approved one run). Paste the full output. Do not rerun on failure.
+6. Tick T55, commit `feat: three clis end to end, evals per cli`.
+
+**Stop and report if** step 4 fails twice. If the eval in step 5 fails, still do step 6 and put the full eval output in the report with STATUS: DEVIATED.
+
+### GATE F - Three CLIs
+
+The builder stops here.
+
+**Run**: `npm test` -> `Tests  354 passed (354)`; lint, typecheck, build exit 0; the Claude Code eval output from T55.
+**Look at**: `git diff <T44 commit>..HEAD --stat` -> only `src/shared`, `src/main`, `src/preload`, `src/renderer`, `tests`, `evals`, `README.md`, `PLAN.md`.
+**Fresh review**: Fable reviews T45-T55 against SPEC (B23-B34), ARCHITECTURE "Milestone 2", UI.md and the template.
+**Try it yourself**:
+1. `npm run dev`. New lesson shows the Tutor picker; Gemini reads "not installed" or, once installed, "Gemini (experimental)".
+2. Start a lesson with Claude Code. Expect replies in a few seconds and "Tutor: Claude Code" under the goal.
+3. Mid-lesson press Change tutor, choose Codex, read the dialog, Switch. Answer the next card: the reply now comes from Codex.
+4. Open an old lesson: it says "Tutor: Codex" and still works.
+**Explain it back**: "Why does switching the tutor mid-lesson need no conversion of the saved lesson?"
+**Then decide**: milestone 3 (more input) / tune.
+
+### OWNER TASK - Gemini live run (after the owner has a paid account)
+1. Owner: `gemini` in a terminal, sign in.
+2. `LEARN_EVAL_CLI=gemini npm run eval` once; paste the output to the planner.
+3. Pass (7 of 8 first try, 8 of 8 with retries): the planner raises a change request to remove "(experimental)". Fail: the planner diagnoses against `gemini.ts` and STACK's unverified list.
+
 ## Backlog (owner requests after Gate D, not yet planned)
 - Spike result (2026-11-14): `codex exec --json` sends NO partial text: only `thread.started`, `turn.started`, then one `item.completed` with the whole reply, then `turn.completed`. A 400-word reading took 43.8 s at the default reasoning effort (1444 of 1949 output tokens were reasoning) and 19.6 s with `-c model_reasoning_effort=low` (one sample each). Claude Code has `--output-format stream-json --include-partial-messages`; Gemini CLI is unchecked. So real streaming is possible only with the Claude/Gemini adapters.
 - Faster feel: streaming of the reply. First a spike: does `codex exec --json` emit partial text of the final message, or only the whole message at the end? Other ideas: write the bridge and check while the learner reads (the Continue answer carries no information).
 
 - Owner-approved scope after milestone 2 (2026-11-14, "I like all 4"; planning to be done by Fable, not yet started): (1) packaging and an open-source release, deferred review findings; (2) practice mode, flashcards, knowledge graph, side questions; (3) more input: PDFs and images, dictation, web search, and a read-only project folder the model may read but never change; (4) model choice, themes, editing the base prompt. Streaming is dropped for now (spike result above).
-
-## Milestone 2 - Gemini CLI and Claude Code (outline)
-Planned after Gate C. Each adapter implements `CliAdapter` (`detect`, `run`) and returns the same JSON reply.
-- Verify each CLI's non-interactive and structured-output flags by running it (owner installs Gemini CLI first).
-- `src/main/cli/gemini.ts`, `src/main/cli/claude.ts`, with tests using `fakeSpawn`.
-- `Session.cli` and `CliAdapter.id` widen to `"codex" | "gemini" | "claude"`; a CLI picker on the New lesson form; `detect` for all three at launch.
-- Run the same seven evals against each CLI.
 
 ## Where each SPEC test lives
 | SPEC test | Task |
