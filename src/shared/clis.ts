@@ -1,4 +1,4 @@
-import type { CliId, CliStatus } from "./types";
+import type { CliId, CliStatus, RunOptions } from "./types";
 
 export const CLI_ORDER: CliId[] = ["codex", "claude", "gemini"];
 
@@ -22,3 +22,11 @@ export function defaultCli(statuses: CliStatus[], lastUsed: CliId | null): CliId
   if (lastUsed !== null && installed(lastUsed)) return lastUsed;
   return CLI_ORDER.find(installed) ?? null;
 }
+
+export const NO_OPTIONS: RunOptions = {
+  readDirs: [],
+  images: [],
+  webSearch: false,
+  model: null,
+  effort: null,
+};

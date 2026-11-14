@@ -49,12 +49,24 @@ export type Answer = {
   text: string | null; // null for choice
   reasoning: string | null;
   confidence: Confidence | null;
+  attachments?: string[]; // stored file names
 };
 
 export type Usage = { inputTokens: number; outputTokens: number };
 export type SessionEvent =
   | { kind: "action"; at: string; action: Action; usage: Usage | null }
   | { kind: "answer"; at: string; answer: Answer };
+
+export type AttachmentKind = "pdf" | "image" | "text";
+export type Attachment = { file: string; name: string; bytes: number; kind: AttachmentKind }; // file: unique stored name
+export type FileEntry = { path: string; bytes: number }; // path relative to the folder
+export type RunOptions = {
+  readDirs: string[];
+  images: string[];
+  webSearch: boolean;
+  model: string | null;
+  effort: string | null;
+};
 
 export type CliId = "codex" | "claude" | "gemini";
 
@@ -69,6 +81,9 @@ export type Session = {
   createdAt: string; // ISO 8601 UTC
   updatedAt: string;
   events: SessionEvent[];
+  folder: string | null;
+  attachments: Attachment[];
+  webSearch: boolean;
 };
 export type SessionSummary = {
   id: string;
@@ -117,13 +132,20 @@ export type LessonState = {
 };
 
 export type DetectResult = { ok: true; version: string } | { ok: false };
-export type RunRequest = { prompt: string; schema: object; signal: AbortSignal; timeoutMs: number };
+export type RunRequest = {
+  prompt: string;
+  schema: object;
+  signal: AbortSignal;
+  timeoutMs: number;
+  options?: RunOptions;
+};
 export type RunResult =
   | { ok: true; text: string; usage: Usage | null }
   | { ok: false; kind: "failed" | "timeout" | "aborted"; message: string };
 
 export type TurnError = {
-  kind: "cli" | "bad_reply" | "busy" | "stopped" | "not_found" | "invalid_answer";
+  kind:
+    "cli" | "bad_reply" | "busy" | "stopped" | "not_found" | "invalid_answer" | "folder_missing";
   message: string;
 };
 export type TurnResult =

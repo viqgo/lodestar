@@ -69,6 +69,9 @@ export function registerIpc(deps: IpcDeps): void {
         createdAt: now(),
         updatedAt: now(),
         events: [],
+        folder: null,
+        attachments: [],
+        webSearch: false,
       };
       await store.writeSession(session);
       return { ok: true as const, session };

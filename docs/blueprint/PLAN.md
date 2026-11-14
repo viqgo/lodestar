@@ -83,7 +83,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T55c Review fixes in the window (CR-5)
 - [ ] GATE F Three CLIs
 - [ ] OWNER TASK Gemini live run
-- [ ] T56 Material rules and types
+- [x] T56 Material rules and types
 - [ ] T57 Listing a folder and storing attachments
 - [ ] T58 Adapters turn options into flags
 - [ ] T59 The prompt and the answer rule
@@ -2958,7 +2958,7 @@ What exists at the end: a lesson can have a material folder, attached files (on 
 
 ### T56 - Material rules and types
 **Implements**: B36, B39, B40, B41 · ARCHITECTURE "Milestones 3-8": data model (M3), `core/material.ts` · limits in SPEC
-**Files**: create `src/core/material.ts`, `tests/core/material.test.ts`; modify `src/shared/limits.ts`, `src/shared/types.ts`, `src/shared/clis.ts`, `tests/shared/limits.test.ts`, `tests/helpers/fixtures.ts`
+**Files**: create `src/core/material.ts`, `tests/core/material.test.ts`; modify `src/main/ipc.ts` (only: add `folder: null, attachments: [], webSearch: false` to the `Session` literal in `sessions:create`), `tests/main/ipc.test.ts` (only: the same three fields in the expected session of `sessions:create stores a trimmed lesson`), `src/shared/limits.ts`, `src/shared/types.ts`, `src/shared/clis.ts`, `tests/shared/limits.test.ts`, `tests/helpers/fixtures.ts`
 **Details**
 - `limits.ts`: `ATTACH_MAX_BYTES = 20 * 1024 * 1024`, `ATTACH_PER_LESSON = 10`, `ATTACH_PER_ANSWER = 3`, `FILE_LIST_MAX = 200`, `CALL_TIMEOUT_TOOLS_MS = 300_000` (add each to the existing limits test).
 - `types.ts`: `AttachmentKind`, `Attachment`, `FileEntry`, `RunOptions` as in ARCHITECTURE; `RunRequest` gains `options?: RunOptions`; `Session` gains `folder: string | null; attachments: Attachment[]; webSearch: boolean`; `Answer` gains `attachments?: string[]`; `TurnError["kind"]` gains `"folder_missing"`.

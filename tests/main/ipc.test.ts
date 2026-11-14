@@ -170,6 +170,9 @@ describe("ipc", () => {
       createdAt: NOW,
       updatedAt: NOW,
       events: [],
+      folder: null,
+      attachments: [],
+      webSearch: false,
     };
     expect(
       await call("sessions:create", { topic: "  Maths ", goal: " Limits ", cli: "codex" }),

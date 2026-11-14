@@ -80,6 +80,9 @@ export const session = (events: SessionEvent[] = []): Session => ({
   createdAt: AT,
   updatedAt: AT,
   events,
+  folder: null,
+  attachments: [],
+  webSearch: false,
 });
 /** probe answered once, probing declared done: now the model must plan */
 export const toPlan: SessionEvent[] = [act(A.probe()), pick(1), act(A.probeDone())];

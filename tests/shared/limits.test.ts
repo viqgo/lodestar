@@ -15,4 +15,9 @@ it("limits match the spec", () => {
   expect(limits.OPTIONS_MIN).toBe(2);
   expect(limits.OPTIONS_MAX).toBe(6);
   expect(limits.STDERR_MAX).toBe(200);
+  expect(limits.ATTACH_MAX_BYTES).toBe(20 * 1024 * 1024);
+  expect(limits.ATTACH_PER_LESSON).toBe(10);
+  expect(limits.ATTACH_PER_ANSWER).toBe(3);
+  expect(limits.FILE_LIST_MAX).toBe(200);
+  expect(limits.CALL_TIMEOUT_TOOLS_MS).toBe(300000);
 });
