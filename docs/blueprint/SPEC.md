@@ -60,7 +60,7 @@ Model reply (exactly one per call), root `{"action": <one of>}`:
 {"type":"lesson_done","verdict":"pass","feedback":"Correct.","summary":"You can now ...","learned":[{"nodeId":"avg-rate","text":"Average rate of change is the slope between two points"}]}
 ```
 
-Question rules: `kind: "choice"` needs 2 to 6 options and `correctIndex` inside the options (probe questions may use `null` when there is no right answer); `kind: "text"` needs `options: []` and `correctIndex: null`. `verdict` is non-null only when the previous learner event was a `text` check answer.
+Question rules: `kind: "choice"` needs 2 to 6 options and `correctIndex` inside the options (probe questions may use `null` when there is no right answer); `kind: "text"` needs `options: []` and `correctIndex: null`. `verdict` only has an effect when the previous learner event was a `text` check answer (it must then be non-null); on any other turn the app ignores it.
 
 Failure: during probing the model returns `{"type":"plan",...}` -> retried once with "Your last reply was not usable: plan is not allowed now. Allowed now: probe, probe_done." -> second bad reply -> B11 message, session file unchanged.
 

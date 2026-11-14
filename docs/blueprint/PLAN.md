@@ -25,6 +25,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T8 What the model may do next
 - [x] T9 Answer checks, learned items, move notes
 - [x] T10 The prompt
+- [ ] T10b Hardening fixes after the Gate A review
 - [ ] GATE A The lesson rules work from the test suite
 - [ ] T11 Finding the CLI on disk
 - [ ] T12 Reading Codex output
@@ -47,7 +48,7 @@ Conventions used in every task:
 ---
 
 ## Stage A - the lesson rules
-What the owner can see working at the end: `npm test` shows 61 passing tests that walk a whole lesson (probe, plan, teach, repair, finish) with no Codex and no window.
+What the owner can see working at the end: `npm test` shows 76 passing tests that walk a whole lesson (probe, plan, teach, repair, finish) with no Codex and no window.
 
 ### T1 - Project skeleton and test runner
 
@@ -631,11 +632,74 @@ What the owner can see working at the end: `npm test` shows 61 passing tests tha
 
 **Stop and report if** any prompt sentence in ARCHITECTURE.md is unclear about where it goes (quote it), or tests fail after two attempts.
 
+### T10b - Hardening fixes after the Gate A review
+
+**Implements**: Gate A review findings (decision D28) · B5, B7, B3, B8, B10, B11 · functions `validatePlan`, `checkAction`, `moveNotes`, `learnedToSave`, `renderTranscript`, `ReplySchema` (tests only except `validatePlan`)
+**Depends on**: T10
+
+**Context**
+- `validatePlan(nodes: PlanNode[]): string | null` in `src/core/plan.ts` checks in this order: size, empty id or title, duplicate id, self-dependency, unknown dep, cycle. It tests `id === ""` and `title === ""` only. A node id of `"__proto__"` is accepted today and breaks the lesson (a plain object ignores it as a key). The prompt tells the model: "Use short lowercase ids with hyphens."
+- Fixtures in `tests/helpers/fixtures.ts`: `A`, `act`, `pick`, `say`, `ans`, `session`, `toPlan`, `toTeach`, `toCheck`, `PLAN`, `choiceQ`, `textQ`, `AT`. `st(...events)` is a local helper in `tests/core/engine.test.ts` = `deriveState([...toTeach, ...events])`; `eight` is the 8 repeated probe rounds already used there.
+
+**Files**
+- Modify: `src/core/plan.ts`, `tests/core/plan.test.ts`, `tests/core/engine.test.ts`, `tests/core/prompt.test.ts`, `tests/shared/schema.test.ts`
+- Do NOT touch any other file. Do NOT change `engine.ts`, `prompt.ts` or `schema.ts` (every other fix here is a test). Do NOT add dependencies.
+
+**Steps**
+
+1. Add these 15 tests (names exactly as shown). `n(id, deps = [])` is the local helper already in `plan.test.ts`.
+
+   In `tests/core/plan.test.ts` (2 tests):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | rejects a whitespace-only id or title | `validatePlan([n("a"), { id: " ", title: "X", deps: [] }])`; `validatePlan([n("a"), { id: "b", title: "  ", deps: [] }])` | both `"empty id or title"` |
+   | rejects ids that are not lowercase hyphenated | `validatePlan([n("a"), n("__proto__")])`; `validatePlan([n("a"), n("Big")])`; `validatePlan([n("a"), n("-x")])`; `validatePlan([n("a"), n("x".repeat(41))])` | `"invalid node id: __proto__"`, `"invalid node id: Big"`, `"invalid node id: -x"`, `"invalid node id: " + "x".repeat(41)`; and `validatePlan([n("a1"), n("b-2", ["a1"])])` is `null` |
+
+   In `tests/core/engine.test.ts` (10 tests):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | moveNotes asks for the plan | `moveNotes(deriveState(toPlan))` | `["Return the plan: 2 to 12 nodes, each one idea, deps listing the nodes it builds on."]` |
+   | moveNotes says to finish when every node is settled | `moveNotes(st(...toCheck("n1"), pick(1), ...toCheck("n2"), pick(1)))` | `["Every node is passed or shaky. Return lesson_done."]` |
+   | moveNotes asks for an explanation after a predict | `moveNotes(st(act(A.predict("n1")), say()))` | `["Explain node n1 and include a check question."]` |
+   | moveNotes asks for a verdict on the first text check | `moveNotes(st(...toCheck("n1", textQ), say()))` | `["The learner's last answer is a free-text check on node n1. Set verdict. If pass, continue with the next step. If fail, explain node n1 again from a different angle with a new check question."]` |
+   | checkAction rejects an empty goal | `checkAction(deriveState([act(A.probe()), pick(1)]), { ...A.probeDone(), goal: "  " } as any)` | `"goal is empty"` |
+   | checkAction rejects a predict for a node that is already passed | `checkAction(st(...toCheck("n1"), pick(1)), A.predict("n1"))` | `"node n1 cannot start now"` |
+   | a text check on the last node allows lesson_done with a verdict | `state = st(...toCheck("n1"), pick(1), ...toCheck("n2", textQ), say())`; | `checkAction(state, A.done("pass"))` is `null`; `checkAction(state, A.done(null))` is `"verdict is required"` |
+   | deriveState throws on an action while the learner is meant to answer | `deriveState([act(A.probe()), act(A.probe())])` | throws `"corrupt session at event 1"` |
+   | deriveState throws on a null verdict after a text check | `deriveState([...toTeach, ...toCheck("n1", textQ), say(), act(A.predict("n2"))])` | throws `"corrupt session at event 8"` |
+   | learnedToSave drops items with empty text | state `st(...toCheck("n1"), pick(1))`; action `{ ...A.done(), learned: [{ nodeId: "n1", text: "  " }, { nodeId: "n1", text: "ok" }] }` | `[{ nodeId: "n1", text: "ok" }]` |
+
+   In `tests/core/prompt.test.ts` (1 test):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | renderTranscript grades choice checks | `renderTranscript([...toTeach, ...toCheck("n1"), pick(1), act(A.explain("n1")), pick(0)])` split on `"\n"` | the line for `pick(1)` (index 7) contains `"graded":"pass"`; the line for `pick(0)` (index 9) contains `"graded":"fail"`; the line for the predict answer (index 5) contains `"graded":null` |
+
+   In `tests/shared/schema.test.ts` (2 tests):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | parseReply rejects an extra property | `parseReply('{"action":{"type":"probe_done","known":[],"goal":"g","extra":1}}')` | `ok` false |
+   | parseReply rejects an empty question prompt | `parseReply(JSON.stringify({ action: A.probe({ ...choiceQ, prompt: "" }) }))` | `ok` false |
+
+2. Run tests. Expected: exactly 2 failed (the two `plan.test.ts` tests), 74 passed: `Tests  2 failed | 74 passed (76)`. The other 13 tests pass at once because they only cover behavior that already exists. Paste the output. If any of those 13 fails, stop and report: it means the blueprint and the code disagree.
+3. In `src/core/plan.ts` change `validatePlan` so that:
+   - the empty check is `x.id.trim() === "" || x.title.trim() === ""` (still `"empty id or title"`);
+   - immediately after the empty check and before the duplicate check, any node whose `id` does not match `/^[a-z0-9][a-z0-9-]{0,39}$/` returns `` `invalid node id: ${id}` `` (first offending node in plan order).
+4. Run tests. Expected: `Tests  76 passed (76)`. Run `npm run format && npm run lint && npm run typecheck`: exit 0. Paste.
+5. Tick T10b in the Progress list, then `git add src/core/plan.ts tests docs/blueprint/PLAN.md && git commit -m "fix: harden plan ids and cover untested rules"`.
+
+**Stop and report instead of continuing if**
+- any of the 13 tests that should pass at once fails in step 2,
+- tests fail after two attempts, or you need a file not named here.
+
 ### GATE A - The lesson rules work from the test suite
 
 The builder stops here. Nothing continues until the owner says so.
 
-**Run**: `npm test` -> expect `Tests  61 passed (61)`; `npm run lint && npm run typecheck` -> exit 0
+**Run**: `npm test` -> expect `Tests  76 passed (76)`; `npm run lint && npm run typecheck` -> exit 0
 **Look at**: `git diff <blueprint-commit>..HEAD --stat` -> only the config files from T1, `src/shared/`, `src/core/`, `src/main/index.ts`, `src/preload/index.ts`, `src/renderer/`, `tests/`, `package-lock.json`, `PLAN.md`
 **Fresh review**: run the reviewer prompt from the skill's `references/execution.md` over T1-T10 against SPEC.md and ARCHITECTURE.md. Attach its verdict.
 **Try it yourself**: run `npm run dev` (a dark window titled lodestar opens). Then open `tests/core/engine.test.ts`, find `third_fail_marks_shaky`, change one `pick(0)` to `pick(1)`, run `npm test`, and watch that test fail. Undo the change.
@@ -672,7 +736,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
    - `export interface CliAdapter { id: "codex"; detect(): Promise<DetectResult>; run(req: RunRequest): Promise<RunResult> }`
    - `extraPathDirs(home: string): string[]` as in test 1.
    - `resolveCommand(name: string, pathEnv: string, extraDirs: string[], exists: (p: string) => boolean): string | null`: split `pathEnv` on `":"`, drop empty parts, append `extraDirs`, return the first `dir + "/" + name` for which `exists` is true.
-4. Run tests. Expected: `Tests  65 passed (65)`. Paste.
+4. Run tests. Expected: `Tests  80 passed (80)`. Paste.
 5. Tick T11, then `git add -A && git commit -m "feat: cli adapter interface and command lookup"`.
 
 **Stop and report if** tests fail after two attempts.
@@ -710,7 +774,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
 3. Create `src/main/cli/codex.ts` exporting:
    - `parseCodexEvents(stdout: string): { text: string | null; usage: Usage | null }`: split on `"\n"`; `JSON.parse` each non-empty line inside try/catch (skip failures); `text` = `item.text` of the last object with `type === "item.completed"` and `item.type === "agent_message"`; `usage` from the last object with `type === "turn.completed"`: `{ inputTokens: usage.input_tokens, outputTokens: usage.output_tokens }`.
    - `lastStderrLine(stderr: string): string`: last line whose `trim()` is non-empty, trimmed, cut with `.slice(0, STDERR_MAX)`; `"exited with an error"` when there is none.
-4. Run tests. Expected: `Tests  71 passed (71)`. Paste.
+4. Run tests. Expected: `Tests  86 passed (86)`. Paste.
 5. Tick T12, then `git add -A && git commit -m "feat: parse codex output"`.
 
 **Stop and report if** tests fail after two attempts.
@@ -774,11 +838,11 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
    | detect fails on a non-zero exit | `make({ code: 1 })` | `{ ok: false }` |
    | detect_times_out_after_5s | `make({ hang: true })` (limit is 30 ms in tests) | `{ ok: false }` and `f.calls[0].killed` is `true` |
    | detect fails when no command can be found | `make({}, { PATH: "/nowhere" }, { ...fs, existsSync: () => false } as typeof fs)` (the stub matters: a real Codex may be installed on this machine) | `{ ok: false }` and `f.calls.length` is `0` |
-3. Run tests. Expected: 5 failed, 71 passed. Paste.
+3. Run tests. Expected: 5 failed, 86 passed. Paste.
 4. In `src/main/cli/codex.ts` add `createCodexAdapter(deps: { spawn: typeof import("node:child_process").spawn; env: NodeJS.ProcessEnv; home: string; tmpRoot: string; fs: typeof import("node:fs"); detectTimeoutMs?: number }): CliAdapter`:
    - command = `deps.env.LEARN_CODEX_PATH` if set and non-empty, else `resolveCommand("codex", deps.env.PATH ?? "", extraPathDirs(deps.home), deps.fs.existsSync)`. Resolve it on every `detect()` and `run()` call.
    - `detect()`: no command -> `{ ok: false }`. Otherwise spawn `command` with args `["--version"]` and options `{ shell: false }`, collect stdout, and resolve exactly once: on `"error"` -> `{ ok: false }`; on `"close"` with code 0 and a match of `/\d+\.\d+\.\d+/` in stdout -> `{ ok: true, version: match[0] }`; on any other close -> `{ ok: false }`; when `deps.detectTimeoutMs ?? DETECT_TIMEOUT_MS` passes first -> `child.kill("SIGKILL")` and `{ ok: false }`. Clear the timer when resolved.
-5. Run tests. Expected: `Tests  76 passed (76)`. Paste.
+5. Run tests. Expected: `Tests  91 passed (91)`. Paste.
 6. Tick T13, then `git add -A && git commit -m "feat: detect the codex cli"`.
 
 **Stop and report if** the fake in step 1 does not type-check against your call (do not change the fake; paste the error), or tests fail after two attempts.
@@ -809,7 +873,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
    | cli_timeout_after_180s | `make({ hang: true })`, `run(req({ timeoutMs: 30 }))` | `kind` is `"timeout"`, `message` is `"no reply after 0.03 seconds"`, `f.calls[0].killed` is `true` |
    | stop_kills_process_and_restores | `make({ hang: true })`; `c = new AbortController()`; start `run(req({ signal: c.signal }))`; `setTimeout(() => c.abort(), 10)` | `{ ok: false, kind: "aborted", message: "stopped" }`, `killed` is `true` |
    | temp_dir_removed_after_call | after each of: a success, the non-zero exit, and the abort case | `f.calls.length` is `1` and `empty(tmpRoot)` is `true` each time |
-2. Run tests. Expected: 8 failed, 76 passed. Paste.
+2. Run tests. Expected: 8 failed, 91 passed. Paste.
 3. Implement `run(req)`:
    - no command -> `{ ok: false, kind: "failed", message: "Codex CLI not found" }`.
    - `root = fs.mkdtempSync(path.join(tmpRoot, "lh-"))`; write `JSON.stringify(req.schema)` to `root/schema.json`; `fs.mkdirSync(root/work)`.
@@ -821,7 +885,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
      - `"error"` event -> `{ ok: false, kind: "failed", message: "Codex CLI not found" }`;
      - `"close"` with code 0 -> `parseCodexEvents(stdout)`; `text === null` -> `{ ok: false, kind: "failed", message: "Codex returned no message" }`, else `{ ok: true, text, usage }`;
      - `"close"` with any other code -> `{ ok: false, kind: "failed", message: lastStderrLine(stderr) }`.
-4. Run tests. Expected: `Tests  84 passed (84)`. Paste.
+4. Run tests. Expected: `Tests  99 passed (99)`. Paste.
 5. Tick T14, then `git add -A && git commit -m "feat: run codex safely and parse its reply"`.
 
 **Stop and report if** tests fail after two attempts, or a test hangs (paste which).
@@ -853,7 +917,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
    - `writeJsonAtomic(file, data)`: `await fs.writeFile(file + ".tmp", JSON.stringify(data, null, 2), "utf8")` then `await fs.rename(file + ".tmp", file)`.
    - id rule: `const ID = /^[sk]_[0-9a-f-]{36}$/`. `readSession(id)`: bad id -> `null`; read and `JSON.parse` in try/catch -> `null` on any error. `writeSession(s)`: `writeJsonAtomic(sessions/<id>.json, s)`. `deleteSession(id)`: bad id -> resolve; else `fs.rm(file, { force: true })`.
    - `listSessions()`: read every `*.json` in `sessions/`, skip those that fail to parse, sort by `updatedAt` descending (string compare).
-4. Run tests. Expected: `Tests  90 passed (90)`. Paste.
+4. Run tests. Expected: `Tests  105 passed (105)`. Paste.
 5. Tick T15, then `git add -A && git commit -m "feat: session storage with atomic writes"`.
 
 **Stop and report if** tests fail after two attempts.
@@ -877,9 +941,9 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
    | knowledge_listed_newest_first | `addKnowledge([ki(1, "2026-01-01T00:00:00.000Z")])` then `addKnowledge([ki(2, "2026-01-02T00:00:00.000Z")])` | `readKnowledge()` texts are `["t2", "t1"]` |
    | knowledge_item_deleted | then `deleteKnowledge(ki(1, "").id)` | texts are `["t2"]`, and `JSON.parse` of `knowledge.json` has length 1 |
    | deleting an unknown id changes nothing | `deleteKnowledge("k_99999999-0000-0000-0000-000000000000")` | resolves; list unchanged |
-2. Run tests. Expected: 4 failed, 90 passed. Paste.
+2. Run tests. Expected: 4 failed, 105 passed. Paste.
 3. Add to the store: `readKnowledge()` (missing or unparsable file -> `[]`; sorted by `createdAt` descending), `addKnowledge(items)` (read, append, `writeJsonAtomic`; no write when `items` is empty), `deleteKnowledge(id)` (read, filter, `writeJsonAtomic`).
-4. Run tests. Expected: `Tests  94 passed (94)`. Paste.
+4. Run tests. Expected: `Tests  109 passed (109)`. Paste.
 5. Tick T16, then `git add -A && git commit -m "feat: knowledge list storage"`.
 
 **Stop and report if** tests fail after two attempts.
@@ -948,7 +1012,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
    }
    return { ok: false, error: { kind: "bad_reply", message: "The model gave an unusable reply. Press Retry." } };
    ```
-5. Run tests. Expected: `Tests  99 passed (99)`. Paste.
+5. Run tests. Expected: `Tests  114 passed (114)`. Paste.
 6. Tick T17, then `git add -A && git commit -m "feat: one model step with a single retry"`.
 
 **Stop and report if** tests fail after two attempts.
@@ -976,7 +1040,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
    | stop ends the running call | adapter whose `run` resolves `{ ok: false, kind: "aborted", message: "stopped" }` when `req.signal` aborts; start `advance(ID)`, check `isRunning(ID)` is `true`, call `stop(ID)` | result `error` equals `{ kind: "stopped", message: "Stopped." }`; `isRunning(ID)` is `false` afterwards |
    | advance reports a missing lesson | `advance("s_99999999-0000-0000-0000-000000000000")` | `{ ok: false, error: { kind: "not_found", message: "This lesson no longer exists." }, session: null }` |
    | lesson_done adds knowledge for passed nodes only | events `[...toTeach, ...toCheck("n1"), pick(1), ...toCheck("n2"), pick(0), act(A.explain("n2")), pick(0), act(A.explain("n2")), pick(0)]`, reply `A.done()` | `store.readKnowledge()` equals `[{ id: "k_00000001-0000-0000-0000-000000000000", text: "t1", sessionId: ID, nodeId: "n1", createdAt: "2026-02-02T00:00:00.000Z" }]` |
-2. Run tests. Expected: 6 failed, 99 passed. Paste.
+2. Run tests. Expected: 6 failed, 114 passed. Paste.
 3. Add to `src/main/turn.ts`:
    - `export type TurnRunner = { advance(id: string): Promise<TurnResult>; stop(id: string): void; isRunning(id: string): boolean }`
    - `createTurnRunner(deps: { adapter: CliAdapter; store: Store; now: () => string; newId: (prefix: "s" | "k") => string; notify: (session: Session) => void }): TurnRunner`, holding `const running = new Map<string, AbortController>()`:
@@ -1011,7 +1075,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
      }
      ```
    - `stop(id)`: `running.get(id)?.abort()`. `isRunning(id)`: `running.has(id)`.
-4. Run tests. Expected: `Tests  105 passed (105)`. Paste. Run `npm run format && npm run lint && npm run typecheck`: exit 0.
+4. Run tests. Expected: `Tests  120 passed (120)`. Paste. Run `npm run format && npm run lint && npm run typecheck`: exit 0.
 5. Tick T18, then `git add -A && git commit -m "feat: advance loop with stop and busy guard"`.
 
 **Stop and report if** tests fail after two attempts, or a test hangs (paste which).
@@ -1064,7 +1128,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
    - for each case, in order: `s = { ...base, events }`, time the call to `modelStep({ adapter, knowledge: [] }, s, deriveState(events), new AbortController().signal)`; the case passes when `ok` is true, the type matches and the extra check holds; count `firstTry` (passed with `calls === 1`) and `withRetry` (passed at all); print one line per case: `E<n> <pass|FAIL> calls=<n> seconds=<s> inputTokens=<n or ?> type=<type or error message>`.
    - at the end print `EVAL SCORE first-try <firstTry>/7, with-retry <withRetry>/7`, then assert `firstTry >= 6`, `withRetry === 7`, every passed case took under 60 seconds, and E1's `inputTokens < 30000` when usage is present.
 2. Run `npm run eval`. Expected: the seven `E` lines, `EVAL SCORE first-try N/7, with-retry 7/7` with N at least 6, and `Tests  1 passed (1)`. Paste the whole output.
-3. Run `npm test`. Expected: `Tests  105 passed (105)` (evals are not part of `npm test`). Run `npm run format && npm run lint && npm run typecheck`: exit 0.
+3. Run `npm test`. Expected: `Tests  120 passed (120)` (evals are not part of `npm test`). Run `npm run format && npm run lint && npm run typecheck`: exit 0.
 4. Tick T19, then `git add -A && git commit -m "test: evals against real codex"`.
 
 **Stop and report instead of continuing if**
@@ -1076,7 +1140,7 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
 
 The builder stops here. Nothing continues until the owner says so.
 
-**Run**: `npm test` -> expect `Tests  105 passed (105)`; `npm run eval` -> expect `EVAL SCORE first-try N/7, with-retry 7/7`, N >= 6
+**Run**: `npm test` -> expect `Tests  120 passed (120)`; `npm run eval` -> expect `EVAL SCORE first-try N/7, with-retry 7/7`, N >= 6
 **Look at**: `git diff <gate-A-commit>..HEAD --stat` -> only `src/main/cli/`, `src/main/store.ts`, `src/main/turn.ts`, `tests/`, `evals/`, `PLAN.md`
 **Fresh review**: run the reviewer prompt from the skill's `references/execution.md` over T11-T19 against SPEC.md and ARCHITECTURE.md. Attach its verdict.
 **Try it yourself**: read the seven `E` lines from the eval output: how many seconds and input tokens does one call cost on your account? Decide whether that is acceptable for a 40-call lesson before the window is built.
