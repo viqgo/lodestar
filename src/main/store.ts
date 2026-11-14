@@ -29,6 +29,7 @@ export type Store = {
 
 const ID = /^[sk]_[0-9a-f-]{36}$/;
 const SUBJECT_ID = /^u_[0-9a-f-]{36}$/;
+const SUBJECT_FILE = /^u_[0-9a-f-]{36}\.json$/;
 
 export async function createStore(
   dir: string,
@@ -164,13 +165,21 @@ export async function createStore(
   };
 
   const listSubjects = async (): Promise<Subject[]> => {
-    const names = (await fs.readdir(subjectsDir)).filter((n) => n.endsWith(".json"));
+    const names = (await fs.readdir(subjectsDir)).filter((n) => SUBJECT_FILE.test(n));
     const subjects: Subject[] = [];
     for (const name of names) {
       try {
-        subjects.push(
-          JSON.parse(await fs.readFile(path.join(subjectsDir, name), "utf8")) as Subject,
-        );
+        const value: unknown = JSON.parse(await fs.readFile(path.join(subjectsDir, name), "utf8"));
+        const o = value as Record<string, unknown> | null;
+        if (
+          typeof o === "object" &&
+          o !== null &&
+          typeof o.id === "string" &&
+          typeof o.updatedAt === "string" &&
+          Array.isArray(o.events)
+        ) {
+          subjects.push(value as Subject);
+        }
       } catch {
         // skip unparsable files
       }

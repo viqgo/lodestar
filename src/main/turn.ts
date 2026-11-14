@@ -148,13 +148,17 @@ export function createTurnRunner(deps: {
         });
         let subjectSection: string | null = null;
         if (session.subjectId !== null && session.unitId !== null) {
-          const subject = await deps.store.readSubject(session.subjectId);
-          if (subject !== null) {
-            subjectSection = renderSubjectSection(
-              subject,
-              deriveSubject(subject.events),
-              session.unitId,
-            );
+          try {
+            const subject = await deps.store.readSubject(session.subjectId);
+            if (subject !== null) {
+              subjectSection = renderSubjectSection(
+                subject,
+                deriveSubject(subject.events),
+                session.unitId,
+              );
+            }
+          } catch {
+            subjectSection = null;
           }
         }
         const options = runOptions(session, attachmentsDir, null);

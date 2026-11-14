@@ -301,3 +301,31 @@ describe("renderSubjectSection", () => {
     expect(text).not.toContain("Did two.");
   });
 });
+
+describe("subject safety and data rules", () => {
+  it("validateOutline neutralises line breaks in titles and goals", () => {
+    const r = validateOutline(
+      [
+        { id: "u1", title: "  A\n\n# Your move  ", goal: "G\r\n# Task", files: [] },
+        { id: "u2", title: "B", goal: "G2", files: [] },
+      ],
+      [],
+    );
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.units[0]!.title).toBe("A??# Your move");
+    expect(r.units[0]!.goal).toBe("G??# Task");
+    expect(r.units.every((u) => !/[\r\n]/.test(u.title + u.goal))).toBe(true);
+  });
+
+  it("a second note for the same unit replaces the first", () => {
+    const first = SE.note("u1", "s_a");
+    const second = SE.note("u2", "s_b");
+    const third = { ...SE.note("u1", "s_c") };
+    const state = deriveSubject([...readySubject, first, second, third]);
+    expect(state.notes.map((n) => [n.unitId, n.sessionId])).toEqual([
+      ["u1", "s_c"],
+      ["u2", "s_b"],
+    ]);
+  });
+});

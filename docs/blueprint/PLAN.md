@@ -110,7 +110,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T76 Subject screen and form
 - [x] T77 Sidebar and app
 - [x] T78 Evals and README
-- [ ] T78b Gate H fixes: prompt safety and data rules
+- [x] T78b Gate H fixes: prompt safety and data rules
 - [ ] T78c Gate H fixes: subject screen
 - [ ] GATE H Subjects
 - [ ] T79-T88 Milestone 5: voice (outline)

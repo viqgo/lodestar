@@ -320,6 +320,19 @@ describe("store subjects", () => {
     expect(await store.readSubject(UID(9))).toBeNull();
   });
 
+  it("listSubjects skips files that are not subjects", async () => {
+    const { dir, store } = await mk();
+    await store.writeSubject(SUB(1, "2026-01-01T00:00:00.000Z"));
+    const w = (name: string, body: unknown) =>
+      fsp.writeFile(path.join(dir, "subjects", name), JSON.stringify(body), "utf8");
+    await w("notes.json", SUB(5, "2026-01-05T00:00:00.000Z"));
+    await w(UID(6) + ".json", null);
+    await w(UID(7) + ".json", { id: UID(7), updatedAt: "2026-01-07T00:00:00.000Z" });
+    await w(UID(8) + ".json", { id: 8, updatedAt: "x", events: [] });
+    await w(UID(9) + ".json", []);
+    expect((await store.listSubjects()).map((s) => s.id)).toEqual([UID(1)]);
+  });
+
   it("readSubject refuses ids that are not subject ids", async () => {
     const { store } = await mk();
     await store.writeSession({ ...session(), id: SID });

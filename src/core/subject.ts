@@ -45,7 +45,12 @@ export function validateOutline(
   const files = new Set(known);
   return {
     ok: true,
-    units: units.map((u) => ({ ...u, files: u.files.filter((f) => files.has(f)) })),
+    units: units.map((u) => ({
+      ...u,
+      title: plain(u.title).trim(),
+      goal: plain(u.goal).trim(),
+      files: u.files.filter((f) => files.has(f)),
+    })),
   };
 }
 
@@ -128,7 +133,11 @@ export function deriveSubject(events: SubjectEvent[]): SubjectState {
         break;
       case "note":
         if (state.phase !== "ready") throw corrupt();
-        state.notes.push(event.note);
+        {
+          const at = state.notes.findIndex((n) => n.unitId === event.note.unitId);
+          if (at >= 0) state.notes[at] = event.note;
+          else state.notes.push(event.note);
+        }
         break;
     }
   });
@@ -178,9 +187,11 @@ export function handoverNote(session: Session): HandoverNote {
   };
 }
 
-function noteLine(note: HandoverNote): string {
-  const shaky = note.shaky.length > 0 ? note.shaky.join("; ") : "nothing";
-  return `${note.unitId}: ${note.summary} Learned: ${note.learned.join("; ")}. Shaky: ${shaky}.`;
+const oneLine = (s: string): string => plain(s.replace(/\s*[\r\n\u2028\u2029]+\s*/g, " "));
+
+export function noteLine(note: HandoverNote): string {
+  const shaky = note.shaky.length > 0 ? note.shaky.map(oneLine).join("; ") : "nothing";
+  return `${note.unitId}: ${oneLine(note.summary)} Learned: ${note.learned.map(oneLine).join("; ")}. Shaky: ${shaky}.`;
 }
 
 export function renderSubjectSection(

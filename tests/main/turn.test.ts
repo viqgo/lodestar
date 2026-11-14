@@ -603,6 +603,13 @@ describe("units in the lesson turn", () => {
     expect(stored!.events.filter((e) => e.kind === "note").length).toBe(1);
   });
 
+  it("a corrupt subject does not stop a unit lesson turn", async () => {
+    const { f, runner } = await setupUnit([], [SE.accepted()], A.probe());
+    const result = await runner.advance(ID);
+    expect(result.ok).toBe(true);
+    expect(f.prompts[0]).not.toContain("# Subject");
+  });
+
   it("a unit lesson whose subject is gone still runs", async () => {
     const { store, f, runner } = await setupUnit(doneEvents(), null, A.done());
     const result = await runner.advance(ID);

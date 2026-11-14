@@ -1,3 +1,4 @@
+import { plain } from "../core/material";
 import { checkChange, deriveSubject, unitStatuses, validateOutline } from "../core/subject";
 import { buildOutlinePrompt, buildSeniorPrompt } from "../core/subjectPrompt";
 import { CALL_TIMEOUT_TOOLS_MS } from "../shared/limits";
@@ -137,6 +138,8 @@ export function createSubjectRunner(deps: {
                 ...r.value.change,
                 unit: {
                   ...r.value.change.unit,
+                  title: plain(r.value.change.unit.title),
+                  goal: plain(r.value.change.unit.goal),
                   files: r.value.change.unit.files.filter((f) => known.includes(f)),
                 },
               }

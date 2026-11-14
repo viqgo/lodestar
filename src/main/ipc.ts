@@ -2,6 +2,7 @@ import { basename, isAbsolute } from "node:path";
 import { isCliId } from "../shared/clis";
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
+import { plain } from "../core/material";
 import {
   checkChange,
   deriveSubject,
@@ -340,26 +341,28 @@ export function registerIpc(deps: IpcDeps): void {
   ): Promise<SubjectMutation> => {
     const busy = { ok: false as const, message: RUNNING_TEXT };
     if (subjects.isRunning(id)) return busy;
-    return withLock(id, async (): Promise<SubjectMutation> => {
-      const subject = await store.readSubject(id);
-      if (subject === null) {
-        return { ok: false as const, message: "This subject no longer exists." };
-      }
-      if (subjects.isRunning(id)) return busy;
-      const { event, message } = await change(subject, deriveSubject(subject.events));
-      if (event !== undefined) {
-        const updated: Subject = {
-          ...subject,
-          updatedAt: now(),
-          events: [...subject.events, event],
-        };
-        await store.writeSubject(updated);
-        send("subject:updated", updated);
-        return { ok: true as const, subject: updated };
-      }
-      if (message !== undefined) return { ok: false as const, message };
-      return { ok: true as const, subject };
-    });
+    return withLock("start:" + id, () =>
+      withLock(id, async (): Promise<SubjectMutation> => {
+        const subject = await store.readSubject(id);
+        if (subject === null) {
+          return { ok: false as const, message: "This subject no longer exists." };
+        }
+        if (subjects.isRunning(id)) return busy;
+        const { event, message } = await change(subject, deriveSubject(subject.events));
+        if (event !== undefined) {
+          const updated: Subject = {
+            ...subject,
+            updatedAt: now(),
+            events: [...subject.events, event],
+          };
+          await store.writeSubject(updated);
+          send("subject:updated", updated);
+          return { ok: true as const, subject: updated };
+        }
+        if (message !== undefined) return { ok: false as const, message };
+        return { ok: true as const, subject };
+      }),
+    );
   };
 
   ipcMain.handle("subjects:list", async (): Promise<SubjectSummary[]> =>
@@ -401,11 +404,13 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle("subjects:delete", async (_event, id: string) => {
     subjects.stop(id);
-    for (const s of await sessionsOf(id)) {
-      turns.stop(s.id);
-      await withLock(s.id, () => store.deleteSession(s.id));
-    }
-    await withLock(id, () => store.deleteSubject(id));
+    await withLock("start:" + id, async () => {
+      for (const s of await sessionsOf(id)) {
+        turns.stop(s.id);
+        await withLock(s.id, () => store.deleteSession(s.id));
+      }
+      await withLock(id, () => store.deleteSubject(id));
+    });
   });
 
   ipcMain.handle("subject:advance", (_event, id: string) => runSubject(id));
@@ -417,20 +422,17 @@ export function registerIpc(deps: IpcDeps): void {
       const rebuilt: Unit[] = [];
       for (const u of units) {
         const p = state.units.find((x) => x.id === u?.id);
-        if (p === undefined) return { message: OUTLINE_TEXT };
-        rebuilt.push({
-          id: p.id,
-          title: String(u.title).trim(),
-          goal: String(u.goal).trim(),
-          files: p.files,
-        });
+        if (p === undefined || typeof u.title !== "string" || typeof u.goal !== "string") {
+          return { message: OUTLINE_TEXT };
+        }
+        rebuilt.push({ id: p.id, title: u.title, goal: u.goal, files: p.files });
       }
       const checked = validateOutline(
         rebuilt,
         rebuilt.flatMap((x) => x.files),
       );
       if (!checked.ok) return { message: OUTLINE_TEXT };
-      return { event: { kind: "accepted", at: now(), units: rebuilt } };
+      return { event: { kind: "accepted", at: now(), units: checked.units } };
     }),
   );
 
@@ -519,8 +521,8 @@ export function registerIpc(deps: IpcDeps): void {
       const session: Session = {
         version: 1,
         id: newId("s"),
-        topic: unit.title,
-        goal: unit.goal,
+        topic: plain(unit.title),
+        goal: plain(unit.goal),
         cli: subject.cli,
         createdAt: now(),
         updatedAt: now(),
