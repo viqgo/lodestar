@@ -93,6 +93,7 @@ export type SessionSummary = {
   phase: Phase;
   cli: CliId;
   updatedAt: string;
+  subjectId: string | null;
 };
 
 export type KnowledgeItem = {
@@ -198,6 +199,33 @@ export type Api = {
   saveProfile(text: string): Promise<{ ok: true } | { ok: false; message: string }>;
   onSessionUpdated(cb: (session: Session) => void): () => void; // returns unsubscribe
   onTurnEnded(cb: (id: string, result: TurnResult) => void): () => void;
+  listSubjects(): Promise<SubjectSummary[]>;
+  createSubject(input: {
+    name: string;
+    folder: string | null;
+    cli: CliId;
+  }): Promise<{ ok: true; subject: Subject } | { ok: false; message: string }>;
+  getSubject(id: string): Promise<Subject | null>;
+  deleteSubject(id: string): Promise<void>;
+  advanceSubject(id: string): Promise<SubjectResult>;
+  acceptOutline(
+    id: string,
+    units: Unit[],
+  ): Promise<{ ok: true; subject: Subject } | { ok: false; message: string }>;
+  subjectMessage(id: string, text: string): Promise<SubjectResult>;
+  resolveChange(
+    id: string,
+    accept: boolean,
+  ): Promise<{ ok: true; subject: Subject } | { ok: false; message: string }>;
+  startUnit(
+    subjectId: string,
+    unitId: string,
+  ): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
+  stopSubject(id: string): Promise<void>;
+  isSubjectRunning(id: string): Promise<boolean>;
+  subjectStatuses(id: string): Promise<UnitStatus[]>;
+  onSubjectUpdated(cb: (subject: Subject) => void): () => void;
+  onSubjectEnded(cb: (id: string, result: SubjectResult) => void): () => void;
 };
 
 export type Unit = { id: string; title: string; goal: string; files: string[] };

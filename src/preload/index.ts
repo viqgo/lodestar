@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { Api, Session, TurnResult } from "../shared/types";
+import type { Api, Session, Subject, SubjectResult, TurnResult } from "../shared/types";
 
 const api: Api = {
   detectClis: () => ipcRenderer.invoke("clis:detect") as ReturnType<Api["detectClis"]>,
@@ -31,6 +31,24 @@ const api: Api = {
   deleteKnowledge: (id) => ipcRenderer.invoke("knowledge:delete", id) as Promise<void>,
   getProfile: () => ipcRenderer.invoke("profile:get") as Promise<string>,
   saveProfile: (text) => ipcRenderer.invoke("profile:save", text) as ReturnType<Api["saveProfile"]>,
+  listSubjects: () => ipcRenderer.invoke("subjects:list") as ReturnType<Api["listSubjects"]>,
+  createSubject: (input) =>
+    ipcRenderer.invoke("subjects:create", input) as ReturnType<Api["createSubject"]>,
+  getSubject: (id) => ipcRenderer.invoke("subjects:get", id) as ReturnType<Api["getSubject"]>,
+  deleteSubject: (id) => ipcRenderer.invoke("subjects:delete", id) as Promise<void>,
+  advanceSubject: (id) => ipcRenderer.invoke("subject:advance", id) as Promise<SubjectResult>,
+  acceptOutline: (id, units) =>
+    ipcRenderer.invoke("subject:accept", id, units) as ReturnType<Api["acceptOutline"]>,
+  subjectMessage: (id, text) =>
+    ipcRenderer.invoke("subject:message", id, text) as Promise<SubjectResult>,
+  resolveChange: (id, accept) =>
+    ipcRenderer.invoke("subject:resolveChange", id, accept) as ReturnType<Api["resolveChange"]>,
+  startUnit: (subjectId, unitId) =>
+    ipcRenderer.invoke("subject:startUnit", subjectId, unitId) as ReturnType<Api["startUnit"]>,
+  stopSubject: (id) => ipcRenderer.invoke("subject:stop", id) as Promise<void>,
+  isSubjectRunning: (id) => ipcRenderer.invoke("subject:running", id) as Promise<boolean>,
+  subjectStatuses: (id) =>
+    ipcRenderer.invoke("subject:statuses", id) as ReturnType<Api["subjectStatuses"]>,
   onSessionUpdated: (cb) => {
     const handler = (_event: unknown, session: Session): void => {
       cb(session);
@@ -47,6 +65,24 @@ const api: Api = {
     ipcRenderer.on("turn:ended", handler);
     return () => {
       ipcRenderer.removeListener("turn:ended", handler);
+    };
+  },
+  onSubjectUpdated: (cb) => {
+    const handler = (_event: unknown, subject: Subject): void => {
+      cb(subject);
+    };
+    ipcRenderer.on("subject:updated", handler);
+    return () => {
+      ipcRenderer.removeListener("subject:updated", handler);
+    };
+  },
+  onSubjectEnded: (cb) => {
+    const handler = (_event: unknown, id: string, result: SubjectResult): void => {
+      cb(id, result);
+    };
+    ipcRenderer.on("subject:ended", handler);
+    return () => {
+      ipcRenderer.removeListener("subject:ended", handler);
     };
   },
 };

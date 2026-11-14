@@ -4,9 +4,15 @@ import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { registerIpc } from "../../src/main/ipc";
 import { createStore } from "../../src/main/store";
-import type { Answer, KnowledgeItem, Session, TurnResult } from "../../src/shared/types";
+import type {
+  Answer,
+  KnowledgeItem,
+  Session,
+  SubjectResult,
+  TurnResult,
+} from "../../src/shared/types";
 import { fakeAdapters } from "../helpers/fakes";
-import { A, act, pick, session } from "../helpers/fixtures";
+import { A, SE, UNITS, act, pick, readySubject, session, subject } from "../helpers/fixtures";
 
 const NOW = "2026-03-03T00:00:00.000Z";
 const ID1 = "s_00000001-0000-0000-0000-000000000000";
@@ -18,6 +24,7 @@ const setup = async (
     pickFolder: async () => null as string | null,
     pickFiles: async () => [] as string[],
   },
+  subjectRunning = false,
 ) => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-ipc-"));
   const store = await createStore(dir, fsp);
@@ -33,6 +40,13 @@ const setup = async (
     stop: vi.fn(),
     isRunning: vi.fn(() => isRunning),
   };
+  const subjectResult: SubjectResult = { ok: true, subject: subject() };
+  const subjects = {
+    outline: vi.fn(async () => subjectResult),
+    reply: vi.fn(async () => subjectResult),
+    stop: vi.fn(),
+    isRunning: vi.fn(() => subjectRunning),
+  };
   const send = vi.fn();
   const adapter = { detect: vi.fn(async () => ({ ok: true as const, version: "1.2.3" })) };
   let n = 0;
@@ -41,13 +55,14 @@ const setup = async (
     adapters: fakeAdapters(adapter as any),
     store,
     turns,
+    subjects,
     now: () => NOW,
     newId: (p) => p + "_0000000" + ++n + "-0000-0000-0000-000000000000",
     send,
     dialogs,
   });
   const call = (channel: string, ...args: unknown[]) => handlers.get(channel)!(null, ...args);
-  return { store, turns, send, call, result, dir };
+  return { store, turns, subjects, send, call, result, dir };
 };
 
 const withId = (id: string, updatedAt: string, events: Session["events"]): Session => ({
@@ -144,8 +159,22 @@ describe("ipc", () => {
     await store.writeSession(withId(ID1, "2026-01-01T00:00:00.000Z", []));
     await store.writeSession(withId(ID2, "2026-01-02T00:00:00.000Z", [act(A.probe())]));
     expect(await call("sessions:list")).toEqual([
-      { id: ID2, topic: "T", phase: "probe", cli: "codex", updatedAt: "2026-01-02T00:00:00.000Z" },
-      { id: ID1, topic: "T", phase: "probe", cli: "codex", updatedAt: "2026-01-01T00:00:00.000Z" },
+      {
+        id: ID2,
+        topic: "T",
+        phase: "probe",
+        cli: "codex",
+        updatedAt: "2026-01-02T00:00:00.000Z",
+        subjectId: null,
+      },
+      {
+        id: ID1,
+        topic: "T",
+        phase: "probe",
+        cli: "codex",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+        subjectId: null,
+      },
     ]);
   });
 
@@ -538,6 +567,12 @@ describe("ipc material", () => {
       adapters: fakeAdapters({ detect: vi.fn() } as any),
       store,
       turns: { advance: vi.fn(), stop: vi.fn(), isRunning: vi.fn(() => false) } as any,
+      subjects: {
+        outline: vi.fn(),
+        reply: vi.fn(),
+        stop: vi.fn(),
+        isRunning: vi.fn(() => false),
+      } as any,
       now: () => NOW,
       newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
       send: vi.fn(),
@@ -617,5 +652,336 @@ describe("ipc profile", () => {
       message: "Keep it under 2000 characters.",
     });
     expect(await store.readProfile()).toBe("Be brief.");
+  });
+});
+
+const SID = "u_00000001-0000-0000-0000-000000000000";
+const SID2 = "u_00000002-0000-0000-0000-000000000000";
+const withSubject = (id: string, events: ReturnType<typeof subject>["events"], at = NOW) => ({
+  ...subject(events),
+  id,
+  updatedAt: at,
+});
+const OTHER = "s_00000099-0000-0000-0000-000000000000";
+const RUNNING_TEXT = "A reply is already on the way.";
+const OUTLINE_TEXT = "An outline needs 2 to 30 units, each with a title and a goal.";
+
+describe("ipc subjects", () => {
+  it("subjects:create stores a trimmed subject", async () => {
+    const { store, call, subjects } = await setup();
+    const r = await call("subjects:create", {
+      name: "  Algebra  ",
+      folder: "/course",
+      cli: "claude",
+    });
+    expect(r).toEqual({
+      ok: true,
+      subject: {
+        version: 1,
+        id: "u_00000001-0000-0000-0000-000000000000",
+        name: "Algebra",
+        folder: "/course",
+        cli: "claude",
+        createdAt: NOW,
+        updatedAt: NOW,
+        events: [],
+      },
+    });
+    expect(await store.readSubject(r.subject.id)).toEqual(r.subject);
+    expect(subjects.outline).not.toHaveBeenCalled();
+  });
+
+  it("new_subject_needs_name_and_folder (ipc)", async () => {
+    const { store, call } = await setup();
+    const text = "Enter a name and choose a folder.";
+    const refuse = (message: string) => ({ ok: false, message });
+    expect(await call("subjects:create", { name: " ", folder: "/f", cli: "codex" })).toEqual(
+      refuse(text),
+    );
+    expect(
+      await call("subjects:create", { name: "x".repeat(101), folder: "/f", cli: "codex" }),
+    ).toEqual(refuse(text));
+    expect(await call("subjects:create", { name: "A", folder: null, cli: "codex" })).toEqual(
+      refuse(text),
+    );
+    expect(
+      await call("subjects:create", { name: "A", folder: "relative/dir", cli: "codex" }),
+    ).toEqual(refuse("Choose a folder."));
+    expect(await call("subjects:create", { name: "A", folder: "/f", cli: "gpt" })).toEqual(
+      refuse("Choose a tutor."),
+    );
+    expect(await store.listSubjects()).toEqual([]);
+  });
+
+  it("subjects:list returns summaries newest first", async () => {
+    const { store, call } = await setup();
+    await store.writeSubject({
+      ...withSubject(SID, []),
+      name: "Old",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    });
+    await store.writeSubject({
+      ...withSubject(SID2, []),
+      name: "New",
+      updatedAt: "2026-01-02T00:00:00.000Z",
+    });
+    expect(await call("subjects:list")).toEqual([
+      { id: SID2, name: "New", updatedAt: "2026-01-02T00:00:00.000Z" },
+      { id: SID, name: "Old", updatedAt: "2026-01-01T00:00:00.000Z" },
+    ]);
+  });
+
+  it("subject:advance runs the outline first and the reply once a message waits", async () => {
+    const { store, call, subjects, send } = await setup();
+    await store.writeSubject(withSubject(SID, []));
+    const r1 = await call("subject:advance", SID);
+    expect(subjects.outline).toHaveBeenCalledTimes(1);
+    expect(subjects.reply).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledWith("subject:ended", SID, r1);
+    await store.writeSubject(withSubject(SID2, [...readySubject, SE.message()]));
+    const r2 = await call("subject:advance", SID2);
+    expect(subjects.reply).toHaveBeenCalledTimes(1);
+    expect(subjects.outline).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith("subject:ended", SID2, r2);
+  });
+
+  it("subject:accept stores the edited outline", async () => {
+    const { store, call, send } = await setup();
+    await store.writeSubject(withSubject(SID, [SE.outline()]));
+    const r = await call("subject:accept", SID, [
+      { id: "u3", title: "  Third  ", goal: " G3 ", files: ["evil.txt"] },
+      { id: "u1", title: "First renamed", goal: "Goal one edited", files: [] },
+    ]);
+    const expected = [
+      { id: "u3", title: "Third", goal: "G3", files: [] },
+      { id: "u1", title: "First renamed", goal: "Goal one edited", files: ["a.txt"] },
+    ];
+    expect(r.ok).toBe(true);
+    expect(r.subject.events[1]).toEqual({ kind: "accepted", at: NOW, units: expected });
+    expect(r.subject.updatedAt).toBe(NOW);
+    expect(await store.readSubject(SID)).toEqual(r.subject);
+    expect(send).toHaveBeenCalledWith("subject:updated", r.subject);
+
+    for (const units of [
+      [
+        { id: "zz", title: "A", goal: "B" },
+        { id: "u1", title: "A", goal: "B" },
+      ],
+      [{ id: "u1", title: "A", goal: "B" }],
+      [
+        { id: "u1", title: " ", goal: "B" },
+        { id: "u2", title: "A", goal: "B" },
+      ],
+      "nope",
+    ]) {
+      await store.writeSubject(withSubject(SID2, [SE.outline()]));
+      expect(await call("subject:accept", SID2, units)).toEqual({
+        ok: false,
+        message: OUTLINE_TEXT,
+      });
+      expect((await store.readSubject(SID2))!.events).toHaveLength(1);
+    }
+  });
+
+  it("nothing_starts_before_accept", async () => {
+    const { store, call, subjects } = await setup();
+    await store.writeSubject(withSubject(SID, []));
+    await store.writeSubject(withSubject(SID2, [SE.outline()]));
+    for (const id of [SID, SID2]) {
+      expect(await call("subject:startUnit", id, "u1")).toEqual({
+        ok: false,
+        message: "Accept the outline first.",
+      });
+      const m = await call("subject:message", id, "hello");
+      expect(m.ok).toBe(false);
+      expect(m.error.kind).toBe("invalid_answer");
+      expect(m.error.message).toBe("Accept the outline first.");
+      expect((await store.readSubject(id))!.events.length).toBe(id === SID ? 0 : 1);
+    }
+    expect(await store.listSessions()).toEqual([]);
+    expect(subjects.outline).not.toHaveBeenCalled();
+    expect(subjects.reply).not.toHaveBeenCalled();
+  });
+
+  it("start_unit_creates_prefilled_lesson", async () => {
+    const { store, call } = await setup();
+    await store.writeSubject({ ...withSubject(SID, readySubject), cli: "claude" });
+    const r = await call("subject:startUnit", SID, "u2");
+    expect(r.ok).toBe(true);
+    expect(r.session).toEqual({
+      version: 1,
+      id: "s_00000001-0000-0000-0000-000000000000",
+      topic: "Unit two",
+      goal: "Goal two",
+      cli: "claude",
+      createdAt: NOW,
+      updatedAt: NOW,
+      events: [],
+      folder: "/course",
+      attachments: [],
+      webSearch: false,
+      subjectId: SID,
+      unitId: "u2",
+    });
+    expect(await store.readSession(r.session.id)).toEqual(r.session);
+    const list = await call("sessions:list");
+    expect(list[0].subjectId).toBe(SID);
+  });
+
+  it("unit_has_one_lesson", async () => {
+    const { store, call } = await setup();
+    await store.writeSubject(withSubject(SID, readySubject));
+    const a = await call("subject:startUnit", SID, "u1");
+    const b = await call("subject:startUnit", SID, "u1");
+    expect(b.session.id).toBe(a.session.id);
+    const [c, d] = await Promise.all([
+      call("subject:startUnit", SID, "u2"),
+      call("subject:startUnit", SID, "u2"),
+    ]);
+    expect(c.session.id).toBe(d.session.id);
+    expect(await store.listSessions()).toHaveLength(2);
+  });
+
+  it("subject:startUnit refuses an unknown unit and a deleted subject", async () => {
+    const { store, call } = await setup();
+    await store.writeSubject(withSubject(SID, readySubject));
+    expect(await call("subject:startUnit", SID, "nope")).toEqual({
+      ok: false,
+      message: "This unit no longer exists.",
+    });
+    expect(await call("subject:startUnit", SID2, "u1")).toEqual({
+      ok: false,
+      message: "This subject no longer exists.",
+    });
+    expect(await store.listSessions()).toEqual([]);
+  });
+
+  it("subject:message stores the message and asks for the reply", async () => {
+    const { store, call, subjects, send } = await setup();
+    await store.writeSubject(withSubject(SID, readySubject));
+    const r = await call("subject:message", SID, "  why?  ");
+    expect(r.ok).toBe(true);
+    const stored = (await store.readSubject(SID))!;
+    expect(stored.events[2]).toEqual({ kind: "message", at: NOW, text: "why?" });
+    expect(subjects.reply).toHaveBeenCalledTimes(1);
+    const names = send.mock.calls.map((c) => c[0]);
+    expect(names).toEqual(["subject:updated", "subject:ended"]);
+
+    const { store: store2, call: call2, subjects: subjects2 } = await setup();
+    await store2.writeSubject(withSubject(SID, readySubject));
+    for (const text of ["", "   ", "x".repeat(4001)]) {
+      const bad = await call2("subject:message", SID, text);
+      expect(bad.ok).toBe(false);
+      expect(bad.error).toEqual({ kind: "invalid_answer", message: "Write a message." });
+    }
+    expect((await store2.readSubject(SID))!.events).toHaveLength(2);
+    expect(subjects2.reply).not.toHaveBeenCalled();
+  });
+
+  it("proposed_change_accept_and_dismiss (ipc)", async () => {
+    const { store, call } = await setup();
+    const add = {
+      kind: "add" as const,
+      unit: { id: "u4", title: "Four", goal: "G4", files: [] },
+      afterId: null,
+    };
+    const pending = [...readySubject, SE.message(), SE.reply("ok", add)];
+    await store.writeSubject(withSubject(SID, pending));
+    await store.writeSubject(withSubject(SID2, pending));
+    const a = await call("subject:resolveChange", SID, true);
+    expect(a.ok).toBe(true);
+    expect(a.subject.events.at(-1)).toEqual({ kind: "change", at: NOW, accepted: true });
+    const { deriveSubject } = await import("../../src/core/subject");
+    const sa = deriveSubject(a.subject.events);
+    expect(sa.units.map((u) => u.id)).toEqual(["u4", "u1", "u2", "u3"]);
+    expect(sa.pendingChange).toBeNull();
+    const d = await call("subject:resolveChange", SID2, false);
+    expect(d.subject.events.at(-1)).toEqual({ kind: "change", at: NOW, accepted: false });
+    const sd = deriveSubject(d.subject.events);
+    expect(sd.units).toEqual(UNITS);
+    expect(sd.pendingChange).toBeNull();
+    const again = await call("subject:resolveChange", SID, true);
+    expect(again.subject.events).toHaveLength(a.subject.events.length);
+  });
+
+  it("resolveChange refuses a removal whose unit was started meanwhile", async () => {
+    const { store, call } = await setup();
+    const remove = { kind: "remove" as const, unitId: "u1" };
+    await store.writeSubject(
+      withSubject(SID, [...readySubject, SE.message(), SE.reply("ok", remove)]),
+    );
+    await call("subject:startUnit", SID, "u1");
+    const r = await call("subject:resolveChange", SID, true);
+    expect(r).toEqual({
+      ok: false,
+      message: "This change no longer fits the outline. Dismiss it.",
+    });
+    expect((await store.readSubject(SID))!.events).toHaveLength(4);
+    const d = await call("subject:resolveChange", SID, false);
+    expect(d.ok).toBe(true);
+    expect(d.subject.events).toHaveLength(5);
+  });
+
+  it("subject channels refuse while a subject call runs", async () => {
+    const { store, call, subjects } = await setup(false, undefined, true);
+    const remove = { kind: "remove" as const, unitId: "u1" };
+    await store.writeSubject(withSubject(SID, [SE.outline()]));
+    await store.writeSubject(
+      withSubject(SID2, [...readySubject, SE.message(), SE.reply("ok", remove)]),
+    );
+    const busy = { ok: false, message: RUNNING_TEXT };
+    expect(await call("subject:accept", SID, UNITS)).toEqual(busy);
+    expect(await call("subject:resolveChange", SID2, true)).toEqual(busy);
+    const m = await call("subject:message", SID2, "hi");
+    expect(m).toEqual({
+      ok: false,
+      error: { kind: "busy", message: RUNNING_TEXT },
+      subject: null,
+    });
+    expect((await store.readSubject(SID))!.events).toHaveLength(1);
+    expect((await store.readSubject(SID2))!.events).toHaveLength(4);
+    expect(subjects.reply).not.toHaveBeenCalled();
+  });
+
+  it("delete_subject_removes_its_lessons_keeps_knowledge (ipc)", async () => {
+    const { store, call, subjects, turns } = await setup();
+    await store.writeSubject(withSubject(SID, readySubject));
+    const a = await call("subject:startUnit", SID, "u1");
+    const b = await call("subject:startUnit", SID, "u2");
+    await store.writeSession(withId(OTHER, "2026-01-01T00:00:00.000Z", []));
+    const item: KnowledgeItem = {
+      id: "k_1",
+      text: "kept",
+      sessionId: a.session.id,
+      nodeId: "n1",
+      createdAt: NOW,
+    } as KnowledgeItem;
+    await store.addKnowledge([item]);
+    await call("subjects:delete", SID);
+    expect(subjects.stop).toHaveBeenCalledWith(SID);
+    expect(turns.stop).toHaveBeenCalledWith(a.session.id);
+    expect(turns.stop).toHaveBeenCalledWith(b.session.id);
+    expect(await store.readSubject(SID)).toBeNull();
+    expect(await store.readSession(a.session.id)).toBeNull();
+    expect(await store.readSession(b.session.id)).toBeNull();
+    expect(await store.readSession(OTHER)).not.toBeNull();
+    expect((await store.readKnowledge()).map((k) => k.id)).toEqual(["k_1"]);
+  });
+
+  it("subject:statuses, subject:stop and subject:running pass through", async () => {
+    const { store, call, subjects } = await setup();
+    await store.writeSubject(withSubject(SID, readySubject));
+    await call("subject:startUnit", SID, "u2");
+    const statuses = await call("subject:statuses", SID);
+    expect(statuses.map((s: { status: string }) => s.status)).toEqual([
+      "not_started",
+      "in_progress",
+      "not_started",
+    ]);
+    expect(await call("subject:statuses", SID2)).toEqual([]);
+    await call("subject:stop", SID);
+    expect(subjects.stop).toHaveBeenCalledWith(SID);
+    expect(await call("subject:running", SID)).toBe(false);
+    expect(subjects.isRunning).toHaveBeenCalledWith(SID);
   });
 });

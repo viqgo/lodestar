@@ -2,7 +2,14 @@ import { basename, isAbsolute } from "node:path";
 import { isCliId } from "../shared/clis";
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
-import { ATTACH_PER_ANSWER, ATTACH_PER_LESSON } from "../shared/limits";
+import {
+  checkChange,
+  deriveSubject,
+  unitStatuses,
+  validateNewSubject,
+  validateOutline,
+} from "../core/subject";
+import { ATTACH_PER_ANSWER, ATTACH_PER_LESSON, CHAT_TEXT_MAX } from "../shared/limits";
 import type {
   Answer,
   Attachment,
@@ -10,11 +17,19 @@ import type {
   KnowledgeView,
   Session,
   SessionSummary,
+  Subject,
+  SubjectEvent,
+  SubjectResult,
+  SubjectState,
+  SubjectSummary,
   TurnResult,
+  Unit,
+  UnitStatus,
 } from "../shared/types";
 import type { CliAdapter } from "./cli/adapter";
 import { detectAll } from "./cli/registry";
 import type { Store } from "./store";
+import type { SubjectRunner } from "./subjectTurn";
 import type { TurnRunner } from "./turn";
 
 export type IpcDeps = {
@@ -22,8 +37,9 @@ export type IpcDeps = {
   adapters: Record<CliId, CliAdapter>;
   store: Store;
   turns: TurnRunner;
+  subjects: SubjectRunner;
   now: () => string;
-  newId: (prefix: "s" | "k") => string;
+  newId: (prefix: "s" | "k" | "u") => string;
   send: (channel: string, ...args: unknown[]) => void;
   dialogs: { pickFolder(): Promise<string | null>; pickFiles(): Promise<string[]> };
 };
@@ -44,7 +60,7 @@ const goodFolder = (folder: unknown): boolean =>
 type SessionResult = { ok: true; session: Session } | { ok: false; message: string };
 
 export function registerIpc(deps: IpcDeps): void {
-  const { ipcMain, adapters, store, turns, now, newId, send, dialogs } = deps;
+  const { ipcMain, adapters, store, turns, subjects, now, newId, send, dialogs } = deps;
 
   const runTurn = async (id: string): Promise<TurnResult> => {
     const result = turns.isRunning(id)
@@ -69,6 +85,7 @@ export function registerIpc(deps: IpcDeps): void {
           phase: deriveState(s.events).phase,
           cli: s.cli,
           updatedAt: s.updatedAt,
+          subjectId: s.subjectId,
         });
       } catch {
         // a lesson that cannot be read is left out
@@ -285,5 +302,251 @@ export function registerIpc(deps: IpcDeps): void {
     } catch {
       return { ok: false as const, message: "Could not save. Check free disk space." };
     }
+  });
+
+  const OUTLINE_TEXT = "An outline needs 2 to 30 units, each with a title and a goal.";
+  const SAVE_TEXT = "Could not save. Check free disk space.";
+  const RUNNING_TEXT = "A reply is already on the way.";
+
+  const sessionsOf = async (id: string): Promise<Session[]> =>
+    (await store.listSessions()).filter((s) => s.subjectId === id);
+
+  const runSubject = async (id: string): Promise<SubjectResult> => {
+    const result = subjects.isRunning(id)
+      ? await subjects.outline(id)
+      : await withLock(id, async (): Promise<SubjectResult> => {
+          const s = await store.readSubject(id);
+          if (s === null) {
+            return {
+              ok: false,
+              error: { kind: "not_found", message: "This subject no longer exists." },
+              subject: null,
+            };
+          }
+          return deriveSubject(s.events).phase === "outline"
+            ? subjects.outline(id)
+            : subjects.reply(id);
+        });
+    send("subject:ended", id, result);
+    return result;
+  };
+
+  type SubjectChange = { event?: SubjectEvent; message?: string };
+  type SubjectMutation = { ok: true; subject: Subject } | { ok: false; message: string };
+
+  const mutateSubject = async (
+    id: string,
+    change: (subject: Subject, state: SubjectState) => Promise<SubjectChange> | SubjectChange,
+  ): Promise<SubjectMutation> => {
+    const busy = { ok: false as const, message: RUNNING_TEXT };
+    if (subjects.isRunning(id)) return busy;
+    return withLock(id, async (): Promise<SubjectMutation> => {
+      const subject = await store.readSubject(id);
+      if (subject === null) {
+        return { ok: false as const, message: "This subject no longer exists." };
+      }
+      if (subjects.isRunning(id)) return busy;
+      const { event, message } = await change(subject, deriveSubject(subject.events));
+      if (event !== undefined) {
+        const updated: Subject = {
+          ...subject,
+          updatedAt: now(),
+          events: [...subject.events, event],
+        };
+        await store.writeSubject(updated);
+        send("subject:updated", updated);
+        return { ok: true as const, subject: updated };
+      }
+      if (message !== undefined) return { ok: false as const, message };
+      return { ok: true as const, subject };
+    });
+  };
+
+  ipcMain.handle("subjects:list", async (): Promise<SubjectSummary[]> =>
+    (await store.listSubjects()).map((s) => ({ id: s.id, name: s.name, updatedAt: s.updatedAt })),
+  );
+
+  ipcMain.handle(
+    "subjects:create",
+    async (_event, input: { name: string; folder: string | null; cli: CliId }) => {
+      const message = validateNewSubject(
+        typeof input.name === "string" ? input.name : "",
+        input.folder ?? null,
+      );
+      if (message !== null) return { ok: false as const, message };
+      if (!isCliId(input.cli)) return { ok: false as const, message: "Choose a tutor." };
+      if (!goodFolder(input.folder) || input.folder === null) {
+        return { ok: false as const, message: "Choose a folder." };
+      }
+      const subject: Subject = {
+        version: 1,
+        id: newId("u"),
+        name: input.name.trim(),
+        folder: input.folder,
+        cli: input.cli,
+        createdAt: now(),
+        updatedAt: now(),
+        events: [],
+      };
+      try {
+        await store.writeSubject(subject);
+      } catch {
+        return { ok: false as const, message: SAVE_TEXT };
+      }
+      return { ok: true as const, subject };
+    },
+  );
+
+  ipcMain.handle("subjects:get", (_event, id: string) => store.readSubject(id));
+
+  ipcMain.handle("subjects:delete", async (_event, id: string) => {
+    subjects.stop(id);
+    for (const s of await sessionsOf(id)) {
+      turns.stop(s.id);
+      await withLock(s.id, () => store.deleteSession(s.id));
+    }
+    await withLock(id, () => store.deleteSubject(id));
+  });
+
+  ipcMain.handle("subject:advance", (_event, id: string) => runSubject(id));
+
+  ipcMain.handle("subject:accept", (_event, id: string, units: Unit[]) =>
+    mutateSubject(id, (_subject, state) => {
+      if (state.phase !== "review") return {};
+      if (!Array.isArray(units)) return { message: OUTLINE_TEXT };
+      const rebuilt: Unit[] = [];
+      for (const u of units) {
+        const p = state.units.find((x) => x.id === u?.id);
+        if (p === undefined) return { message: OUTLINE_TEXT };
+        rebuilt.push({
+          id: p.id,
+          title: String(u.title).trim(),
+          goal: String(u.goal).trim(),
+          files: p.files,
+        });
+      }
+      const checked = validateOutline(
+        rebuilt,
+        rebuilt.flatMap((x) => x.files),
+      );
+      if (!checked.ok) return { message: OUTLINE_TEXT };
+      return { event: { kind: "accepted", at: now(), units: rebuilt } };
+    }),
+  );
+
+  ipcMain.handle(
+    "subject:message",
+    async (_event, id: string, text: string): Promise<SubjectResult> => {
+      const busy: SubjectResult = {
+        ok: false,
+        error: { kind: "busy", message: RUNNING_TEXT },
+        subject: null,
+      };
+      if (subjects.isRunning(id)) return busy;
+      const outcome = await withLock(id, async (): Promise<SubjectResult | null> => {
+        if (subjects.isRunning(id)) return busy;
+        const subject = await store.readSubject(id);
+        if (subject === null) {
+          return {
+            ok: false,
+            error: { kind: "not_found", message: "This subject no longer exists." },
+            subject: null,
+          };
+        }
+        if (deriveSubject(subject.events).phase !== "ready") {
+          return {
+            ok: false,
+            error: { kind: "invalid_answer", message: "Accept the outline first." },
+            subject,
+          };
+        }
+        if (
+          typeof text !== "string" ||
+          text.trim().length < 1 ||
+          text.trim().length > CHAT_TEXT_MAX
+        ) {
+          return {
+            ok: false,
+            error: { kind: "invalid_answer", message: "Write a message." },
+            subject,
+          };
+        }
+        const updated: Subject = {
+          ...subject,
+          updatedAt: now(),
+          events: [...subject.events, { kind: "message", at: now(), text: text.trim() }],
+        };
+        await store.writeSubject(updated);
+        send("subject:updated", updated);
+        return null;
+      });
+      if (outcome !== null) return outcome;
+      return runSubject(id);
+    },
+  );
+
+  ipcMain.handle("subject:resolveChange", (_event, id: string, accept: boolean) =>
+    mutateSubject(id, async (_subject, state) => {
+      if (state.pendingChange === null) return {};
+      if (accept === true) {
+        const started = unitStatuses(state.units, await sessionsOf(id))
+          .filter((u) => u.status !== "not_started")
+          .map((u) => u.unitId);
+        if (checkChange(state.units, started, state.pendingChange) !== null) {
+          return { message: "This change no longer fits the outline. Dismiss it." };
+        }
+      }
+      return { event: { kind: "change", at: now(), accepted: accept === true } };
+    }),
+  );
+
+  ipcMain.handle("subject:startUnit", (_event, id: string, unitId: string) =>
+    withLock("start:" + id, async (): Promise<SessionResult> => {
+      const subject = await store.readSubject(id);
+      if (subject === null) {
+        return { ok: false as const, message: "This subject no longer exists." };
+      }
+      const state = deriveSubject(subject.events);
+      if (state.phase !== "ready") {
+        return { ok: false as const, message: "Accept the outline first." };
+      }
+      const unit = state.units.find((u) => u.id === unitId);
+      if (unit === undefined) {
+        return { ok: false as const, message: "This unit no longer exists." };
+      }
+      const existing = (await sessionsOf(id)).find((s) => s.unitId === unitId);
+      if (existing !== undefined) return { ok: true as const, session: existing };
+      const session: Session = {
+        version: 1,
+        id: newId("s"),
+        topic: unit.title,
+        goal: unit.goal,
+        cli: subject.cli,
+        createdAt: now(),
+        updatedAt: now(),
+        events: [],
+        folder: subject.folder,
+        attachments: [],
+        webSearch: false,
+        subjectId: id,
+        unitId,
+      };
+      try {
+        await store.writeSession(session);
+      } catch {
+        return { ok: false as const, message: SAVE_TEXT };
+      }
+      return { ok: true as const, session };
+    }),
+  );
+
+  ipcMain.handle("subject:stop", (_event, id: string) => {
+    subjects.stop(id);
+  });
+  ipcMain.handle("subject:running", (_event, id: string) => subjects.isRunning(id));
+  ipcMain.handle("subject:statuses", async (_event, id: string): Promise<UnitStatus[]> => {
+    const s = await store.readSubject(id);
+    if (s === null) return [];
+    return unitStatuses(deriveSubject(s.events).units, await sessionsOf(id));
   });
 }

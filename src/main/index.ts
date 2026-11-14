@@ -10,6 +10,7 @@ import { createAdapters } from "./cli/registry";
 import { registerIpc } from "./ipc";
 import { listFolder } from "./files";
 import { createStore } from "./store";
+import { createSubjectRunner } from "./subjectTurn";
 import { createTurnRunner } from "./turn";
 
 export function createWindow(): BrowserWindow {
@@ -53,7 +54,7 @@ async function main(): Promise<void> {
     win?.webContents.send(channel, ...args);
   };
   const now = (): string => new Date().toISOString();
-  const newId = (prefix: "s" | "k"): string => prefix + "_" + randomUUID();
+  const newId = (prefix: "s" | "k" | "u"): string => prefix + "_" + randomUUID();
   const turns = createTurnRunner({
     adapters,
     store,
@@ -61,6 +62,13 @@ async function main(): Promise<void> {
     newId,
     notify: (s) => send("session:updated", s),
     listFolder: (f) => listFolder(fsp, f, FILE_LIST_MAX),
+  });
+  const subjects = createSubjectRunner({
+    adapters,
+    store,
+    listFolder: (f) => listFolder(fsp, f, FILE_LIST_MAX),
+    now,
+    notify: (s) => send("subject:updated", s),
   });
   const dialogs = {
     pickFolder: async (): Promise<string | null> => {
@@ -72,7 +80,7 @@ async function main(): Promise<void> {
       return r.canceled ? [] : r.filePaths;
     },
   };
-  registerIpc({ ipcMain, adapters, store, turns, now, newId, send, dialogs });
+  registerIpc({ ipcMain, adapters, store, turns, subjects, now, newId, send, dialogs });
   if (!process.env.ELECTRON_RENDERER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({

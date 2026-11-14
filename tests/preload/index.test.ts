@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Answer, Session, TurnResult } from "../../src/shared/types";
-import { session } from "../helpers/fixtures";
+import { UNITS, session, subject } from "../helpers/fixtures";
 
 const ANSWER: Answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
 const SESSION: Session = session();
@@ -58,6 +58,20 @@ describe("preload", () => {
         "saveProfile",
         "onSessionUpdated",
         "onTurnEnded",
+        "listSubjects",
+        "createSubject",
+        "getSubject",
+        "deleteSubject",
+        "advanceSubject",
+        "acceptOutline",
+        "subjectMessage",
+        "resolveChange",
+        "startUnit",
+        "stopSubject",
+        "isSubjectRunning",
+        "subjectStatuses",
+        "onSubjectUpdated",
+        "onSubjectEnded",
       ].sort(),
     );
   });
@@ -72,6 +86,7 @@ describe("preload", () => {
       webSearch: false,
       attachPaths: [],
     };
+    const subjectInput = { name: "n", folder: "/f", cli: "codex" as const };
     const results = [
       await api.detectClis(),
       await api.listSessions(),
@@ -93,6 +108,18 @@ describe("preload", () => {
       await api.setSessionWebSearch("a", true),
       await api.addAttachments("a", ["/x.pdf"]),
       await api.removeAttachment("a", "a1-x.pdf"),
+      await api.listSubjects(),
+      await api.createSubject(subjectInput),
+      await api.getSubject("u"),
+      await api.deleteSubject("u"),
+      await api.advanceSubject("u"),
+      await api.acceptOutline("u", UNITS),
+      await api.subjectMessage("u", "hi"),
+      await api.resolveChange("u", true),
+      await api.startUnit("u", "u1"),
+      await api.stopSubject("u"),
+      await api.isSubjectRunning("u"),
+      await api.subjectStatuses("u"),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -115,8 +142,20 @@ describe("preload", () => {
       ["sessions:setWebSearch", "a", true],
       ["sessions:addAttachments", "a", ["/x.pdf"]],
       ["sessions:removeAttachment", "a", "a1-x.pdf"],
+      ["subjects:list"],
+      ["subjects:create", subjectInput],
+      ["subjects:get", "u"],
+      ["subjects:delete", "u"],
+      ["subject:advance", "u"],
+      ["subject:accept", "u", UNITS],
+      ["subject:message", "u", "hi"],
+      ["subject:resolveChange", "u", true],
+      ["subject:startUnit", "u", "u1"],
+      ["subject:stop", "u"],
+      ["subject:running", "u"],
+      ["subject:statuses", "u"],
     ]);
-    expect(results).toEqual(Array(20).fill("R"));
+    expect(results).toEqual(Array(32).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {
@@ -138,5 +177,27 @@ describe("preload", () => {
     expect(cb2).toHaveBeenCalledWith("id", RESULT);
     off2();
     expect(removeListener).toHaveBeenCalledWith("turn:ended", handler2);
+  });
+
+  it("preload forwards the subject events", async () => {
+    const api = await load();
+    const cb = vi.fn();
+    const off = api.onSubjectUpdated(cb);
+    expect(on.mock.calls[0][0]).toBe("subject:updated");
+    const handler = on.mock.calls[0][1];
+    handler({}, subject());
+    expect(cb).toHaveBeenCalledWith(subject());
+    off();
+    expect(removeListener).toHaveBeenCalledWith("subject:updated", handler);
+
+    const cb2 = vi.fn();
+    const off2 = api.onSubjectEnded(cb2);
+    expect(on.mock.calls[1][0]).toBe("subject:ended");
+    const handler2 = on.mock.calls[1][1];
+    const r = { ok: true, subject: subject() };
+    handler2({}, "u", r);
+    expect(cb2).toHaveBeenCalledWith("u", r);
+    off2();
+    expect(removeListener).toHaveBeenCalledWith("subject:ended", handler2);
   });
 });

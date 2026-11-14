@@ -104,7 +104,8 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T70 Subject storage
 - [x] T71 Subject runner
 - [x] T72 Units in the lesson turn
-- [ ] T73-T78 Milestone 4: subjects (outline, expanded at stage start)
+- [x] T73 Subject channels
+- [ ] T74-T78 Milestone 4: subjects (outline, expanded at stage start)
 - [ ] GATE H Subjects
 - [ ] T79-T88 Milestone 5: voice (outline)
 - [ ] GATE I Voice

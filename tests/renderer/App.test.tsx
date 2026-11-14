@@ -19,6 +19,7 @@ const summary = (id: string, topic: string): SessionSummary => ({
   phase: "probe",
   cli: "codex",
   updatedAt: AT,
+  subjectId: null,
 });
 
 describe("App", () => {

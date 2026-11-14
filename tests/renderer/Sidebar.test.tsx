@@ -14,6 +14,7 @@ const sessions: SessionSummary[] = [
     phase: "teach",
     cli: "codex",
     updatedAt: "2026-03-03T10:00:00.000Z",
+    subjectId: null,
   },
 ];
 
