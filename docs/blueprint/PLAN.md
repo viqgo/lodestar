@@ -147,7 +147,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T103 Deferred fixes: window
 - [x] T103b Deferred fixes: subject folder button, calls
 - [x] T104 Build config
-- [ ] T105 Build and check
+- [x] T105 Build and check
 - [ ] T106 User README
 - [ ] GATE K Packaging
 - [ ] T107 Settings grow
