@@ -1,6 +1,7 @@
 import path from "node:path";
 import { allowedActions, checkAction, deriveState, learnedToSave } from "../core/engine";
 import { buildPrompt } from "../core/prompt";
+import { callModel } from "./call";
 import { attachmentKind, renderMaterial } from "../core/material";
 import { CALL_TIMEOUT_MS, CALL_TIMEOUT_TOOLS_MS } from "../shared/limits";
 import { REPLY_JSON_SCHEMA, parseReply } from "../shared/schema";
@@ -52,44 +53,33 @@ export async function modelStep(
 ): Promise<
   { ok: true; action: Action; usage: Usage | null; calls: number } | { ok: false; error: TurnError }
 > {
-  let retryNote: string | null = null;
-  for (let attempt = 1; attempt <= deps.adapter.retries + 1; attempt++) {
-    const prompt = buildPrompt({
-      session,
-      state,
-      knowledge: deps.knowledge,
-      retryNote,
-      profile: deps.profile,
-      material: deps.material ?? null,
-      webSearch: deps.options.webSearch,
-      ...(deps.attachmentsDir !== undefined ? { attachmentsDir: deps.attachmentsDir } : {}),
-    });
-    const run = await deps.adapter.run({
-      prompt,
+  const r = await callModel(
+    { adapter: deps.adapter },
+    {
+      prompt: (retryNote) =>
+        buildPrompt({
+          session,
+          state,
+          knowledge: deps.knowledge,
+          retryNote,
+          profile: deps.profile,
+          material: deps.material ?? null,
+          webSearch: deps.options.webSearch,
+          ...(deps.attachmentsDir !== undefined ? { attachmentsDir: deps.attachmentsDir } : {}),
+        }),
       schema: REPLY_JSON_SCHEMA,
-      signal,
-      timeoutMs: deps.timeoutMs,
+      parse: (text) => {
+        const p = parseReply(text);
+        return p.ok ? { ok: true, value: p.action } : p;
+      },
+      check: (action) => checkAction(state, action),
+      allowed: allowedActions(state).join(", "),
       options: deps.options,
-    });
-    if (!run.ok) {
-      if (run.kind === "aborted")
-        return { ok: false, error: { kind: "stopped", message: "Stopped." } };
-      return {
-        ok: false,
-        error: { kind: "cli", message: deps.adapter.label + " failed: " + run.message },
-      };
-    }
-    const parsed = parseReply(run.text);
-    const reason = parsed.ok ? checkAction(state, parsed.action) : parsed.reason;
-    if (parsed.ok && reason === null) {
-      return { ok: true, action: parsed.action, usage: run.usage, calls: attempt };
-    }
-    retryNote = `Your last reply was not usable: ${reason}. Allowed now: ${allowedActions(state).join(", ")}.`;
-  }
-  return {
-    ok: false,
-    error: { kind: "bad_reply", message: "The model gave an unusable reply. Press Retry." },
-  };
+      timeoutMs: deps.timeoutMs,
+      signal,
+    },
+  );
+  return r.ok ? { ok: true, action: r.value, usage: r.usage, calls: r.calls } : r;
 }
 
 export type TurnRunner = {

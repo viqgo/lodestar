@@ -98,7 +98,8 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T66c Resume after the material folder is fixed (D59)
 - [x] T66d Two small gate G fixes: delete under the lock, C1 controls in names (D60)
 - [x] GATE G More input (milestone 3)
-- [ ] T67-T78 Milestone 4: subjects (outline, expanded at stage start)
+- [x] T67 Shared model call
+- [ ] T68-T78 Milestone 4: subjects (outline, expanded at stage start)
 - [ ] GATE H Subjects
 - [ ] T79-T88 Milestone 5: voice (outline)
 - [ ] GATE I Voice
