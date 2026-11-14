@@ -3133,7 +3133,7 @@ Do NOT touch any other file.
 ## Stage H - milestone 4: subjects
 What exists at the end: "New subject" asks for a name, a material folder and a tutor; a senior tutor reads the folder and proposes an outline of units; the owner edits and accepts it; each unit is an ordinary lesson that points back at its subject, carries the subject sections in its prompt and leaves a handover note when it finishes; the subject screen has a chat with the senior tutor, who may propose one outline change at a time; the sidebar groups lessons by subject.
 
-Expanded by the stage planner on 2026-11-14 against HEAD `bc1da55` (459 tests). The standard steps and stop rules of "Stages G-L" apply to every task. Totals: 459 at the start, 571 after T77 (T78 adds none).
+Expanded by the stage planner on 2026-11-14 against HEAD `bc1da55` (459 tests). The standard steps and stop rules of "Stages G-L" apply to every task. Totals: 459 at the start, 571 after T77 (T78 adds none), 581 after the Gate H fixes T78b and T78c.
 
 Rules that hold for every task of this stage:
 - The app never writes into a subject's folder. A subject call gets exactly `{ readDirs: [subject.folder], images: [], webSearch: false, model: null, effort: null }` through `RunOptions`; no adapter file is touched in this stage; every CLI still starts through `runProcess`; no real CLI is called from `tests/`.
