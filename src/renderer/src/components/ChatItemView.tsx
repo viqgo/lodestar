@@ -7,7 +7,7 @@ type Props = {
   item: ChatItem;
   sessionId: string;
   disabled: boolean;
-  onSubmit(a: Answer): void;
+  onSubmit(a: Answer, attachPaths: string[]): void;
 };
 
 export function ChatItemView({ item, sessionId, disabled, onSubmit }: Props) {
@@ -27,7 +27,7 @@ export function ChatItemView({ item, sessionId, disabled, onSubmit }: Props) {
               className="btn is-primary"
               disabled={disabled}
               onClick={() =>
-                onSubmit({ choiceIndex: null, text: null, reasoning: null, confidence: null })
+                onSubmit({ choiceIndex: null, text: null, reasoning: null, confidence: null }, [])
               }
             >
               Continue

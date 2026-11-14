@@ -7,6 +7,7 @@ import { QuestionCard } from "../../src/renderer/src/components/QuestionCard";
 import { shuffledOrder } from "../../src/renderer/src/lib/shuffle";
 import type { Answer } from "../../src/shared/types";
 import { choiceQ, pick, textQ } from "../helpers/fixtures";
+import { installApi } from "../helpers/dom";
 
 function renderCard(over: Record<string, unknown> = {}) {
   const onSubmit = vi.fn();
@@ -55,12 +56,15 @@ describe("QuestionCard", () => {
     expect(submit).toBeEnabled();
     await user.click(submit);
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith({
-      choiceIndex: 1,
-      text: null,
-      reasoning: null,
-      confidence: null,
-    });
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        choiceIndex: 1,
+        text: null,
+        reasoning: null,
+        confidence: null,
+      },
+      [],
+    );
   });
 
   it("a text answer is required and trimmed", async () => {
@@ -70,12 +74,15 @@ describe("QuestionCard", () => {
     expect(submit).toBeDisabled();
     await user.type(screen.getByLabelText("Your answer"), "  hello  ");
     await user.click(submit);
-    expect(onSubmit).toHaveBeenCalledWith({
-      choiceIndex: null,
-      text: "hello",
-      reasoning: null,
-      confidence: null,
-    });
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        choiceIndex: null,
+        text: "hello",
+        reasoning: null,
+        confidence: null,
+      },
+      [],
+    );
   });
 
   it("reasoning is sent when typed, null when blank", async () => {
@@ -166,5 +173,71 @@ describe("QuestionCard", () => {
   it("QuestionCard limits a text answer to 4000 characters", () => {
     renderCard({ question: textQ });
     expect(screen.getByLabelText("Your answer")).toHaveAttribute("maxlength", "4000");
+  });
+
+  it("a text card can attach files", async () => {
+    const { api } = installApi({ pickFiles: vi.fn(async () => ["/tmp/a.pdf", "/tmp/b.txt"]) });
+    const onSubmit = renderCard({ question: textQ });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Attach" }));
+    expect(api.pickFiles).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText("a.pdf")).toBeInTheDocument();
+    expect(screen.getByText("b.txt")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Remove b.txt" }));
+    expect(screen.queryByText("b.txt")).toBeNull();
+    await user.type(screen.getByLabelText("Your answer"), "hi");
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      { choiceIndex: null, text: "hi", reasoning: null, confidence: null },
+      ["/tmp/a.pdf"],
+    );
+  });
+
+  it("answer_attach_allows_empty_text (card)", async () => {
+    installApi({ pickFiles: vi.fn(async () => ["/tmp/a.pdf"]) });
+    const onSubmit = renderCard({ question: textQ, purpose: "predict" });
+    const user = userEvent.setup();
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+    await user.click(screen.getByRole("button", { name: "Attach" }));
+    await screen.findByText("a.pdf");
+    await user.click(screen.getByRole("button", { name: "Submit" }));
+    expect(onSubmit).toHaveBeenCalledWith(
+      { choiceIndex: null, text: "", reasoning: null, confidence: null },
+      ["/tmp/a.pdf"],
+    );
+  });
+
+  it("a card keeps at most 3 files", async () => {
+    installApi({
+      pickFiles: vi.fn(async () => ["/tmp/a.txt", "/tmp/b.txt", "/tmp/c.txt", "/tmp/d.txt"]),
+    });
+    renderCard({ question: textQ });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Attach" }));
+    expect(await screen.findByText("An answer can hold at most 3 files.")).toBeInTheDocument();
+    expect(screen.getByText("c.txt")).toBeInTheDocument();
+    expect(screen.queryByText("d.txt")).toBeNull();
+  });
+
+  it("answer_shows_attachment_names", () => {
+    renderCard({
+      question: textQ,
+      answer: {
+        choiceIndex: null,
+        text: "x",
+        reasoning: null,
+        confidence: null,
+        attachments: ["a1-notes.pdf", "a2-pic.png"],
+      },
+    });
+    expect(screen.getByText("notes.pdf")).toBeInTheDocument();
+    expect(screen.getByText("pic.png")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Remove/ })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
+  });
+
+  it("a choice card has no Attach button", () => {
+    renderCard();
+    expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
   });
 });

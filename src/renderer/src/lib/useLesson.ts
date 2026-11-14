@@ -15,7 +15,7 @@ export function useLesson(
   state: LessonState | null;
   busy: boolean;
   error: TurnError | null;
-  submit(a: Answer): void;
+  submit(a: Answer, attachPaths: string[]): void;
   retry(): void;
   stop(): void;
 } {
@@ -82,10 +82,10 @@ export function useLesson(
   const state = useMemo(() => (session ? deriveState(session.events) : null), [session]);
 
   const submit = useCallback(
-    (a: Answer) => {
+    (a: Answer, attachPaths: string[]) => {
       setError(null);
       setBusy(true);
-      window.api.answer(id, a, []).then(handleResult, onReject);
+      window.api.answer(id, a, attachPaths).then(handleResult, onReject);
     },
     [id, onReject, handleResult],
   );

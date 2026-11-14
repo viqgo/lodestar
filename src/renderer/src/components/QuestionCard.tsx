@@ -1,7 +1,8 @@
 import { useId, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { Answer, Confidence, Question, Verdict } from "../../../shared/types";
-import { ANSWER_TEXT_MAX } from "../../../shared/limits";
+import { displayName } from "../../../core/material";
+import { ANSWER_TEXT_MAX, ATTACH_PER_ANSWER } from "../../../shared/limits";
 import { shuffledOrder } from "../lib/shuffle";
 import { MarkdownView } from "./MarkdownView";
 
@@ -14,7 +15,7 @@ type Props = {
   answer: Answer | null;
   grade: Verdict | null;
   disabled: boolean;
-  onSubmit(a: Answer): void;
+  onSubmit(a: Answer, attachPaths: string[]): void;
 };
 
 const LABEL: Record<Purpose, string> = { probe: "Probe", predict: "Predict", check: "Check" };
@@ -37,23 +38,44 @@ export function QuestionCard({
   const [text, setText] = useState("");
   const [reasoning, setReasoning] = useState("");
   const [confidence, setConfidence] = useState<Confidence | null>(null);
+  const [files, setFiles] = useState<string[]>([]);
+  const [fileNote, setFileNote] = useState<string | null>(null);
   const textId = useId();
   const reasoningId = useId();
 
   const answered = answer !== null;
   const locked = disabled || answered;
   const isChoice = question.kind === "choice";
-  const canSubmit = isChoice ? picked !== null : text.trim() !== "";
+  const canSubmit = isChoice ? picked !== null : text.trim() !== "" || files.length > 0;
   const selected = answered ? answer.choiceIndex : picked;
 
   function submit() {
     const r = reasoning.trim();
-    onSubmit({
-      choiceIndex: isChoice ? picked : null,
-      text: isChoice ? null : text.trim(),
-      reasoning: r === "" ? null : r,
-      confidence,
-    });
+    onSubmit(
+      {
+        choiceIndex: isChoice ? picked : null,
+        text: isChoice ? null : text.trim(),
+        reasoning: r === "" ? null : r,
+        confidence,
+      },
+      isChoice ? [] : files,
+    );
+  }
+
+  async function attach() {
+    const chosen = await window.api.pickFiles();
+    const next = [...files];
+    let over = false;
+    for (const f of chosen) {
+      if (next.includes(f)) continue;
+      if (next.length >= ATTACH_PER_ANSWER) {
+        over = true;
+        break;
+      }
+      next.push(f);
+    }
+    setFiles(next);
+    setFileNote(over ? "An answer can hold at most 3 files." : null);
   }
 
   function onKeyDown(event: KeyboardEvent) {
@@ -94,7 +116,18 @@ export function QuestionCard({
           ))}
         </div>
       ) : answered ? (
-        <p>{answer.text}</p>
+        <>
+          <p>{answer.text}</p>
+          {(answer.attachments ?? []).length > 0 && (
+            <div className="row">
+              {(answer.attachments ?? []).map((f) => (
+                <span key={f} className="chip">
+                  {displayName(f)}
+                </span>
+              ))}
+            </div>
+          )}
+        </>
       ) : (
         <div className="field">
           <label className="label" htmlFor={textId}>
@@ -110,6 +143,32 @@ export function QuestionCard({
             maxLength={ANSWER_TEXT_MAX}
             disabled={locked}
           />
+          <div className="row">
+            {files.map((f) => {
+              const name = f.split(/[\\/]/).pop() ?? f;
+              return (
+                <span key={f} className="chip">
+                  {name}
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    aria-label={`Remove ${name}`}
+                    disabled={locked}
+                    onClick={() => {
+                      setFiles(files.filter((x) => x !== f));
+                      setFileNote(null);
+                    }}
+                  >
+                    ×
+                  </button>
+                </span>
+              );
+            })}
+            <button type="button" className="btn" disabled={locked} onClick={() => void attach()}>
+              Attach
+            </button>
+          </div>
+          {fileNote !== null && <small>{fileNote}</small>}
         </div>
       )}
       {!answered && (

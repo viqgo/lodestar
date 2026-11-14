@@ -92,7 +92,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T62 Material controls
 - [x] T63 Material on the New lesson form
 - [x] T64 Material in the lesson header
-- [ ] T65 Files on an answer
+- [x] T65 Files on an answer
 - [ ] T66 Document it and check it for real
 - [ ] GATE G More input (milestone 3)
 - [ ] T67-T78 Milestone 4: subjects (outline, expanded at stage start)

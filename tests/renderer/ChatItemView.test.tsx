@@ -129,12 +129,15 @@ describe("ChatItemView", () => {
     const onSubmit = renderItem(reading(false));
     await userEvent.click(screen.getByRole("button", { name: "Continue" }));
     expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(onSubmit).toHaveBeenCalledWith({
-      choiceIndex: null,
-      text: null,
-      reasoning: null,
-      confidence: null,
-    });
+    expect(onSubmit).toHaveBeenCalledWith(
+      {
+        choiceIndex: null,
+        text: null,
+        reasoning: null,
+        confidence: null,
+      },
+      [],
+    );
   });
 
   it("an answered reading has no Continue", () => {

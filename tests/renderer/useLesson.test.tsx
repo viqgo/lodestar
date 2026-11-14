@@ -86,7 +86,7 @@ describe("useLesson", () => {
     });
     const { result } = renderHook(() => useLesson("s_1", false));
     await waitFor(() => expect(result.current.session).toEqual(s));
-    rtlAct(() => result.current.submit(ANSWER));
+    rtlAct(() => result.current.submit(ANSWER, []));
     expect(api.answer).toHaveBeenCalledWith("s_1", ANSWER, []);
     expect(result.current.busy).toBe(true);
     rtlAct(() => emitEnded("s_1", { ok: true, session: s2 }));
@@ -115,8 +115,20 @@ describe("useLesson", () => {
     });
     const { result } = renderHook(() => useLesson("s_1", false));
     await waitFor(() => expect(result.current.session).toEqual(s));
-    rtlAct(() => result.current.submit(ANSWER));
+    rtlAct(() => result.current.submit(ANSWER, []));
     await waitFor(() => expect(result.current.busy).toBe(false));
     expect(result.current.error?.message).toBe("Write an answer.");
+  });
+
+  it("submit passes the attached paths to the api", async () => {
+    const s = S([act(A.probe())]);
+    const { api } = installApi({
+      getSession: async () => s,
+      answer: vi.fn(() => new Promise(() => {})),
+    });
+    const { result } = renderHook(() => useLesson("s_1", false));
+    await waitFor(() => expect(result.current.session).toEqual(s));
+    rtlAct(() => result.current.submit(ANSWER, ["/tmp/a.pdf", "/tmp/b.txt"]));
+    expect(api.answer).toHaveBeenCalledWith("s_1", ANSWER, ["/tmp/a.pdf", "/tmp/b.txt"]);
   });
 });
