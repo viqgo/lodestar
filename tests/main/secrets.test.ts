@@ -67,6 +67,13 @@ describe("secrets", () => {
     expect(await secrets.get()).toBe("k1");
   });
 
+  it("secrets refuse a key with a line break or space inside", async () => {
+    const { secrets } = await setup();
+    expect(await secrets.set("ab cd")).toEqual({ ok: false, message: "Enter a key." });
+    expect(await secrets.set("ab\ncd")).toEqual({ ok: false, message: "Enter a key." });
+    expect(await secrets.get()).toBeNull();
+  });
+
   it("remove deletes the key file and tolerates a missing one", async () => {
     const { file, secrets } = await setup();
     await secrets.set(KEY);

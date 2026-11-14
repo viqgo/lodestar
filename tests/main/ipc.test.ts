@@ -1184,6 +1184,31 @@ describe("ipc voice", () => {
     expect(voice.stop).toHaveBeenCalledTimes(1);
   });
 
+  it("voice:start refuses a lesson id that is not text", async () => {
+    const { call, voice } = await setup();
+    const r = await call("voice:start", 42);
+    expect(r).toMatchObject({ ok: false });
+    expect(voice.start).not.toHaveBeenCalled();
+  });
+
+  it("voice:say and voice:audio and voice:setKey refuse oversized input", async () => {
+    const { call, emit, voice, secrets } = await setup();
+    await call("voice:say", "x".repeat(4001));
+    expect(voice.say).not.toHaveBeenCalled();
+    await call("voice:say", "x".repeat(4000));
+    expect(voice.say).toHaveBeenCalledTimes(1);
+    emit("voice:audio", new Uint8Array(8193));
+    emit("voice:audio", new ArrayBuffer(8193));
+    expect(voice.audio).not.toHaveBeenCalled();
+    emit("voice:audio", new Uint8Array(8192));
+    expect(voice.audio).toHaveBeenCalledTimes(1);
+    expect(await call("voice:setKey", "k".repeat(201))).toEqual({
+      ok: false,
+      message: "Enter a key.",
+    });
+    expect(secrets.set).not.toHaveBeenCalled();
+  });
+
   it("voice:audio forwards binary chunks only", async () => {
     const { emit, voice } = await setup();
     emit("voice:audio", new Uint8Array([1, 2]).buffer);

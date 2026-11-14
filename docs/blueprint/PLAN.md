@@ -123,6 +123,8 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T86 Call bar
 - [x] T87 Voice settings
 - [x] T88 README
+- [x] T88b Gate I fixes: main process
+- [ ] T88c Gate I fixes: call logic in the window
 - [ ] GATE I Voice
 - [ ] T89-T100 Milestone 6: learning modes (outline)
 - [ ] GATE J Learning modes
@@ -3702,6 +3704,40 @@ Known gap, not planned here: the production policy in `index.ts` has no `media-s
 **Tests**: none.
 **Totals**: 678 -> 678. **Commit**: `docs: voice in the README`
 **Stop and report**: a fact above contradicts the code as built (name it; do not change the code).
+
+### T88b - Gate I fixes: main process
+**Implements**: Gate I findings I1, I2, M6, M7, N1 (cheap numbers, [D]) · D56, D64
+**Depends on**: T88
+**Files**: modify `src/main/voice/deepgram.ts`, `src/main/voice/hub.ts`, `src/main/secrets.ts`, `src/main/index.ts`, `src/main/ipc.ts`, `src/shared/limits.ts`, `tests/main/deepgram.test.ts`, `tests/main/hub.test.ts`, `tests/main/secrets.test.ts`, `tests/main/ipc.test.ts`, `tests/shared/limits.test.ts`. Do NOT touch any other file.
+**Details**
+- I1: in `deepgram.ts`, every error text built from a caught `e.message` (the `speak` catch and the listener's error path) is passed through a helper that returns the fixed text `the connection failed` when the message contains the key, else the message. `secrets.set` refuses a key that does not match `/^[\x21-\x7e]+$/` with the existing text `Enter a key.`.
+- I2: `speak` passes `signal: AbortSignal.timeout(SPEAK_TIMEOUT_MS)` in its `fetch` options (`limits.ts`: `SPEAK_TIMEOUT_MS = 15000` [D]); the exact-request test expects the signal. In `hub.ts` the speech `queue` lives inside the call (a new call starts with an empty queue), and each link is chained as `queue.catch(() => undefined).then(...)`. A `speak` that fails (timeout or error) ends the call with the existing `Voice stopped: <detail>.` path.
+- M6: the `media` request handler in `index.ts` also requires `details.mediaTypes` to contain no `"video"`; add `session.defaultSession.setPermissionCheckHandler` with the same predicate (window identity, `media`, no video).
+- M7: `voice:start` refuses (returns the existing refusal shape) when `lessonId` is not a string.
+- N1 [D]: `limits.ts`: `VOICE_SAY_MAX = 4000`, `VOICE_CHUNK_MAX = 8192` (bytes), `KEY_MAX = 200`. `voice:say` ignores text longer than `VOICE_SAY_MAX` or not a string; `voice:audio` ignores a chunk that is not an `ArrayBuffer`/typed array or is longer than `VOICE_CHUNK_MAX`; `voice:setKey` refuses a key longer than `KEY_MAX` with `Enter a key.`. Add the three numbers and `SPEAK_TIMEOUT_MS` to `limits match the spec`.
+**Tests (+9)**: `speak never returns the key in an error text` (fetch rejects with a message holding `dg_test_key_123`) · `a listener error never carries the key` · `secrets refuse a key with a line break or space inside` · `speak request carries a timeout signal` (changes the exact-request test, count the change as no new test) · `a hung speak does not block the next call's speech` · `one failing speech link does not silence later speech` · `voice:start refuses a lesson id that is not text` · `voice:say and voice:audio and voice:setKey refuse oversized input` · `limits` extended (no new test).
+**Expected failure**: each new test fails before its change.
+**Totals**: 678 -> 686 (the builder reports the real number and the plan is corrected). **Commit**: `fix: gate I main process fixes`
+**Stop and report**: an existing test needs an edit beyond the named exact-request test.
+
+### T88c - Gate I fixes: call logic in the window
+**Implements**: Gate I findings M1, M2, M3, M4, M5, M8
+**Depends on**: T88b
+**Files**: modify `src/renderer/src/lib/useCall.ts`, `src/renderer/src/components/QuestionCard.tsx`, `tests/renderer/useCall.test.tsx`, `tests/renderer/QuestionCard.test.tsx`. Do NOT touch any other file.
+**Details**
+- M1: `stopPlayback` also revokes the URL of the piece that is playing (keep it in a ref).
+- M2: `finished` in the playback code runs at most once per piece (a local `ended` flag) and does nothing when `currentRef.current !== a`.
+- M3: `skip()` sets `speakingRef.current = false`; the `onVoiceAudio` handler drops a chunk unless `speakingRef.current` is true.
+- M4: `QuestionCard` applies `heard` only when it is non-empty or the previous `heard` was non-empty (so Start call does not wipe a typed draft; Start over still empties the box).
+- M5: when the call state changes to `speaking`, call `clearHeard()`.
+- M8: `start` catches a rejected `voiceStart` and shows `Voice stopped: could not start the call.` through the existing error value; no new copy elsewhere. [D]
+**Tests (+6)**: `Skip revokes the playing piece's URL` · `finished runs once per piece` · `audio arriving after Skip is dropped` · `Start call keeps a typed draft` · `speaking clears words heard before it` · `a rejected voiceStart shows an error and leaves no call`.
+**Expected failure**: each new test fails before its change.
+**Totals**: 686 -> 692. **Commit**: `fix: gate I call logic fixes`
+**Stop and report**: `useCall` has no error value of that shape.
+
+### Gate I findings not fixed
+N2 (a late voiceStop from a left lesson can end another lesson's call; needs a call id), N3 (voice submits ignore a missing tutor CLI; `useCall` would need a new input), N4 (a short option like "No" can match inside a phrase; R6 as written), N5 (ARCHITECTURE's `createListener` row still says `speech_final`; the code and B60 use `UtteranceEnd`). For the owner's live try-out: audio events must reach the window before the `voice:say` reply; `audioWorklet.addModule` must load from `file://` in a packaged build; a 16 kHz AudioContext must accept the microphone stream.
 
 ### Where each milestone 5 SPEC test lives
 - key_is_encrypted_and_never_sent_to_window: T81 (file, ipc), T87 (`key shown only as saved`)

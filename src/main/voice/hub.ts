@@ -11,6 +11,7 @@ type Call = {
   listener: Listener;
   speaking: boolean;
   round: number;
+  queue: Promise<void>;
 };
 
 export function createVoiceHub(deps: {
@@ -31,8 +32,6 @@ export function createVoiceHub(deps: {
   stop(): void;
 } {
   let call: Call | null = null;
-  let queue: Promise<void> = Promise.resolve();
-
   const stop = (): void => {
     if (call === null) return;
     const c = call;
@@ -70,6 +69,7 @@ export function createVoiceHub(deps: {
       }),
       speaking: false,
       round: 0,
+      queue: Promise.resolve(),
     };
     call = c;
     deps.send("voice:state", "listening");
@@ -88,19 +88,21 @@ export function createVoiceHub(deps: {
       deps.send("voice:state", "speaking");
     }
     const round = c.round;
-    queue = queue.then(async () => {
-      for (const piece of chunkSpeech(text, SPEAK_CHUNK_MAX)) {
-        if (call !== c || c.round !== round) return;
-        const r = await deps.speak(c.key, c.voice, piece);
-        if (call !== c || c.round !== round) return;
-        if (!r.ok) {
-          fail(r.message);
-          return;
+    c.queue = c.queue
+      .catch(() => undefined)
+      .then(async () => {
+        for (const piece of chunkSpeech(text, SPEAK_CHUNK_MAX)) {
+          if (call !== c || c.round !== round) return;
+          const r = await deps.speak(c.key, c.voice, piece);
+          if (call !== c || c.round !== round) return;
+          if (!r.ok) {
+            fail(r.message);
+            return;
+          }
+          deps.send("voice:audio", r.audio);
         }
-        deps.send("voice:audio", r.audio);
-      }
-    });
-    return queue;
+      });
+    return c.queue;
   };
 
   const skip = (): void => {

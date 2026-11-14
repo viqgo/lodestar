@@ -144,6 +144,29 @@ describe("deepgram", () => {
     }
   });
 
+  it("speak never returns the key in an error text", async () => {
+    const f = vi.fn(async () => {
+      throw new Error("request to https://x failed, Token " + KEY);
+    });
+    const r = await speak({ fetch: f as any }, KEY, "v", "t");
+    expect(r).toEqual({ ok: false, message: "the connection failed" });
+    expect(JSON.stringify(r)).not.toContain(KEY);
+  });
+
+  it("a listener error never carries the key", () => {
+    const { on, ws } = setup();
+    ws.fail("bad header Token " + KEY);
+    expect(on.error).toHaveBeenCalledWith("the connection failed");
+    expect(JSON.stringify(on.error.mock.calls)).not.toContain(KEY);
+  });
+
+  it("speak request carries a timeout signal", async () => {
+    const fetch = vi.fn(async () => new Response(new Uint8Array([1])));
+    await speak({ fetch: fetch as any }, KEY, "v", "t");
+    const init = (fetch.mock.calls as any)[0][1];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
   it("speak_request_is_exact", async () => {
     const fetch = vi.fn(async () => new Response(new Uint8Array([1, 2, 3])));
     const r = await speak({ fetch: fetch as any }, KEY, "aura-2-thalia-en", "Hello.");
@@ -152,6 +175,7 @@ describe("deepgram", () => {
       method: "POST",
       headers: { Authorization: "Token dg_test_key_123", "Content-Type": "application/json" },
       body: '{"text":"Hello."}',
+      signal: expect.any(AbortSignal),
     });
     expect(r.ok).toBe(true);
     if (r.ok) expect([...r.audio]).toEqual([1, 2, 3]);

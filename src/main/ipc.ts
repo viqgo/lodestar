@@ -11,7 +11,14 @@ import {
   validateNewSubject,
   validateOutline,
 } from "../core/subject";
-import { ATTACH_PER_ANSWER, ATTACH_PER_LESSON, CHAT_TEXT_MAX } from "../shared/limits";
+import {
+  ATTACH_PER_ANSWER,
+  ATTACH_PER_LESSON,
+  CHAT_TEXT_MAX,
+  KEY_MAX,
+  VOICE_CHUNK_MAX,
+  VOICE_SAY_MAX,
+} from "../shared/limits";
 import type {
   Answer,
   Attachment,
@@ -327,16 +334,23 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle("voice:hasKey", () => secrets.has());
   ipcMain.handle("voice:setKey", (_event, key: unknown) =>
-    typeof key === "string" ? secrets.set(key) : { ok: false as const, message: "Enter a key." },
+    typeof key === "string" && key.length <= KEY_MAX
+      ? secrets.set(key)
+      : { ok: false as const, message: "Enter a key." },
   );
-  ipcMain.handle("voice:start", (_event, lessonId: string) => voice.start(lessonId));
+  ipcMain.handle("voice:start", (_event, lessonId: unknown) =>
+    typeof lessonId === "string"
+      ? voice.start(lessonId)
+      : { ok: false as const, message: "could not start the call" },
+  );
   ipcMain.on("voice:audio", (_event, chunk: unknown) => {
-    if (chunk instanceof ArrayBuffer) voice.audio(Buffer.from(chunk));
-    else if (ArrayBuffer.isView(chunk))
+    if (chunk instanceof ArrayBuffer) {
+      if (chunk.byteLength <= VOICE_CHUNK_MAX) voice.audio(Buffer.from(chunk));
+    } else if (ArrayBuffer.isView(chunk) && chunk.byteLength <= VOICE_CHUNK_MAX)
       voice.audio(Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength));
   });
   ipcMain.handle("voice:say", (_event, text: unknown) =>
-    typeof text === "string" ? voice.say(text) : undefined,
+    typeof text === "string" && text.length <= VOICE_SAY_MAX ? voice.say(text) : undefined,
   );
   ipcMain.handle("voice:skip", () => {
     voice.skip();

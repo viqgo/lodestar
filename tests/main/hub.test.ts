@@ -149,6 +149,30 @@ describe("voice hub", () => {
     }
   });
 
+  it("a hung speak does not block the next call's speech", async () => {
+    const { hub, speak } = setup();
+    await hub.start("a");
+    speak.mockImplementationOnce(() => new Promise(() => undefined));
+    void hub.say("first.");
+    await Promise.resolve();
+    await hub.start("b");
+    await hub.say("second.");
+    expect(speak).toHaveBeenCalledTimes(2);
+    expect(speak.mock.calls[1][2]).toBe("second.");
+  });
+
+  it("one failing speech link does not silence later speech", async () => {
+    const { hub, speak } = setup();
+    await hub.start("a");
+    speak.mockRejectedValueOnce(new Error("boom"));
+    const first = hub.say("first.");
+    const second = hub.say("second.");
+    await first.catch(() => undefined);
+    await second;
+    expect(speak).toHaveBeenCalledTimes(2);
+    expect(speak.mock.calls[1][2]).toBe("second.");
+  });
+
   it("stop closes the listener and reports off", async () => {
     const { hub, listeners, send } = setup();
     await hub.start("a");

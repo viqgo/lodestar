@@ -105,9 +105,23 @@ async function main(): Promise<void> {
     secrets,
     voice,
   });
-  session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    callback(permission === "media" && win !== null && webContents === win.webContents);
-  });
+  session.defaultSession.setPermissionRequestHandler(
+    (webContents, permission, callback, details) => {
+      callback(
+        permission === "media" &&
+          win !== null &&
+          webContents === win.webContents &&
+          !(details as { mediaTypes?: string[] }).mediaTypes?.includes("video"),
+      );
+    },
+  );
+  session.defaultSession.setPermissionCheckHandler(
+    (webContents, permission, _origin, details) =>
+      permission === "media" &&
+      win !== null &&
+      webContents === win.webContents &&
+      !(details as { mediaTypes?: string[] }).mediaTypes?.includes("video"),
+  );
   if (!process.env.ELECTRON_RENDERER_URL) {
     session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
       callback({

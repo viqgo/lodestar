@@ -21,3 +21,7 @@ export const UNITS_MIN = 2;
 export const UNITS_MAX = 30;
 export const CHAT_TEXT_MAX = 4000;
 export const SPEAK_CHUNK_MAX = 2000;
+export const SPEAK_TIMEOUT_MS = 15000;
+export const VOICE_SAY_MAX = 4000;
+export const VOICE_CHUNK_MAX = 8192;
+export const KEY_MAX = 200;

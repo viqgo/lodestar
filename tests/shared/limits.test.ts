@@ -25,4 +25,8 @@ it("limits match the spec", () => {
   expect(limits.UNITS_MAX).toBe(30);
   expect(limits.CHAT_TEXT_MAX).toBe(4000);
   expect(limits.SPEAK_CHUNK_MAX).toBe(2000);
+  expect(limits.SPEAK_TIMEOUT_MS).toBe(15000);
+  expect(limits.VOICE_SAY_MAX).toBe(4000);
+  expect(limits.VOICE_CHUNK_MAX).toBe(8192);
+  expect(limits.KEY_MAX).toBe(200);
 });

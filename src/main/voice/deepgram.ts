@@ -1,3 +1,5 @@
+import { SPEAK_TIMEOUT_MS } from "../../shared/limits";
+
 export type ListenerEvents = {
   transcript(text: string, final: boolean): void;
   utteranceEnd(): void;
@@ -5,6 +7,9 @@ export type ListenerEvents = {
 };
 
 export type Listener = { send(chunk: Buffer): void; close(): void };
+
+const safeMessage = (message: string, key: string): string =>
+  key !== "" && message.includes(key) ? "the connection failed" : message;
 
 const WRONG_KEY = "the Deepgram key was not accepted";
 
@@ -62,7 +67,11 @@ export function createListener(
   ws.on("error", (err: Error) => {
     if (done) return;
     finish();
-    on.error(/Unexpected server response: 401/.test(err.message) ? WRONG_KEY : err.message);
+    on.error(
+      /Unexpected server response: 401/.test(err.message)
+        ? WRONG_KEY
+        : safeMessage(err.message, key),
+    );
   });
 
   ws.on("close", () => {
@@ -101,12 +110,13 @@ export async function speak(
         method: "POST",
         headers: { Authorization: "Token " + key, "Content-Type": "application/json" },
         body: JSON.stringify({ text }),
+        signal: AbortSignal.timeout(SPEAK_TIMEOUT_MS),
       },
     );
     if (res.status === 401) return { ok: false, message: WRONG_KEY };
     if (!res.ok) return { ok: false, message: "Deepgram answered with status " + res.status };
     return { ok: true, audio: Buffer.from(await res.arrayBuffer()) };
   } catch (e) {
-    return { ok: false, message: e instanceof Error ? e.message : String(e) };
+    return { ok: false, message: safeMessage(e instanceof Error ? e.message : String(e), key) };
   }
 }

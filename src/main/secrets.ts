@@ -25,7 +25,7 @@ export function createSecrets(deps: {
     has: async () => (await get()) !== null,
     set: async (key) => {
       const k = key.trim();
-      if (k === "") return { ok: false, message: "Enter a key." };
+      if (k === "" || !/^[\x21-\x7e]+$/.test(k)) return { ok: false, message: "Enter a key." };
       if (!deps.safeStorage.isEncryptionAvailable()) {
         return { ok: false, message: "This Mac cannot store the key safely." };
       }
