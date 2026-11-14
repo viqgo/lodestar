@@ -4,7 +4,7 @@ import { act as rtlAct, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { LessonScreen } from "../../src/renderer/src/components/LessonScreen";
-import type { SessionEvent } from "../../src/shared/types";
+import type { CliStatus, SessionEvent } from "../../src/shared/types";
 import { installApi } from "../helpers/dom";
 import { A, act, pick, session, toCheck, toPlan, toTeach } from "../helpers/fixtures";
 
@@ -14,11 +14,16 @@ vi.mock("../../src/renderer/src/components/PlanPanel", () => ({
 
 const S = (events: SessionEvent[]) => session(events);
 const ID = session().id;
+const ALL: CliStatus[] = [
+  { id: "codex", installed: true, version: "1" },
+  { id: "claude", installed: true, version: "1" },
+  { id: "gemini", installed: true, version: "1" },
+];
 
 describe("LessonScreen", () => {
   it("resume_shows_pending_question", async () => {
     installApi({ getSession: vi.fn(async () => S([act(A.probe())])) });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     expect(await screen.findByText("T")).toBeInTheDocument();
     expect(screen.getByText("Goal: G")).toBeInTheDocument();
     expect(await screen.findByText("Pick")).toBeInTheDocument();
@@ -28,7 +33,7 @@ describe("LessonScreen", () => {
 
   it("LessonScreen starts a new lesson", async () => {
     const { api } = installApi({ getSession: vi.fn(async () => S([])) });
-    render(<LessonScreen id={ID} start={true} />);
+    render(<LessonScreen id={ID} start={true} statuses={ALL} onRetryDetect={() => {}} />);
     await screen.findByText("Thinking…");
     expect(api.advance).toHaveBeenCalledTimes(1);
   });
@@ -38,7 +43,7 @@ describe("LessonScreen", () => {
       getSession: vi.fn(async () => S([act(A.probe())])),
       isRunning: vi.fn(async () => true),
     });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     expect(await screen.findByText("Thinking…")).toBeInTheDocument();
     for (const radio of screen.getAllByRole("radio")) expect(radio).toBeDisabled();
   });
@@ -48,7 +53,7 @@ describe("LessonScreen", () => {
       getSession: vi.fn(async () => S([act(A.probe())])),
       isRunning: vi.fn(async () => true),
     });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     await userEvent.click(await screen.findByRole("button", { name: "Stop" }));
     expect(api.stop).toHaveBeenCalledWith(ID);
   });
@@ -57,7 +62,7 @@ describe("LessonScreen", () => {
     const { api, emitEnded } = installApi({
       getSession: vi.fn(async () => S([act(A.probe()), pick(1)])),
     });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     await screen.findByText("T");
     rtlAct(() =>
       emitEnded(ID, {
@@ -75,7 +80,7 @@ describe("LessonScreen", () => {
     const { emitEnded } = installApi({
       getSession: vi.fn(async () => S([act(A.probe()), pick(1)])),
     });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     await screen.findByText("T");
     rtlAct(() =>
       emitEnded(ID, { ok: false, error: { kind: "stopped", message: "Stopped." }, session: null }),
@@ -86,7 +91,7 @@ describe("LessonScreen", () => {
 
   it("LessonScreen shows a missing lesson without Retry", async () => {
     const { emitEnded } = installApi({ getSession: vi.fn(async () => null) });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     await rtlAct(async () => {
       await Promise.resolve();
     });
@@ -105,7 +110,7 @@ describe("LessonScreen", () => {
     const { api } = installApi({
       getSession: vi.fn(async () => S([act(A.probe()), pick(1)])),
     });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     expect(await screen.findByText("The last reply did not arrive.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(api.advance).not.toHaveBeenCalled();
@@ -113,12 +118,14 @@ describe("LessonScreen", () => {
 
   it("LessonScreen shows the map only once there is a plan", async () => {
     installApi({ getSession: vi.fn(async () => S(toPlan)) });
-    const first = render(<LessonScreen id={ID} start={false} />);
+    const first = render(
+      <LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />,
+    );
     await screen.findByText("T");
     expect(screen.queryByTestId("plan")).not.toBeInTheDocument();
     first.unmount();
     installApi({ getSession: vi.fn(async () => S(toTeach)) });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     expect(await screen.findByTestId("plan")).toBeInTheDocument();
   });
 
@@ -136,7 +143,7 @@ describe("LessonScreen", () => {
       act(A.done()),
     ];
     installApi({ getSession: vi.fn(async () => S(events)) });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     expect(await screen.findByText("Lesson complete")).toBeInTheDocument();
     expect(screen.getByText(/1 items added to your knowledge list\./)).toBeInTheDocument();
     expect(screen.getByText(/1 step is still shaky\./)).toBeInTheDocument();
@@ -145,9 +152,101 @@ describe("LessonScreen", () => {
 
   it("reopening a lesson with no events offers Retry", async () => {
     const { api } = installApi({ getSession: vi.fn(async () => S([])) });
-    render(<LessonScreen id={ID} start={false} />);
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
     expect(await screen.findByText("The last reply did not arrive.")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
     expect(api.advance).not.toHaveBeenCalled();
+  });
+  it("lesson_header_names_the_tutor", async () => {
+    installApi({
+      getSession: vi.fn(async () => ({ ...S([act(A.probe())]), cli: "claude" as const })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    expect(await screen.findByText("Tutor: Claude Code")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Change tutor" })).toBeInTheDocument();
+  });
+
+  it("missing_cli_blocks_lesson_with_banner", async () => {
+    const onRetryDetect = vi.fn();
+    const { api } = installApi({
+      getSession: vi.fn(async () => ({ ...S([act(A.probe())]), cli: "gemini" as const })),
+    });
+    const statuses: CliStatus[] = [
+      { id: "codex", installed: true, version: "1" },
+      { id: "claude", installed: true, version: "1" },
+      { id: "gemini", installed: false, version: null },
+    ];
+    render(
+      <LessonScreen id={ID} start={false} statuses={statuses} onRetryDetect={onRetryDetect} />,
+    );
+    expect(
+      await screen.findByText("Gemini not found. Install it and sign in, then press Retry."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("The last reply did not arrive.")).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetryDetect).toHaveBeenCalledTimes(1);
+    expect(api.advance).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Submit" })).toBeDisabled();
+  });
+
+  it("switch_tutor_asks_then_stores", async () => {
+    const { api } = installApi({
+      getSession: vi.fn(async () => S([act(A.probe())])),
+      setSessionCli: vi.fn(async () => ({ ok: true, session: S([act(A.probe())]) })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Change tutor" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Claude Code" }));
+    expect(
+      screen.getByText(
+        "Switch this lesson to Claude Code? It will read the whole lesson so far and continue from there.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Switch" }));
+    expect(api.setSessionCli).toHaveBeenCalledTimes(1);
+    expect(api.setSessionCli).toHaveBeenCalledWith(ID, "claude");
+    expect(api.advance).not.toHaveBeenCalled();
+    expect(screen.queryByRole("radiogroup", { name: "Tutor" })).not.toBeInTheDocument();
+  });
+
+  it("switch cancel keeps the tutor", async () => {
+    const { api } = installApi({ getSession: vi.fn(async () => S([act(A.probe())])) });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await userEvent.click(await screen.findByRole("button", { name: "Change tutor" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Claude Code" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(api.setSessionCli).not.toHaveBeenCalled();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("Change tutor is disabled while a reply is on the way", async () => {
+    installApi({
+      getSession: vi.fn(async () => S([act(A.probe())])),
+      isRunning: vi.fn(async () => true),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await screen.findByText("Thinking…");
+    expect(screen.getByRole("button", { name: "Change tutor" })).toBeDisabled();
+  });
+
+  it("Change tutor is hidden when the lesson is done", async () => {
+    const events = [
+      ...toTeach,
+      ...toCheck("n1"),
+      pick(1),
+      ...toCheck("n2"),
+      pick(0),
+      act(A.explain("n2")),
+      pick(0),
+      act(A.explain("n2")),
+      pick(0),
+      act(A.done()),
+    ];
+    installApi({ getSession: vi.fn(async () => S(events)) });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    expect(await screen.findByText("Lesson complete")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Change tutor" })).not.toBeInTheDocument();
+    expect(screen.getByText("Tutor: Codex")).toBeInTheDocument();
   });
 });

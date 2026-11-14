@@ -1,26 +1,53 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { learnedToSave } from "../../../core/engine";
-import type { Action } from "../../../shared/types";
+import { CLI_INFO } from "../../../shared/clis";
+import type { Action, CliId, CliStatus } from "../../../shared/types";
 import { useLesson } from "../lib/useLesson";
 import { buildItems } from "../lib/view";
 import { Banner } from "./Banner";
 import { ChatItemView } from "./ChatItemView";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { PlanPanel } from "./PlanPanel";
 import { ThinkingBar } from "./ThinkingBar";
+import { TutorPicker } from "./TutorPicker";
 
 type DoneAction = Extract<Action, { type: "lesson_done" }>;
 
-export function LessonScreen(props: { id: string; start: boolean }) {
+export function LessonScreen(props: {
+  id: string;
+  start: boolean;
+  statuses: CliStatus[] | null;
+  onRetryDetect(): void;
+}) {
   const { session, state, busy, error, submit, retry, stop } = useLesson(props.id, props.start);
   const items = useMemo(() => (session ? buildItems(session) : []), [session]);
   const endRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [ask, setAsk] = useState<CliId | null>(null);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
   }, [items.length, busy, error]);
 
+  const missing =
+    session !== null &&
+    props.statuses !== null &&
+    !props.statuses.some((s) => s.id === session.cli && s.installed);
+
   let banner: React.ReactNode = null;
-  if (error) {
+  if (session && missing) {
+    banner = (
+      <Banner
+        kind="error"
+        message={
+          CLI_INFO[session.cli].label + " not found. Install it and sign in, then press Retry."
+        }
+        actionLabel="Retry"
+        onAction={props.onRetryDetect}
+      />
+    );
+  } else if (error) {
     if (error.kind === "stopped") {
       banner = <Banner kind="info" message="Stopped." actionLabel="Retry" onAction={retry} />;
     } else if (error.kind === "not_found") {
@@ -59,6 +86,19 @@ export function LessonScreen(props: { id: string; start: boolean }) {
 
   const isDone = finished !== null;
 
+  const confirmSwitch = async () => {
+    if (ask === null) return;
+    const result = await window.api.setSessionCli(props.id, ask);
+    if (result.ok) {
+      setSwitchError(null);
+      setAsk(null);
+      setOpen(false);
+    } else {
+      setSwitchError(result.message);
+      setAsk(null);
+    }
+  };
+
   return (
     <>
       <div className="content">
@@ -66,6 +106,23 @@ export function LessonScreen(props: { id: string; start: boolean }) {
           <>
             <h3>{session.topic}</h3>
             <p className="note">Goal: {session.goal}</p>
+            <div className="row">
+              <span className="note">Tutor: {CLI_INFO[session.cli].label}</span>
+              {!isDone && (
+                <button className="btn" disabled={busy} onClick={() => setOpen(!open)}>
+                  Change tutor
+                </button>
+              )}
+            </div>
+            {switchError && <small>{switchError}</small>}
+            {open && (
+              <TutorPicker
+                statuses={props.statuses ?? []}
+                value={session.cli}
+                disabled={busy}
+                onChange={(cli) => (cli === session.cli ? setOpen(false) : setAsk(cli))}
+              />
+            )}
           </>
         )}
         {items.map((item) => (
@@ -73,7 +130,7 @@ export function LessonScreen(props: { id: string; start: boolean }) {
             key={item.key}
             item={item}
             sessionId={props.id}
-            disabled={busy}
+            disabled={busy || missing}
             onSubmit={submit}
           />
         ))}
@@ -81,6 +138,18 @@ export function LessonScreen(props: { id: string; start: boolean }) {
         {banner}
         {finished}
         <div ref={endRef} />
+        {ask !== null && (
+          <ConfirmDialog
+            message={
+              "Switch this lesson to " +
+              CLI_INFO[ask].label +
+              "? It will read the whole lesson so far and continue from there."
+            }
+            confirmLabel="Switch"
+            onConfirm={confirmSwitch}
+            onCancel={() => setAsk(null)}
+          />
+        )}
       </div>
       {state?.plan && (
         <PlanPanel plan={state.plan} nodes={state.nodes} currentNodeId={state.currentNodeId} />

@@ -49,7 +49,15 @@ export function App() {
   } else if (screen.name === "profile") {
     content = <ProfileScreen />;
   } else if (screen.name === "lesson") {
-    content = <LessonScreen key={screen.id} id={screen.id} start={screen.start} />;
+    content = (
+      <LessonScreen
+        key={screen.id}
+        id={screen.id}
+        start={screen.start}
+        statuses={clis}
+        onRetryDetect={retry}
+      />
+    );
   } else {
     content = (
       <div className="content">
