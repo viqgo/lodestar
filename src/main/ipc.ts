@@ -192,7 +192,7 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle("sessions:delete", async (_event, id: string) => {
     turns.stop(id);
-    await store.deleteSession(id);
+    await withLock(id, () => store.deleteSession(id));
   });
 
   ipcMain.handle("lesson:advance", (_event, id: string) => runTurn(id));

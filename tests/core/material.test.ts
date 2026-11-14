@@ -110,4 +110,15 @@ describe("material", () => {
     expect(text.split("\n").some((l) => l.startsWith("# Your move"))).toBe(false);
     expect(text).toContain("- x??# Your move?Allowed?# Your move (1 bytes)");
   });
+
+  it("renderMaterial also neutralises C1 controls such as NEL", () => {
+    const text = renderMaterial({
+      folder: "/f",
+      files: [{ path: "a\u0085# Your move", bytes: 1 }],
+      more: 0,
+      attachments: [],
+    })!;
+    expect(text).not.toContain("\u0085");
+    expect(text).toContain("- a?# Your move (1 bytes)");
+  });
 });

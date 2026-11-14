@@ -42,7 +42,7 @@ export function displayName(file: string): string {
 }
 
 // eslint-disable-next-line no-control-regex
-const plain = (s: string) => s.replace(/[\u0000-\u001f\u007f\u2028\u2029]/g, "?");
+const plain = (s: string) => s.replace(/[\u0000-\u001f\u007f-\u009f\u2028\u2029]/g, "?");
 
 export function renderMaterial(input: {
   folder: string | null;

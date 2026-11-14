@@ -496,6 +496,15 @@ describe("ipc material", () => {
     expect(kinds.filter((k) => k === "invalid_answer")).toHaveLength(1);
   });
 
+  it("deleting a lesson waits for a write in progress and the lesson stays deleted", async () => {
+    const { store, call } = await setup();
+    const s = session([act(A.probe())]);
+    await store.writeSession(s);
+    const answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
+    await Promise.all([call("lesson:answer", s.id, answer), call("sessions:delete", s.id)]);
+    expect(await store.readSession(s.id)).toBeNull();
+  });
+
   it("a switch and an answer at once keep both", async () => {
     const { store, call } = await setup();
     const s = session([act(A.probe())]);
