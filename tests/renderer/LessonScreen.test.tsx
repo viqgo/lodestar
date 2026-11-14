@@ -6,10 +6,15 @@ import { describe, expect, it, vi } from "vitest";
 import { LessonScreen } from "../../src/renderer/src/components/LessonScreen";
 import type { CliStatus, Session, SessionEvent } from "../../src/shared/types";
 import { installApi } from "../helpers/dom";
-import { A, act, pick, session, toCheck, toPlan, toTeach } from "../helpers/fixtures";
+import { A, act, pick, session, textQ, toCheck, toPlan, toTeach } from "../helpers/fixtures";
+import { startMic } from "../../src/renderer/src/lib/mic";
 
 vi.mock("../../src/renderer/src/components/PlanPanel", () => ({
   PlanPanel: () => <div data-testid="plan" />,
+}));
+
+vi.mock("../../src/renderer/src/lib/mic", () => ({
+  startMic: vi.fn(async () => ({ ok: true, stop: vi.fn() })),
 }));
 
 const S = (events: SessionEvent[]) => session(events);
@@ -468,5 +473,104 @@ describe("LessonScreen", () => {
     await userEvent.click(screen.getByRole("button", { name: "Remove" }));
     await vi.waitFor(() => expect(api.advance).toHaveBeenCalledTimes(1));
     expect(screen.queryByText(message)).not.toBeInTheDocument();
+  });
+});
+
+describe("LessonScreen call", () => {
+  const props = { id: ID, start: false, statuses: ALL, onRetryDetect: () => {} };
+  const withKey = (over: Parameters<typeof installApi>[0] = {}) =>
+    installApi({
+      getSession: vi.fn(async () => S([act(A.probe(textQ))])),
+      voiceHasKey: vi.fn(async () => true),
+      voiceStart: vi.fn(async () => ({ ok: true })),
+      ...over,
+    });
+  const begin = async () => {
+    await screen.findByText("Say");
+    const start = screen.getByRole("button", { name: "Start call" });
+    await vi.waitFor(() => expect(start).toBeEnabled());
+    await userEvent.click(start);
+    await screen.findByText("On call · listening");
+  };
+
+  it("the lesson header has the call bar", async () => {
+    installApi({ getSession: vi.fn(async () => S([act(A.probe())])) });
+    const first = render(<LessonScreen {...props} />);
+    await screen.findByText("T");
+    expect(screen.getByRole("button", { name: "Start call" })).toBeDisabled();
+    expect(screen.getByText("Add a Deepgram key in Profile to use voice.")).toBeInTheDocument();
+    first.unmount();
+    installApi({
+      getSession: vi.fn(async () => S([act(A.probe())])),
+      voiceHasKey: vi.fn(async () => true),
+    });
+    render(<LessonScreen {...props} />);
+    await vi.waitFor(() =>
+      expect(screen.getByRole("button", { name: "Start call" })).toBeEnabled(),
+    );
+  });
+
+  it("Start call opens a call and shows its state", async () => {
+    const { api, emitVoiceState } = withKey();
+    render(<LessonScreen {...props} />);
+    await begin();
+    expect(api.voiceStart).toHaveBeenCalledWith(ID);
+    rtlAct(() => emitVoiceState("speaking"));
+    expect(screen.getByText("On call · speaking")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "End call" }));
+    expect(api.voiceStop).toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Start call" })).toBeInTheDocument();
+  });
+
+  it("what is heard appears in the pending answer box", async () => {
+    const { emitVoiceTranscript } = withKey();
+    render(<LessonScreen {...props} />);
+    await begin();
+    rtlAct(() => emitVoiceTranscript("hello", false));
+    expect(screen.getByLabelText("Your answer")).toHaveValue("hello");
+    await userEvent.click(screen.getByRole("button", { name: "Start over" }));
+    expect(screen.getByLabelText("Your answer")).toHaveValue("");
+  });
+
+  it("mic_refused_message (display)", async () => {
+    withKey();
+    vi.mocked(startMic).mockResolvedValueOnce({ ok: false });
+    render(<LessonScreen {...props} />);
+    await screen.findByText("Say");
+    const start = screen.getByRole("button", { name: "Start call" });
+    await vi.waitFor(() => expect(start).toBeEnabled());
+    await userEvent.click(start);
+    expect(
+      await screen.findByText(
+        "Microphone access was refused. Allow it in System Settings, then start the call again.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start call" })).toBeInTheDocument();
+  });
+
+  it("deepgram_failure_ends_call_lesson_continues (display)", async () => {
+    const { api, emitVoiceError } = withKey({
+      answer: vi.fn(async () => ({ ok: true, session: S([act(A.probe(textQ))]) })),
+    });
+    render(<LessonScreen {...props} />);
+    await begin();
+    rtlAct(() => emitVoiceError("the Deepgram key was not accepted"));
+    expect(
+      await screen.findByText("Voice stopped: the Deepgram key was not accepted."),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Start call" })).toBeInTheDocument();
+    const box = screen.getByLabelText("Your answer");
+    expect(box).toBeEnabled();
+    await userEvent.type(box, "typed");
+    await userEvent.click(screen.getByRole("button", { name: "Submit" }));
+    expect(api.answer).toHaveBeenCalled();
+  });
+
+  it("call_ends_when_lesson_closes (display)", async () => {
+    const { api } = withKey();
+    const view = render(<LessonScreen {...props} />);
+    await begin();
+    view.unmount();
+    expect(api.voiceStop).toHaveBeenCalled();
   });
 });

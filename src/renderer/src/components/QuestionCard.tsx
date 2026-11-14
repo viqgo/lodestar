@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { Answer, Confidence, Question, Verdict } from "../../../shared/types";
 import { displayName } from "../../../core/material";
@@ -16,6 +16,7 @@ type Props = {
   grade: Verdict | null;
   disabled: boolean;
   onSubmit(a: Answer, attachPaths: string[]): void;
+  heard?: string | null;
 };
 
 const LABEL: Record<Purpose, string> = { probe: "Probe", predict: "Predict", check: "Check" };
@@ -33,6 +34,7 @@ export function QuestionCard({
   grade,
   disabled,
   onSubmit,
+  heard,
 }: Props) {
   const [picked, setPicked] = useState<number | null>(null);
   const [text, setText] = useState("");
@@ -47,6 +49,10 @@ export function QuestionCard({
   const locked = disabled || answered;
   const isChoice = question.kind === "choice";
   const canSubmit = isChoice ? picked !== null : text.trim() !== "" || files.length > 0;
+  useEffect(() => {
+    if (heard !== null && heard !== undefined && !isChoice && !answered)
+      setText(heard.slice(0, ANSWER_TEXT_MAX));
+  }, [heard, isChoice, answered]);
   const selected = answered ? answer.choiceIndex : picked;
 
   function submit() {

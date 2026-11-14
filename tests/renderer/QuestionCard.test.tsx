@@ -240,4 +240,26 @@ describe("QuestionCard", () => {
     renderCard();
     expect(screen.queryByRole("button", { name: "Attach" })).toBeNull();
   });
+
+  it("interim_text_fills_answer_box (card)", async () => {
+    const props = {
+      seed: "s:1",
+      purpose: "check" as const,
+      question: textQ,
+      answer: null,
+      grade: null,
+      disabled: false,
+      onSubmit: vi.fn(),
+    };
+    const { rerender } = render(<QuestionCard {...props} heard="the der" />);
+    expect(screen.getByLabelText("Your answer")).toHaveValue("the der");
+    rerender(<QuestionCard {...props} heard="the derivative" />);
+    expect(screen.getByLabelText("Your answer")).toHaveValue("the derivative");
+    rerender(<QuestionCard {...props} heard={null} />);
+    await userEvent.type(screen.getByLabelText("Your answer"), "!");
+    expect(screen.getByLabelText("Your answer")).toHaveValue("the derivative!");
+    rerender(<QuestionCard {...props} question={choiceQ} heard="ignored" />);
+    expect(screen.queryByLabelText("Your answer")).toBeNull();
+    expect(screen.queryByDisplayValue("ignored")).toBeNull();
+  });
 });

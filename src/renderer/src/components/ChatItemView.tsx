@@ -8,9 +8,10 @@ type Props = {
   sessionId: string;
   disabled: boolean;
   onSubmit(a: Answer, attachPaths: string[]): void;
+  heard?: string | null;
 };
 
-export function ChatItemView({ item, sessionId, disabled, onSubmit }: Props) {
+export function ChatItemView({ item, sessionId, disabled, onSubmit, heard }: Props) {
   switch (item.kind) {
     case "text":
       return (
@@ -60,6 +61,7 @@ export function ChatItemView({ item, sessionId, disabled, onSubmit }: Props) {
           grade={item.grade}
           disabled={disabled}
           onSubmit={onSubmit}
+          heard={item.answer === null ? heard : null}
         />
       );
   }

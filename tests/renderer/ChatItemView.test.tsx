@@ -5,7 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { ChatItemView } from "../../src/renderer/src/components/ChatItemView";
 import type { ChatItem } from "../../src/renderer/src/lib/view";
-import { choiceQ, pick } from "../helpers/fixtures";
+import { choiceQ, pick, textQ } from "../helpers/fixtures";
 
 const SESSION_ID = "s_1";
 
@@ -148,5 +148,48 @@ describe("ChatItemView", () => {
   it("Continue is disabled while busy", () => {
     renderItem(reading(false), { disabled: true });
     expect(screen.getByRole("button", { name: "Continue" })).toBeDisabled();
+  });
+
+  it("ChatItemView passes what is heard to a pending question only", () => {
+    const base = { kind: "question", key: "q", eventIndex: 1, purpose: "check" } as const;
+    const { unmount } = render(
+      <ChatItemView
+        item={{ ...base, question: textQ, answer: null, grade: null }}
+        sessionId={SESSION_ID}
+        disabled={false}
+        onSubmit={vi.fn()}
+        heard="spoken words"
+      />,
+    );
+    expect(screen.getByLabelText("Your answer")).toHaveValue("spoken words");
+    unmount();
+    const answered = render(
+      <ChatItemView
+        item={{
+          ...base,
+          question: textQ,
+          answer: { choiceIndex: null, text: "typed", reasoning: null, confidence: null },
+          grade: null,
+        }}
+        sessionId={SESSION_ID}
+        disabled={false}
+        onSubmit={vi.fn()}
+        heard="spoken words"
+      />,
+    );
+    expect(screen.queryByDisplayValue("spoken words")).toBeNull();
+    expect(screen.getByText("typed")).toBeInTheDocument();
+    answered.unmount();
+    render(
+      <ChatItemView
+        item={{ kind: "reading", key: "r", eventIndex: 2, markdown: "a reading", answered: false }}
+        sessionId={SESSION_ID}
+        disabled={false}
+        onSubmit={vi.fn()}
+        heard="spoken words"
+      />,
+    );
+    expect(screen.queryByDisplayValue("spoken words")).toBeNull();
+    expect(screen.getByText("a reading")).toBeInTheDocument();
   });
 });

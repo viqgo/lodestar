@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { learnedToSave } from "../../../core/engine";
 import { CLI_INFO, isCliId } from "../../../shared/clis";
 import type { Action, CliId, CliStatus } from "../../../shared/types";
+import { useCall } from "../lib/useCall";
 import { useLesson } from "../lib/useLesson";
 import { buildItems } from "../lib/view";
 import { Banner } from "./Banner";
+import { CallBar } from "./CallBar";
 import { ChatItemView } from "./ChatItemView";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { MaterialControls } from "./MaterialControls";
@@ -21,12 +23,24 @@ export function LessonScreen(props: {
   onRetryDetect(): void;
 }) {
   const { session, state, busy, error, submit, retry, stop } = useLesson(props.id, props.start);
+  const call = useCall({ id: props.id, session, state, busy, submit });
+  const [hasKey, setHasKey] = useState(false);
   const items = useMemo(() => (session ? buildItems(session) : []), [session]);
   const endRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
   const [ask, setAsk] = useState<CliId | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [materialError, setMaterialError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    void window.api.voiceHasKey().then((has) => {
+      if (alive) setHasKey(has);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     endRef.current?.scrollIntoView?.({ behavior: "smooth", block: "end" });
@@ -179,6 +193,15 @@ export function LessonScreen(props: {
               onWebSearch={(on) => material(() => window.api.setSessionWebSearch(props.id, on))}
             />
             {materialError && <small>{materialError}</small>}
+            <CallBar
+              state={call.state}
+              hasKey={hasKey}
+              onStart={call.start}
+              onSkip={call.skip}
+              onStartOver={call.startOver}
+              onEnd={call.end}
+            />
+            {call.error !== null && <Banner kind="error" message={call.error} />}
             {open && (
               <TutorPicker
                 statuses={props.statuses ?? []}
@@ -196,6 +219,7 @@ export function LessonScreen(props: {
             sessionId={props.id}
             disabled={busy || blocked}
             onSubmit={submit}
+            heard={call.state === "off" ? null : call.heard}
           />
         ))}
         {busy && !isDone && <ThinkingBar onStop={stop} />}
