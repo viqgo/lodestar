@@ -506,3 +506,95 @@ Allowed action types now: {allowedActions(state) joined by ", "}.
 ```
 
 Measured cost of one call with a one-line prompt: 17,302 input tokens (Codex's own overhead). With `--ignore-user-config --ignore-rules` and five features disabled it was 14,094. Those flags are NOT used in milestone 1 because `--ignore-user-config` would also ignore the user's model and provider settings.
+
+## Milestone 2: more CLIs (approved 2026-11-14, D45)
+
+### Overview
+Each CLI has one adapter file. All three share `process.ts`, which starts the process without a shell in a new empty temporary folder, writes the prompt to stdin, enforces the time limit and Stop, and always removes the folder. `registry.ts` builds the three adapters and reports which are installed. A lesson stores its CLI in `Session.cli`; every call looks up that adapter. The window has one new component, `TutorPicker`, used on the New lesson form and in the lesson header.
+
+### Flows
+1. Launch: `App` -> `api.detectClis` -> `clis:detect` -> `detectAll(adapters)` (three `--version` checks in parallel) -> `CliStatus[]`. None installed: `CliGate` shows the B24 banner, New lesson disabled.
+2. New lesson: `NewLessonForm` shows `TutorPicker` (start value `defaultCli(statuses, lastUsed)`) -> `api.createSession({ topic, goal, cli })` -> `sessions:create` (`validateNewLesson`, `isCliId`) -> session saved with `cli` -> `turn.advance` -> `adapters[session.cli].run`.
+3. A call: `turn.advance` -> `modelStep` with `adapters[session.cli]` -> `buildPrompt` -> `adapter.run` -> `parseReply` -> `checkAction`; on a bad reply up to `adapter.retries` more attempts; CLI failure -> `"<adapter.label> failed: <message>"`.
+4. Switch: `LessonScreen` "Change tutor" -> `TutorPicker` -> `ConfirmDialog` -> `api.setSessionCli(id, cli)` -> `sessions:setCli` -> session written with the new `cli` -> `session:updated`. No call starts.
+
+### Files
+```
+src/shared/clis.ts                          - CLI ids, labels, order, defaultCli         (new)
+src/main/cli/process.ts                     - findCommand, detectVersion, runProcess     (new)
+src/main/cli/claude.ts                      - Claude Code adapter                        (new)
+src/main/cli/gemini.ts                      - Gemini adapter (experimental)              (new)
+src/main/cli/registry.ts                    - createAdapters, detectAll                  (new)
+src/renderer/src/components/TutorPicker.tsx - radio rows for the three CLIs              (new)
+tests/shared/clis.test.ts, tests/main/process.test.ts, claude.test.ts, gemini.test.ts, registry.test.ts, tests/renderer/TutorPicker.test.tsx (new)
+```
+Edited: `src/shared/types.ts`, `src/main/cli/adapter.ts`, `src/main/cli/codex.ts`, `src/main/turn.ts`, `src/main/ipc.ts`, `src/main/index.ts`, `src/preload/index.ts`, `CliGate.tsx`, `NewLessonForm.tsx`, `LessonScreen.tsx`, `App.tsx`, `app.css`, `evals/loop.eval.ts`, `README.md`, `tests/helpers/fakes.ts`, `tests/helpers/dom.ts`.
+
+### Data model changes (`src/shared/types.ts`)
+```ts
+export type CliId = "codex" | "claude" | "gemini";
+export type CliStatus = { id: CliId; installed: boolean; version: string | null };
+// Session.cli: CliId                      (was "codex"; version stays 1)
+// SessionSummary gains cli: CliId
+// Api: detectClis(): Promise<CliStatus[]>              (replaces detectCli)
+//      createSession(input: { topic: string; goal: string; cli: CliId }): ...
+//      setSessionCli(id: string, cli: CliId): Promise<{ ok: true; session: Session } | { ok: false; message: string }>
+```
+
+### Function inventory
+| File | Signature | Purpose | On failure | Task |
+|------|-----------|---------|------------|------|
+| `clis.ts` | `export const CLI_ORDER: CliId[]` | `["codex", "claude", "gemini"]` | - | T45 |
+| `clis.ts` | `export const CLI_INFO: Record<CliId, { label: string; experimental: boolean }>` | `Codex`/false, `Claude Code`/false, `Gemini`/true | - | T45 |
+| `clis.ts` | `isCliId(x: unknown): x is CliId` | guard | false | T45 |
+| `clis.ts` | `cliName(id: CliId): string` | label, plus ` (experimental)` when experimental | - | T45 |
+| `clis.ts` | `defaultCli(statuses: CliStatus[], lastUsed: CliId \| null): CliId \| null` | B26 | `null` when none installed | T45 |
+| `process.ts` | `type ProcessDeps = { spawn; env: NodeJS.ProcessEnv; home: string; tmpRoot: string; fs: typeof import("node:fs"); detectTimeoutMs?: number }` | what every adapter is built from | - | T46 |
+| `process.ts` | `type ProcessResult = { kind: "exit"; code: number \| null; stdout: string; stderr: string } \| { kind: "missing" } \| { kind: "aborted" } \| { kind: "timeout" }` | - | - | T46 |
+| `process.ts` | `findCommand(deps: ProcessDeps, name: string, envVar: string): string \| null` | the env override, else `resolveCommand` | `null` | T46 |
+| `process.ts` | `detectVersion(deps: ProcessDeps, command: string \| null): Promise<DetectResult>` | `<command> --version`, first `\d+\.\d+\.\d+` | `{ ok: false }` on null command, spawn error, non-zero exit, no version, timeout | T46 |
+| `process.ts` | `runProcess(deps: ProcessDeps, spec: { command: string \| null; args(dirs: { root: string; work: string }): string[]; stdin: string; signal: AbortSignal; timeoutMs: number; prepare?(dirs: { root: string; work: string }): void; dropEnv?: string[] }): Promise<ProcessResult>` | temp folder `root` with empty `root/work` as cwd; no shell; ignores stdin write errors; UTF-8; kills on abort and timeout; removes `root` in every case | `missing` for a null command or spawn error; `aborted` when the signal is already aborted (no folder created) | T46 |
+| `process.ts` | `failureResult(r: Exclude<ProcessResult, { kind: "exit" }>, label: string, timeoutMs: number): RunResult` | `missing` -> failed `"<label> CLI not found"`; `aborted` -> aborted `"stopped"`; `timeout` -> timeout `"no reply after <n> seconds"` | - | T46 |
+| `process.ts` | `lastStderrLine(stderr: string): string` | moved from `codex.ts` (still re-exported there) | `"exited with an error"` | T46 |
+| `adapter.ts` | `interface CliAdapter { id: CliId; label: string; retries: number; detect(): Promise<DetectResult>; run(req: RunRequest): Promise<RunResult> }` | `retries`: Codex 1, Claude Code 1, Gemini 2 | - | T47 |
+| `codex.ts` | `createCodexAdapter(deps: ProcessDeps): CliAdapter` | same behavior as before, built on `process.ts` | as before | T47 |
+| `claude.ts` | `parseClaudeResult(stdout: string): { text: string \| null; usage: Usage \| null; error: string \| null }` | B29 | `error` `"unreadable output"` when stdout is not a JSON object; the `result` string (cut to 200) when `is_error` | T48 |
+| `claude.ts` | `createClaudeAdapter(deps: ProcessDeps): CliAdapter` | B29; env override `LEARN_CLAUDE_PATH`; drops `CLAUDECODE` and `CLAUDE_CODE_ENTRYPOINT` from the child env | failed `"Claude Code returned no message"` when text is null | T48 |
+| `gemini.ts` | `export const GEMINI_EXCLUDED_TOOLS: string[]` | `run_shell_command, replace, write_file, read_file, read_many_files, glob, grep_search, list_directory, web_fetch, google_web_search, invoke_agent, activate_skill, ask_user, write_todos, list_mcp_resources, read_mcp_resource` | - | T49 |
+| `gemini.ts` | `extractJsonObject(text: string): string \| null` | the first balanced `{...}` in the text, string-aware | `null` | T49 |
+| `gemini.ts` | `geminiErrorMessage(stderr: string): string` | `error.message` of the JSON object found in stderr, else `lastStderrLine`; cut to 200 | - | T49 |
+| `gemini.ts` | `geminiPrompt(prompt: string, schema: object): string` | prompt plus the "# Reply format" section with the schema | - | T49 |
+| `gemini.ts` | `createGeminiAdapter(deps: ProcessDeps): CliAdapter` | B30; env override `LEARN_GEMINI_PATH`; `usage` is always `null` | failed `"Gemini returned no message"` when stdout has no string `response` | T49 |
+| `registry.ts` | `createAdapters(deps: ProcessDeps): Record<CliId, CliAdapter>` | one of each | - | T50 |
+| `registry.ts` | `detectAll(adapters: Record<CliId, CliAdapter>): Promise<CliStatus[]>` | all three in parallel, in `CLI_ORDER` | a rejected detect counts as not installed | T50 |
+| `turn.ts` | `modelStep(deps: { adapter: CliAdapter; knowledge: KnowledgeItem[]; profile: string }, ...)` | attempts = `adapter.retries + 1`; failure message `"<adapter.label> failed: <message>"` | as before | T50 |
+| `turn.ts` | `createTurnRunner(deps: { adapters: Record<CliId, CliAdapter>; store; now; newId; notify })` | uses `adapters[session.cli]` (an unknown value falls back to `codex`) | as before | T50 |
+| `ipc.ts` | `IpcDeps.adapters: Record<CliId, CliAdapter>` (replaces `adapter`) | - | - | T50 |
+| `ipc.ts` | `clis:detect` | `detectAll(adapters)` | - | T51 |
+| `ipc.ts` | `sessions:create` | also checks `isCliId(input.cli)` | `{ ok: false, message: "Choose a tutor." }` | T51, T55 |
+| `ipc.ts` | `sessions:list` | each summary carries `cli` | - | T51 |
+| `ipc.ts` | `sessions:setCli (id, cli)` | B34: writes the session with the new `cli` and `updatedAt`, sends `session:updated` | `{ ok: false, message }` with `"Choose a tutor."`, `"A reply is already on the way."` or `"This lesson no longer exists."` | T51 |
+| `TutorPicker.tsx` | `TutorPicker(props: { statuses: CliStatus[]; value: CliId \| null; disabled: boolean; onChange(cli: CliId): void })` | a `radiogroup` labelled "Tutor", one `.option` row per CLI in `CLI_ORDER`, text `cliName(id)`; a missing CLI is disabled, class `is-disabled`, text followed by ` · not installed` | - | T52 |
+| `CliGate.tsx` | `CliGate(props: { clis: CliStatus[] \| null; onRetry(): void })` | B24 banner when the list is known and nothing is installed | renders nothing otherwise | T53 |
+| `NewLessonForm.tsx` | `NewLessonForm(props: { disabled: boolean; statuses: CliStatus[]; lastUsed: CliId \| null; onCreated(session: Session): void })` | picker between Goal and Start; sends `cli` | - | T53 |
+| `LessonScreen.tsx` | `LessonScreen(props: { id: string; start: boolean; statuses: CliStatus[] \| null; onRetryDetect(): void })` | B27 header, B28 banner, B34 switching | - | T54 |
+
+### Errors (milestone 2)
+| Condition | Result |
+|-----------|--------|
+| No CLI installed | banner B24 with Retry; New lesson disabled |
+| The lesson's CLI is not installed | banner B28 with Retry; pending card disabled; no call |
+| Unknown CLI id on create or switch | "Choose a tutor." |
+| Switch while a call runs | "A reply is already on the way." |
+| Switch on a deleted lesson | "This lesson no longer exists." |
+| CLI exits non-zero, cannot be started, or times out | "<name> failed: <detail>" with Retry |
+
+### LLM calls (milestone 2)
+The prompt is unchanged for Codex and Claude Code. For Gemini, `geminiPrompt` appends exactly:
+
+```
+
+# Reply format
+Reply with exactly one JSON object and nothing else: no code fence, no text before or after it. It must match this JSON Schema:
+{JSON.stringify(schema)}
+```

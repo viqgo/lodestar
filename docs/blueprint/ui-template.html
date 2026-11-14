@@ -86,6 +86,8 @@
             border: 1px solid var(--color-border); border-radius: var(--radius); cursor: pointer; }
   .option i { width: 14px; height: 14px; border-radius: 50%; border: 1px solid var(--color-muted); flex: none; }
   .option.is-hover { background: var(--color-surface-2); }
+  .option.is-disabled { color: var(--color-muted); cursor: default; }
+  .row { display: flex; align-items: center; gap: var(--space-3); }
   .option.is-selected { border-color: var(--color-accent); }
   .option.is-selected i { background: var(--color-accent); border-color: var(--color-accent); }
   .option.is-correct { border-color: var(--color-success); }
@@ -199,6 +201,7 @@
         <div class="option is-selected"><i></i>How steep the line is</div>
         <div class="option is-hover"><i></i>How long the line is</div>
         <div class="option"><i></i>The area under the line</div>
+        <div class="option is-disabled"><i></i>Gemini (experimental) · not installed</div>
         <div class="field"><label class="label">Your thinking (optional)</label><textarea placeholder="Why do you think so?"></textarea></div>
         <div class="card-foot">
           <div class="segments"><button class="segment is-selected">Sure</button><button class="segment">Unsure</button><button class="segment">Guessing</button></div>

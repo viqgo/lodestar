@@ -41,6 +41,7 @@ The template is `ui-template.html` (open it in a browser). Styling is plain CSS:
 | Plan map (`PlanPanel`) | node: todo, current, passed, shaky | Mermaid graph; plain list fallback |
 | Reading (`ChatItemView`) | pending (with Continue), continued | CR-3: the tutor's full text as plain prose in the column, no box; Continue is the one primary button; once continued the button is gone |
 | Profile screen (`ProfileScreen`) | empty, edited, saved, error | CR-4: one textarea (`.field`) with a visible label, one Save button (primary, disabled until edited) |
+| Tutor picker (`TutorPicker`) | option: default, hover, selected, disabled ("not installed") | milestone 2: radio rows in the `.option` style under the label "Tutor"; used on New lesson and after "Change tutor" |
 | Probe summary (`ChatItemView`) | one | known list + goal |
 | Lesson summary (`ChatItemView`) | one | summary + counts line |
 | Confirm dialog (`ConfirmDialog`) | one | centered over a dimmed window |
@@ -88,7 +89,8 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 | Lesson row status | "probing", "planning", "teaching", "done", then " · " and relative time ("just now", "5m ago", "2h ago", "3d ago") |
 | New lesson | title "What do you want to learn?"; labels "Topic", "Goal"; placeholders "e.g. Derivatives", "e.g. Understand why the derivative is the slope of the tangent line"; button "Start" |
 | Validation | "Enter a topic and a goal." |
-| Codex missing | "Codex CLI not found. Install it and sign in, then press Retry."; button "Retry" |
+| No CLI (milestone 2, replaces "Codex missing") | "No AI CLI found. Install Codex, Claude Code or Gemini CLI and sign in, then press Retry."; button "Retry" |
+| Tutor (milestone 2) | picker label "Tutor"; rows "Codex", "Claude Code", "Gemini (experimental)"; a missing one adds " · not installed"; lesson header "Tutor: <name>" and button "Change tutor"; missing in a lesson: "<name> not found. Install it and sign in, then press Retry."; dialog "Switch this lesson to <name>? It will read the whole lesson so far and continue from there." with "Cancel", "Switch"; refusals "Choose a tutor.", "A reply is already on the way." |
 | Lesson header | "Goal: <goal>" |
 | Card labels | "Probe", "Predict", "Check" |
 | Card fields | "Your answer" (placeholder for predict: "Take a guess. This is not graded."; for probe and check: "Type your answer"); "Your thinking (optional)" (placeholder "Why do you think so?") |
@@ -107,6 +109,11 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 | Delete lesson | "Delete this lesson? This cannot be undone."; "Cancel", "Delete" |
 | Profile | sidebar button "Profile"; title "Profile"; "Tell your tutor how you want to be taught. It is added to every lesson from the next reply on."; label "Tutor instructions"; placeholder "e.g. Explain like I'm a nurse. Use more worked examples. Keep readings short."; button "Save"; "Saved."; error "Could not save. Check free disk space." |
 | Knowledge | title "Knowledge"; "What you have shown you understand. Later lessons start from here."; "Deleted lesson" when the source is gone; empty text above |
+
+## Tutor picker (milestone 2)
+- New lesson: the picker sits between Goal and Start.
+- Lesson: under the goal line, one row (`.row`): the note "Tutor: <name>" and the button "Change tutor" (hidden when the lesson is done, disabled while a reply is on the way). Pressing it shows the picker under the row; choosing a different installed CLI opens the confirm dialog; choosing the current one or pressing "Change tutor" again closes the picker.
+- New CSS, existing tokens only: `.option.is-disabled { color: var(--color-muted); cursor: default; }`, `.option.is-disabled:hover { background: transparent; }`, `.row { display: flex; align-items: center; gap: var(--space-3); }`.
 
 ## Telling text from questions (CR-3)
 - Tutor text (readings, bridges, feedback, summaries) is plain prose in the reading column: no border, no background, `color-text`.
