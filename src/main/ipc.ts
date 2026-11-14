@@ -3,6 +3,7 @@ import { isCliId } from "../shared/clis";
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
 import { plain } from "../core/material";
+import { dueItems, newReview, nextDue, nextReview } from "../core/review";
 import { mergeSettings, validateSettings } from "../core/settings";
 import {
   checkChange,
@@ -24,6 +25,7 @@ import type {
   Attachment,
   CliId,
   KnowledgeView,
+  ReviewFilter,
   Session,
   SessionSummary,
   Subject,
@@ -304,6 +306,41 @@ export function registerIpc(deps: IpcDeps): void {
   });
 
   ipcMain.handle("knowledge:delete", (_event, id: string) => store.deleteKnowledge(id));
+
+  ipcMain.handle("review:due", async (_event, filter: ReviewFilter) => {
+    const f: ReviewFilter = {
+      subjectId: typeof filter?.subjectId === "string" ? filter.subjectId : null,
+      sessionId: typeof filter?.sessionId === "string" ? filter.sessionId : null,
+    };
+    const items = await store.readKnowledge();
+    const reviews = await store.readReviews();
+    const sessions = await store.listSessions();
+    const due = dueItems(items, reviews, now(), f, sessions);
+    const all = dueItems(items, reviews, "9999-12-31T23:59:59.999Z", f, sessions);
+    const dueIds = new Set(due.map((d) => d.item.id));
+    return {
+      due,
+      nextDue: nextDue(all.filter((d) => !dueIds.has(d.item.id)).map((d) => d.review)),
+    };
+  });
+
+  ipcMain.handle("review:record", (_event, itemId: string, correct: boolean) =>
+    withLock("reviews", async (): Promise<void> => {
+      if (typeof itemId !== "string" || typeof correct !== "boolean") return;
+      const item = (await store.readKnowledge()).find((k) => k.id === itemId);
+      if (!item) return;
+      const reviews = await store.readReviews();
+      const current = reviews.find((r) => r.itemId === itemId) ?? newReview(itemId, item.createdAt);
+      try {
+        await store.writeReviews([
+          ...reviews.filter((r) => r.itemId !== itemId),
+          nextReview(current, correct, now()),
+        ]);
+      } catch {
+        // nothing changes
+      }
+    }),
+  );
 
   ipcMain.handle("profile:get", () => store.readProfile());
 

@@ -37,6 +37,9 @@ const api: Api = {
   isRunning: (id) => ipcRenderer.invoke("lesson:running", id) as Promise<boolean>,
   listKnowledge: () => ipcRenderer.invoke("knowledge:list") as ReturnType<Api["listKnowledge"]>,
   deleteKnowledge: (id) => ipcRenderer.invoke("knowledge:delete", id) as Promise<void>,
+  dueItems: (filter) => ipcRenderer.invoke("review:due", filter) as ReturnType<Api["dueItems"]>,
+  recordReview: (itemId, correct) =>
+    ipcRenderer.invoke("review:record", itemId, correct) as Promise<void>,
   getSettings: () => ipcRenderer.invoke("settings:get") as Promise<Settings>,
   saveSettings: (settings) =>
     ipcRenderer.invoke("settings:save", settings) as ReturnType<Api["saveSettings"]>,

@@ -3,7 +3,8 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createStore } from "../../src/main/store";
-import { session, subject } from "../helpers/fixtures";
+import { newReview } from "../../src/core/review";
+import { K, review, session, subject } from "../helpers/fixtures";
 
 const mk = async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-store-"));
@@ -395,5 +396,70 @@ describe("store settings", () => {
     expect(await store.readSettings()).toEqual(defaults);
     await fsp.writeFile(path.join(dir, "settings.json"), "[1]", "utf8");
     expect(await store.readSettings()).toEqual(defaults);
+  });
+});
+
+describe("store reviews", () => {
+  it("reviews round-trip and are empty without a file", async () => {
+    const { dir, store } = await mk();
+    expect(await store.readReviews()).toEqual([]);
+    const two = [review(1), review(2, { box: 3 })];
+    await store.writeReviews(two);
+    expect(await store.readReviews()).toEqual(two);
+    await expect(fsp.access(path.join(dir, "reviews.json"))).resolves.toBeUndefined();
+  });
+
+  it("readReviews drops what is not a review", async () => {
+    const { dir, store } = await mk();
+    const file = path.join(dir, "reviews.json");
+    await fsp.writeFile(file, "not json", "utf8");
+    expect(await store.readReviews()).toEqual([]);
+    await fsp.writeFile(file, "{}", "utf8");
+    expect(await store.readReviews()).toEqual([]);
+    const good = review(1);
+    await fsp.writeFile(
+      file,
+      JSON.stringify([
+        good,
+        { ...review(2), box: 6 },
+        { itemId: "x", box: 1, front: null },
+        { ...review(3), front: 3 },
+      ]),
+      "utf8",
+    );
+    expect(await store.readReviews()).toEqual([good]);
+  });
+
+  it("a new knowledge item gets a review in box one", async () => {
+    const { store } = await mk();
+    await store.addKnowledge([K(1), K(2)]);
+    expect(await store.readReviews()).toEqual([
+      newReview(K(1).id, K(1).createdAt),
+      newReview(K(2).id, K(2).createdAt),
+    ]);
+    await store.addKnowledge([K(1)]);
+    expect(await store.readReviews()).toHaveLength(2);
+    await store.writeReviews([...(await store.readReviews()), review(3, { box: 4 })]);
+    await store.addKnowledge([K(3)]);
+    expect((await store.readReviews()).find((r) => r.itemId === K(3).id)?.box).toBe(4);
+    expect(await store.readReviews()).toHaveLength(3);
+  });
+
+  it("delete_item_removes_card_and_schedule", async () => {
+    const { dir, store } = await mk();
+    await store.addKnowledge([K(1), K(2)]);
+    await store.writeReviews([review(1, { front: "Q" }), review(2)]);
+    await store.deleteKnowledge(K(1).id);
+    expect((await store.readKnowledge()).map((k) => k.id)).toEqual([K(2).id]);
+    expect(await store.readReviews()).toEqual([review(2)]);
+    const before = [
+      await fsp.readFile(path.join(dir, "knowledge.json"), "utf8"),
+      await fsp.readFile(path.join(dir, "reviews.json"), "utf8"),
+    ];
+    await store.deleteKnowledge("k_99999999-0000-0000-0000-000000000000");
+    expect([
+      await fsp.readFile(path.join(dir, "knowledge.json"), "utf8"),
+      await fsp.readFile(path.join(dir, "reviews.json"), "utf8"),
+    ]).toEqual(before);
   });
 });

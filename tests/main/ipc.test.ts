@@ -12,7 +12,19 @@ import type {
   TurnResult,
 } from "../../src/shared/types";
 import { fakeAdapters } from "../helpers/fakes";
-import { A, SE, UNITS, act, pick, readySubject, session, subject } from "../helpers/fixtures";
+import { newReview } from "../../src/core/review";
+import {
+  A,
+  K,
+  SE,
+  UNITS,
+  act,
+  pick,
+  readySubject,
+  review,
+  session,
+  subject,
+} from "../helpers/fixtures";
 
 const NOW = "2026-03-03T00:00:00.000Z";
 const ID1 = "s_00000001-0000-0000-0000-000000000000";
@@ -1220,5 +1232,103 @@ describe("ipc voice", () => {
     emit("voice:audio", "text");
     emit("voice:audio", null);
     expect(voice.audio).not.toHaveBeenCalled();
+  });
+});
+
+describe("ipc review", () => {
+  const APRIL = "2026-04-01T00:00:00.000Z";
+  const BEFORE = "2026-03-01T00:00:00.000Z";
+  const all = { subjectId: null, sessionId: null };
+
+  it("review:due lists the due items for the filter with the next date", async () => {
+    const { store, call } = await setup();
+    await store.writeSession({ ...withId(ID1, BEFORE, []), subjectId: subject().id });
+    await store.writeSession(withId(ID2, BEFORE, []));
+    const items = [K(1, { sessionId: ID1 }), K(2, { sessionId: ID2 }), K(3, { sessionId: ID2 })];
+    await store.addKnowledge(items);
+    await store.writeReviews([
+      review(1, { due: BEFORE }),
+      review(2, { due: BEFORE }),
+      review(3, { due: APRIL }),
+    ]);
+    const ids = async (filter: unknown) =>
+      (await call("review:due", filter)).due.map((d: any) => d.item.id);
+    const r = await call("review:due", all);
+    expect(r.due.map((d: any) => d.item.id).sort()).toEqual([K(1).id, K(2).id].sort());
+    expect(r.due.find((d: any) => d.item.id === K(1).id).review).toEqual(
+      review(1, { due: BEFORE }),
+    );
+    expect(r.nextDue).toBe(APRIL);
+    const bySubject = await call("review:due", { subjectId: subject().id, sessionId: null });
+    expect(bySubject.due.map((d: any) => d.item.id)).toEqual([K(1).id]);
+    expect(bySubject.nextDue).toBeNull();
+    expect(await ids({ subjectId: null, sessionId: ID2 })).toEqual([K(2).id]);
+    expect((await call("review:due", { subjectId: null, sessionId: ID2 })).nextDue).toBe(APRIL);
+  });
+
+  it("review:due counts an older item without a review as due and tolerates a missing filter", async () => {
+    const { store, call, dir } = await setup();
+    await store.writeJsonAtomic(path.join(dir, "knowledge.json"), [K(1)]);
+    const r = await call("review:due");
+    expect(r.due).toHaveLength(1);
+    expect(r.due[0].review).toEqual(newReview(K(1).id, K(1).createdAt));
+    expect(await store.readReviews()).toEqual([]);
+  });
+
+  it("flashcard_grades_update_box (ipc)", async () => {
+    const { store, call } = await setup();
+    await store.addKnowledge([K(1)]);
+    await store.writeReviews([review(1, { front: "Q" })]);
+    await call("review:record", K(1).id, true);
+    expect(await store.readReviews()).toEqual([
+      review(1, { front: "Q", box: 2, due: "2026-03-06T00:00:00.000Z" }),
+    ]);
+    await call("review:record", K(1).id, false);
+    expect(await store.readReviews()).toEqual([
+      review(1, { front: "Q", box: 1, due: "2026-03-04T00:00:00.000Z" }),
+    ]);
+  });
+
+  it("review:record ignores an unknown item and wrong arguments", async () => {
+    const { store, call } = await setup();
+    await store.addKnowledge([K(1)]);
+    const before = await store.readReviews();
+    expect(await call("review:record", "k_99999999-0000-0000-0000-000000000000", true)).toBe(
+      undefined,
+    );
+    expect(await call("review:record", 42, true)).toBe(undefined);
+    expect(await call("review:record", K(1).id, "yes")).toBe(undefined);
+    expect(await store.readReviews()).toEqual(before);
+    const failing = { ...store, writeReviews: vi.fn(async () => Promise.reject(new Error("x"))) };
+    const ctx = await setup();
+    await ctx.store.addKnowledge([K(1)]);
+    const handlers = new Map<string, (...a: any[]) => any>();
+    registerIpc({
+      ipcMain: {
+        handle: (c: string, f: (...a: any[]) => any) => handlers.set(c, f),
+        on: vi.fn(),
+      } as any,
+      adapters: fakeAdapters({ detect: vi.fn() } as any),
+      store: { ...ctx.store, writeReviews: failing.writeReviews },
+      turns: { advance: vi.fn(), stop: vi.fn(), isRunning: vi.fn() } as any,
+      subjects: { outline: vi.fn(), reply: vi.fn(), stop: vi.fn(), isRunning: vi.fn() } as any,
+      now: () => NOW,
+      newId: (p) => p,
+      send: vi.fn(),
+      dialogs: { pickFolder: async () => null, pickFiles: async () => [] },
+      secrets: ctx.secrets,
+      voice: ctx.voice,
+    });
+    expect(await handlers.get("review:record")!(null, K(1).id, true)).toBe(undefined);
+    expect(failing.writeReviews).toHaveBeenCalled();
+  });
+
+  it("delete_item_removes_card_and_schedule (ipc)", async () => {
+    const { store, call } = await setup();
+    await store.addKnowledge([K(1), K(2)]);
+    await call("knowledge:delete", K(1).id);
+    expect((await store.readKnowledge()).map((k) => k.id)).toEqual([K(2).id]);
+    expect((await store.readReviews()).map((r) => r.itemId)).toEqual([K(2).id]);
+    expect((await call("review:due", all)).due.map((d: any) => d.item.id)).toEqual([K(2).id]);
   });
 });

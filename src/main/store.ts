@@ -1,7 +1,15 @@
 import path from "node:path";
 import { mergeSettings } from "../core/settings";
+import { newReview } from "../core/review";
 import { attachmentKind, checkAttachment } from "../core/material";
-import type { Attachment, KnowledgeItem, Session, Settings, Subject } from "../shared/types";
+import type {
+  Attachment,
+  KnowledgeItem,
+  Review,
+  Session,
+  Settings,
+  Subject,
+} from "../shared/types";
 
 export type Store = {
   writeJsonAtomic(file: string, data: unknown): Promise<void>;
@@ -24,6 +32,8 @@ export type Store = {
   readKnowledge(): Promise<KnowledgeItem[]>;
   addKnowledge(items: KnowledgeItem[]): Promise<void>;
   deleteKnowledge(id: string): Promise<void>;
+  readReviews(): Promise<Review[]>;
+  writeReviews(reviews: Review[]): Promise<void>;
   readProfile(): Promise<string>;
   writeProfile(text: string): Promise<void>;
   readSettings(): Promise<Settings>;
@@ -213,6 +223,30 @@ export async function createStore(
     }
   };
 
+  const reviewsFile = path.join(dir, "reviews.json");
+
+  const readReviews = async (): Promise<Review[]> => {
+    try {
+      const parsed: unknown = JSON.parse(await fs.readFile(reviewsFile, "utf8"));
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter((r): r is Review => {
+        if (typeof r !== "object" || r === null) return false;
+        const o = r as Record<string, unknown>;
+        return (
+          typeof o.itemId === "string" &&
+          (o.box === 1 || o.box === 2 || o.box === 3 || o.box === 4 || o.box === 5) &&
+          typeof o.due === "string" &&
+          (typeof o.front === "string" || o.front === null)
+        );
+      });
+    } catch {
+      return [];
+    }
+  };
+
+  const writeReviews = (reviews: Review[]): Promise<void> =>
+    serial(reviewsFile, () => writeJsonAtomic(reviewsFile, reviews));
+
   const readKnowledge = async (): Promise<KnowledgeItem[]> =>
     (await readAllKnowledge()).sort((a, b) =>
       a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
@@ -232,6 +266,18 @@ export async function createStore(
       }
       if (fresh.length === 0) return;
       await writeJsonAtomic(knowledgeFile, [...existing, ...fresh]);
+      try {
+        await serial(reviewsFile, async () => {
+          const have = await readReviews();
+          const ids = new Set(have.map((r) => r.itemId));
+          await writeJsonAtomic(reviewsFile, [
+            ...have,
+            ...fresh.filter((k) => !ids.has(k.id)).map((k) => newReview(k.id, k.createdAt)),
+          ]);
+        });
+      } catch {
+        // a missing review counts as box one
+      }
     });
 
   const deleteKnowledge = (id: string): Promise<void> =>
@@ -241,6 +287,15 @@ export async function createStore(
         knowledgeFile,
         all.filter((k) => k.id !== id),
       );
+      await serial(reviewsFile, async () => {
+        const have = await readReviews();
+        if (have.some((r) => r.itemId === id)) {
+          await writeJsonAtomic(
+            reviewsFile,
+            have.filter((r) => r.itemId !== id),
+          );
+        }
+      });
     });
 
   const profileFile = path.join(dir, "profile.json");
@@ -292,6 +347,8 @@ export async function createStore(
     readSettings,
     writeSettings,
     deleteKnowledge,
+    readReviews,
+    writeReviews,
     readProfile,
     writeProfile,
   };

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Answer, Session, TurnResult } from "../../src/shared/types";
 import { UNITS, session, subject } from "../helpers/fixtures";
 
+const FILTER = { subjectId: null, sessionId: null };
 const ANSWER: Answer = { choiceIndex: 1, text: null, reasoning: null, confidence: null };
 const SETTINGS = { voice: { language: "en", voice: "aura-2-thalia-en" } };
 const SESSION: Session = session();
@@ -57,6 +58,8 @@ describe("preload", () => {
         "isRunning",
         "listKnowledge",
         "deleteKnowledge",
+        "dueItems",
+        "recordReview",
         "getProfile",
         "saveProfile",
         "getSettings",
@@ -147,6 +150,8 @@ describe("preload", () => {
       await api.voiceSpeak("hi"),
       await api.voiceSkip(),
       await api.voiceStop(),
+      await api.dueItems(FILTER),
+      await api.recordReview("k", true),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -190,8 +195,10 @@ describe("preload", () => {
       ["voice:say", "hi"],
       ["voice:skip"],
       ["voice:stop"],
+      ["review:due", FILTER],
+      ["review:record", "k", true],
     ]);
-    expect(results).toEqual(Array(41).fill("R"));
+    expect(results).toEqual(Array(43).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

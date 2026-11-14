@@ -199,6 +199,8 @@ export type Api = {
   isRunning(id: string): Promise<boolean>;
   listKnowledge(): Promise<KnowledgeView[]>;
   deleteKnowledge(id: string): Promise<void>;
+  dueItems(filter: ReviewFilter): Promise<{ due: DueItem[]; nextDue: string | null }>;
+  recordReview(itemId: string, correct: boolean): Promise<void>;
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: true } | { ok: false; message: string }>;
   voiceHasKey(): Promise<boolean>;
