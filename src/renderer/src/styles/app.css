@@ -551,3 +551,8 @@ body {
 .box-5 {
   color: var(--color-success);
 }
+.aside {
+  border-left: 3px solid var(--color-border);
+  padding-left: var(--space-4);
+  width: 100%;
+}

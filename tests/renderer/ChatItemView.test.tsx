@@ -192,4 +192,22 @@ describe("ChatItemView", () => {
     expect(screen.queryByDisplayValue("spoken words")).toBeNull();
     expect(screen.getByText("a reading")).toBeInTheDocument();
   });
+
+  it("aside_is_saved_and_shown (display)", () => {
+    const { container } = render(
+      <ChatItemView
+        item={{ kind: "aside", key: "a", question: "why", markdown: "**because**" }}
+        sessionId={SESSION_ID}
+        disabled={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+    const box = container.querySelector(".aside");
+    expect(box).not.toBeNull();
+    expect(screen.getByText("Aside")).toBeInTheDocument();
+    expect(screen.getByText("why").classList.contains("note")).toBe(true);
+    expect(box?.contains(screen.getByText("why"))).toBe(true);
+    expect(box?.querySelector("strong")?.textContent).toBe("because");
+    expect(screen.queryByRole("button")).toBeNull();
+  });
 });

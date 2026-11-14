@@ -6,7 +6,17 @@ import { describe, expect, it, vi } from "vitest";
 import { LessonScreen } from "../../src/renderer/src/components/LessonScreen";
 import type { CliStatus, Session, SessionEvent } from "../../src/shared/types";
 import { installApi } from "../helpers/dom";
-import { A, act, pick, session, textQ, toCheck, toPlan, toTeach } from "../helpers/fixtures";
+import {
+  A,
+  act,
+  asideEv,
+  pick,
+  session,
+  textQ,
+  toCheck,
+  toPlan,
+  toTeach,
+} from "../helpers/fixtures";
 import { startMic } from "../../src/renderer/src/lib/mic";
 
 vi.mock("../../src/renderer/src/components/PlanPanel", () => ({
@@ -572,5 +582,85 @@ describe("LessonScreen call", () => {
     await begin();
     view.unmount();
     expect(api.voiceStop).toHaveBeenCalled();
+  });
+
+  it("the lesson has the side question box under its last item", async () => {
+    installApi({ getSession: vi.fn(async () => S([act(A.probe())])) });
+    const view = render(
+      <LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />,
+    );
+    const card = await screen.findByText("Pick");
+    const field = screen.getByLabelText("Ask a side question");
+    const button = screen.getByRole("button", { name: "Ask" });
+    expect(card.compareDocumentPosition(field) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(card.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    view.unmount();
+    installApi({
+      getSession: vi.fn(async () =>
+        S([
+          ...toTeach,
+          ...toCheck("n1"),
+          pick(1),
+          ...toCheck("n2"),
+          pick(0),
+          act(A.explain("n2")),
+          pick(0),
+          act(A.explain("n2")),
+          pick(0),
+          act(A.done()),
+        ]),
+      ),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    expect(await screen.findByText("Lesson complete")).toBeInTheDocument();
+    expect(screen.getByLabelText("Ask a side question")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeInTheDocument();
+  });
+
+  it("asking a side question calls the api and shows the aside", async () => {
+    const before = S([act(A.probe())]);
+    const { api } = installApi({
+      getSession: vi.fn(async () => before),
+      aside: vi.fn(async () => ({ ok: true, session: S([act(A.probe()), asideEv()]) })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await screen.findByText("Pick");
+    await userEvent.type(screen.getByLabelText("Ask a side question"), "why");
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(api.aside).toHaveBeenCalledWith(ID, "why");
+    expect(await screen.findByText("Aside")).toBeInTheDocument();
+    expect(screen.getByText("because")).toBeInTheDocument();
+    for (const radio of screen.getAllByRole("radio")) expect(radio).toBeEnabled();
+  });
+
+  it("a failed side question shows its message under the box", async () => {
+    const message = "The model gave an unusable reply. Press Retry.";
+    const before = S([act(A.probe())]);
+    const { api } = installApi({
+      getSession: vi.fn(async () => before),
+      aside: vi.fn(async () => ({
+        ok: false,
+        error: { kind: "bad_reply", message },
+        session: before,
+      })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await screen.findByText("Pick");
+    await userEvent.type(screen.getByLabelText("Ask a side question"), "why");
+    await userEvent.click(screen.getByRole("button", { name: "Ask" }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Retry" })).not.toBeInTheDocument();
+    expect(api.advance).not.toHaveBeenCalled();
+  });
+
+  it("the side question box is disabled while a reply is on the way", async () => {
+    installApi({
+      getSession: vi.fn(async () => S([act(A.probe())])),
+      isRunning: vi.fn(async () => true),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await screen.findByText("Thinking…");
+    expect(screen.getByLabelText("Ask a side question")).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Ask" })).toBeDisabled();
   });
 });

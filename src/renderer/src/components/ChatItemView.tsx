@@ -51,6 +51,14 @@ export function ChatItemView({ item, sessionId, disabled, onSubmit, heard }: Pro
       );
     case "plan_notice":
       return <p className="note">{`Your path: ${item.count} steps`}</p>;
+    case "aside":
+      return (
+        <div className="aside">
+          <span className="label">Aside</span>
+          <p className="note">{item.question}</p>
+          <MarkdownView markdown={item.markdown} />
+        </div>
+      );
     case "question":
       return (
         <QuestionCard

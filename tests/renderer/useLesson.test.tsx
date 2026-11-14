@@ -4,7 +4,7 @@ import { act as rtlAct, renderHook, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import type { Answer, Session, SessionEvent } from "../../src/shared/types";
 import { useLesson } from "../../src/renderer/src/lib/useLesson";
-import { A, act, pick, session } from "../helpers/fixtures";
+import { A, act, asideEv, pick, session } from "../helpers/fixtures";
 import { installApi } from "../helpers/dom";
 
 const S = (events: SessionEvent[]): Session => ({ ...session(events), id: "s_1" });
@@ -130,5 +130,57 @@ describe("useLesson", () => {
     await waitFor(() => expect(result.current.session).toEqual(s));
     rtlAct(() => result.current.submit(ANSWER, ["/tmp/a.pdf", "/tmp/b.txt"]));
     expect(api.answer).toHaveBeenCalledWith("s_1", ANSWER, ["/tmp/a.pdf", "/tmp/b.txt"]);
+  });
+
+  it("ask sends the side question and takes the lesson it gets back", async () => {
+    const s = S([act(A.probe())]);
+    const s2 = S([act(A.probe()), asideEv()]);
+    let resolve: (v: unknown) => void = () => {};
+    const { api } = installApi({
+      getSession: async () => s,
+      aside: vi.fn(() => new Promise((r) => (resolve = r))),
+    });
+    const { result } = renderHook(() => useLesson("s_1", false));
+    await waitFor(() => expect(result.current.session).toEqual(s));
+    rtlAct(() => result.current.ask("why"));
+    expect(api.aside).toHaveBeenCalledWith("s_1", "why");
+    expect(result.current.busy).toBe(true);
+    await rtlAct(async () => resolve({ ok: true, session: s2 }));
+    expect(result.current.session).toEqual(s2);
+    expect(result.current.busy).toBe(false);
+    expect(result.current.error).toBeNull();
+    expect(result.current.asideError).toBeNull();
+  });
+
+  it("a failed side question reports its message and leaves the lesson as it was", async () => {
+    const s = S([act(A.probe())]);
+    const message = "The model gave an unusable reply. Press Retry.";
+    const aside = vi.fn();
+    const { api } = installApi({ getSession: async () => s, aside });
+    void api;
+    const { result } = renderHook(() => useLesson("s_1", false));
+    await waitFor(() => expect(result.current.session).toEqual(s));
+    aside.mockResolvedValueOnce({
+      ok: false,
+      error: { kind: "bad_reply", message },
+      session: s,
+    });
+    await rtlAct(async () => result.current.ask("why"));
+    expect(result.current.asideError).toBe(message);
+    expect(result.current.error).toBeNull();
+    expect(result.current.busy).toBe(false);
+    expect(result.current.session).toEqual(s);
+    aside.mockRejectedValueOnce(new Error("x"));
+    await rtlAct(async () => result.current.ask("why"));
+    expect(result.current.asideError).toBe("Could not save. Check free disk space.");
+    expect(result.current.busy).toBe(false);
+    aside.mockResolvedValueOnce({
+      ok: false,
+      error: { kind: "busy", message: "A reply is already on the way." },
+      session: null,
+    });
+    await rtlAct(async () => result.current.ask("why"));
+    expect(result.current.busy).toBe(true);
+    expect(result.current.asideError).toBeNull();
   });
 });

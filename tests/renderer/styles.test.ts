@@ -62,3 +62,8 @@ it("styles have the select rule", () => {
   const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
   expect(/\.field select\s*\{[^}]*border: 1px solid var\(--color-border\)/.test(css)).toBe(true);
 });
+
+it("styles have the aside rule", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
+  expect(/\.aside\s*\{[^}]*border-left: 3px solid var\(--color-border\)/.test(css)).toBe(true);
+});

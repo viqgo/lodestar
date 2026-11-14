@@ -15,6 +15,8 @@ export function useLesson(
   state: LessonState | null;
   busy: boolean;
   error: TurnError | null;
+  asideError: string | null;
+  ask(text: string): void;
   submit(a: Answer, attachPaths: string[]): void;
   retry(): void;
   stop(): void;
@@ -22,6 +24,7 @@ export function useLesson(
   const [session, setSession] = useState<Session | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<TurnError | null>(null);
+  const [asideError, setAsideError] = useState<string | null>(null);
   const started = useRef<string | null>(null);
 
   const onReject = useCallback(() => {
@@ -47,6 +50,7 @@ export function useLesson(
     setSession(null);
     setBusy(false);
     setError(null);
+    setAsideError(null);
     const offUpdated = window.api.onSessionUpdated((s) => {
       if (s.id === id) setSession(s);
     });
@@ -96,9 +100,33 @@ export function useLesson(
     window.api.advance(id).then(handleResult, onReject);
   }, [id, onReject, handleResult]);
 
+  const ask = useCallback(
+    (text: string) => {
+      setAsideError(null);
+      setBusy(true);
+      window.api.aside(id, text).then(
+        (result) => {
+          if (result.ok) {
+            setSession(result.session);
+            setBusy(false);
+            return;
+          }
+          if (result.error.kind === "busy") return;
+          setAsideError(result.error.message);
+          setBusy(false);
+        },
+        () => {
+          setAsideError(SAVE_ERROR.message);
+          setBusy(false);
+        },
+      );
+    },
+    [id],
+  );
+
   const stop = useCallback(() => {
     void window.api.stop(id);
   }, [id]);
 
-  return { session, state, busy, error, submit, retry, stop };
+  return { session, state, busy, error, asideError, ask, submit, retry, stop };
 }

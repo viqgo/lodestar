@@ -5,6 +5,7 @@ import type { Action, CliId, CliStatus } from "../../../shared/types";
 import { useCall } from "../lib/useCall";
 import { useLesson } from "../lib/useLesson";
 import { buildItems } from "../lib/view";
+import { AsideBox } from "./AsideBox";
 import { Banner } from "./Banner";
 import { CallBar } from "./CallBar";
 import { ChatItemView } from "./ChatItemView";
@@ -22,7 +23,17 @@ export function LessonScreen(props: {
   statuses: CliStatus[] | null;
   onRetryDetect(): void;
 }) {
-  const { session, state, busy, error, submit, retry, stop } = useLesson(props.id, props.start);
+  const {
+    session,
+    state,
+    busy,
+    error,
+    asideError,
+    ask: askAside,
+    submit,
+    retry,
+    stop,
+  } = useLesson(props.id, props.start);
   const call = useCall({ id: props.id, session, state, busy, submit });
   const [hasKey, setHasKey] = useState(false);
   const items = useMemo(() => (session ? buildItems(session) : []), [session]);
@@ -222,6 +233,12 @@ export function LessonScreen(props: {
             heard={call.state === "off" ? null : call.heard}
           />
         ))}
+        {session && (
+          <>
+            <AsideBox disabled={busy || blocked} onAsk={askAside} />
+            {asideError !== null && <small>{asideError}</small>}
+          </>
+        )}
         {busy && !isDone && <ThinkingBar onStop={stop} />}
         {banner}
         {finished}
