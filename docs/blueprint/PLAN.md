@@ -57,6 +57,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T36 App wiring
 - [x] T36b Keyboard access, double-click guard, map fallback symbol
 - [x] T37 README
+- [ ] T37b Gate C fixes (CR-2)
 - [ ] GATE C A full lesson in the window
 
 Conventions used in every task:
@@ -2085,11 +2086,79 @@ Conventions for every Stage C task (in addition to the ones at the top):
 2. Run `npm run format && npm run lint`: exit 0. Run `npm test`: `Tests  252 passed (252)`. Paste.
 3. Tick T37, then `git add -A && git commit -m "docs: readme"`.
 
+### T37b - Gate C fixes (CR-2)
+
+**Implements**: change request CR-2 (decision D34) · B2, B12, B13, B14, B16, B18, B1 · fixes from Fable's Gate C review (findings I1-I5 and five Minor ones)
+**Depends on**: T37
+
+**Context**
+- I1. `window.api.answer(id, a)` / `advance(id)` resolve a `TurnResult`. For early refusals (`busy`, `not_found`, `invalid_answer`) `src/main/ipc.ts` returns the result but sends no `turn:ended` event. `useLesson` ignores the resolved value (`.catch(onReject)` only), so `busy` stays `true` forever.
+- I2. `LessonScreen` shows the "The last reply did not arrive." banner only when `session.events.length > 0`; a lesson with no events reopened with `start: false` shows nothing and cannot be retried.
+- I3. `CliGate` is rendered only inside the new-lesson screen block of `App`. After navigating away there is no way back to its Retry.
+- I4/I5. CSS: `.overlay` has no `z-index`; `.content p { margin: 0 }` removes paragraph spacing inside `.markdown`; the radiogroup in `QuestionCard` has no gap rule; the template's `.is-hover` / `.is-focus` demo classes exist but no real `:hover` / `:focus` rules do; the × (`.icon-btn` in a `.lesson-row`) is always visible although UI.md says it shows on hover.
+- Test helpers: `installApi` returns `{ api, emitUpdated, emitEnded, listenerCounts }` (`tests/helpers/dom.ts`). Fixtures `A`, `act`, `pick`, `say`, `session`, `toPlan`, `toTeach`, `textQ`, `choiceQ`. Existing tests in each file show how components are rendered. Mermaid is mocked in component tests (`vi.mock("mermaid", ...)`).
+
+**Files**
+- Modify: `src/renderer/src/lib/useLesson.ts`, `src/renderer/src/components/LessonScreen.tsx`, `src/renderer/src/components/QuestionCard.tsx`, `src/renderer/src/components/NewLessonForm.tsx`, `src/renderer/src/components/KnowledgeScreen.tsx`, `src/renderer/src/components/PlanPanel.tsx`, `src/renderer/src/App.tsx`, `src/renderer/src/styles/app.css`, `tests/renderer/useLesson.test.tsx`, `LessonScreen.test.tsx`, `QuestionCard.test.tsx`, `NewLessonForm.test.tsx`, `KnowledgeScreen.test.tsx`, `PlanPanel.test.tsx`, `App.test.tsx`, `styles.test.ts` (all under `tests/renderer/`)
+- Do NOT touch any other file. Do NOT change any text shown to the user except where stated. Do NOT add dependencies.
+
+**Steps**
+
+1. Add 8 tests (names exactly as shown; existing tests must keep passing unchanged):
+
+   | Test | File | Given | Expect |
+   |------|------|-------|--------|
+   | useLesson clears busy when an answer is refused | useLesson.test.tsx | `answer` resolves `{ ok: false, error: { kind: "invalid_answer", message: "Write an answer." }, session: S }`; call `submit(ANSWER)` | after it settles: `busy` is `false` and `error.message` is `"Write an answer."` |
+   | QuestionCard limits a text answer to 4000 characters | QuestionCard.test.tsx | `question={textQ}` pending | the `Your answer` textarea has attribute `maxlength` `"4000"` |
+   | reopening a lesson with no events offers Retry | LessonScreen.test.tsx | `S([])`, `start=false`, not busy | `The last reply did not arrive.` and a `Retry` button; `api.advance` not called |
+   | App shows the Codex banner on every screen | App.test.tsx | `detectCli` resolves `{ ok: false }`; click `Knowledge` | the text `Codex CLI not found. Install it and sign in, then press Retry.` and a `Retry` button are present on the Knowledge screen |
+   | styles give real hover, focus and layering rules | styles.test.ts | read `app.css` | it contains `.overlay` with `z-index`; `.btn:hover`; `.field input:focus`; `.options`; and `.lesson-row:hover .icon-btn` (each tested with a regex on the file text) |
+   | KnowledgeScreen refreshes when a turn ends | KnowledgeScreen.test.tsx | render; then `emitEnded("s_1", { ok: true, session: S })` | `listKnowledge` was called a second time |
+   | NewLessonForm reports a failed save | NewLessonForm.test.tsx | `createSession` rejects; click `Start` | the text `Could not save. Check free disk space.` is shown, `onCreated` not called, and clicking `Start` again calls `createSession` a second time |
+   | PlanPanel keeps Mermaid quiet on errors | PlanPanel.test.tsx | render once; look at the `mermaid.initialize` mock calls (do not clear mocks before this assertion; if an existing `beforeEach` clears them, make this test render first and assert inside itself) | `initialize` was called with an object containing `suppressErrorRendering: true` |
+2. Run tests. Expected: `Tests  8 failed | 252 passed (260)`: exactly the eight new tests fail. Paste. If any other test fails, stop and report.
+3. Fix the code:
+   - `useLesson.ts` (I1): create one function `handleResult(result: TurnResult)` with exactly the logic now inside the `onTurnEnded` callback (ok -> set session, `busy` false, `error` null; failed with `error.kind === "busy"` -> ignore; failed otherwise -> set session if present, set `error`, `busy` false). Use it in the `onTurnEnded` callback (after the id check) and change `window.api.answer(id, a).catch(onReject)`, `window.api.advance(id).catch(onReject)` (both places) to `.then(handleResult, onReject)`.
+   - `QuestionCard.tsx` (I1): add `maxLength={ANSWER_TEXT_MAX}` (import from `../../../shared/limits`) to the `Your answer` textarea only. Also give the choice radiogroup `<div role="radiogroup">` the class `options`.
+   - `LessonScreen.tsx` (I2): remove the `session.events.length > 0` condition from the interrupted-lesson banner. Change the scroll effect's dependency list to `[items.length, busy, error]`.
+   - `PlanPanel.tsx`: add `suppressErrorRendering: true` to the object passed to `mermaid.initialize`.
+   - `KnowledgeScreen.tsx`: in a `useEffect` (empty dependency list) subscribe with `window.api.onTurnEnded(() => reload())` and return the unsubscribe function.
+   - `NewLessonForm.tsx`: in `submit()`, add a `catch { setError("Could not save. Check free disk space."); }` between the `try` body and the existing `finally`.
+   - `App.tsx` (I3): render `<CliGate cli={cli} onRetry={retry} />` once, above the screen content, inside a wrapper `<div className="main">…</div>` that is the second child of `.screen` (after `Sidebar`); the wrapper contains `<CliGate … />` and then `content`. Remove `CliGate` from the new-lesson block, which becomes `<div className="content"><NewLessonForm … /></div>`.
+   - `app.css`:
+     - change the `.screen` rule's `grid-template-columns` to `var(--sidebar-width) minmax(0, 1fr)` and delete the `.screen.has-plan` rule if present;
+     - add:
+       ```css
+       .main { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: auto minmax(0, 1fr); min-height: 0; }
+       .main > .banner { grid-column: 1 / -1; width: auto; margin: var(--space-4) var(--space-5) 0; }
+       .main > .content, .main > .plan { grid-row: 2; }
+       .overlay { z-index: 1000; }
+       .options { display: flex; flex-direction: column; gap: var(--space-2); }
+       .content .markdown > * + * { margin-top: var(--space-3); }
+       .markdown ul, .markdown ol { padding-left: var(--space-5); }
+       .btn:hover:not([disabled]) { background: var(--color-surface-2); }
+       .btn.is-primary:hover:not([disabled]) { background: var(--color-accent); filter: brightness(0.92); }
+       .option:hover { background: var(--color-surface-2); }
+       .lesson-row:hover { background: var(--color-surface); }
+       .icon-btn:hover { color: var(--color-text); }
+       .field input:focus, .field textarea:focus { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+       .lesson-row .icon-btn { visibility: hidden; }
+       .lesson-row:hover .icon-btn, .lesson-row:focus-within .icon-btn { visibility: visible; }
+       ```
+       (the existing `.overlay` rule keeps its other declarations; merge the `z-index` into it instead of duplicating the selector if you prefer: the test only needs a `.overlay` block containing `z-index`).
+4. Run tests: `Tests  260 passed (260)`. Run `npm run format && npm run lint && npm run typecheck && npm run build`: exit 0. Paste.
+5. Tick T37b, then stage by name (the files listed above plus the PLAN.md tick; check `git status --short` first, do not commit `out/`) and commit `fix: stuck thinking bar, dead lessons, codex banner everywhere, spacing and hover`.
+
+**Stop and report instead of continuing if**
+- step 2 shows any failure other than the eight new tests,
+- an existing test breaks in step 4 because of the `App` layout change and the fix would need a file not listed,
+- tests fail after two attempts.
+
 ### GATE C - A full lesson in the window
 
 The builder stops here. Nothing continues until the owner says so.
 
-**Run**: `npm test` -> expect `Tests  252 passed (252)`; `npm run lint && npm run typecheck && npm run build` -> exit 0
+**Run**: `npm test` -> expect `Tests  260 passed (260)`; `npm run lint && npm run typecheck && npm run build` -> exit 0
 **Look at**: `git diff <gate-B-commit>..HEAD --stat` -> only `src/main/ipc.ts`, `src/main/index.ts`, `src/preload/`, `src/renderer/`, `tests/`, `README.md`, `PLAN.md`
 **Fresh review**: Fable reviews T20-T37 against SPEC, ARCHITECTURE, UI and `ui-template.html` (the reviewer prompt from `references/execution.md`, plus: compare each built screen's markup and classes to the template).
 **Try it yourself** (this is the first time the app does anything):

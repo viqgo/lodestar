@@ -98,6 +98,7 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 | Plan panel | "Lesson map" |
 | Thinking | "Thinking…", "Stop" |
 | Stopped | "Stopped." + "Retry" |
+| Codex banner | shown above every screen (not only the new lesson screen) while Codex is missing, so Retry is always reachable (D34) |
 | Interrupted lesson | "The last reply did not arrive." with button "Retry" (info banner; added by D31) |
 | Errors | "The model gave an unusable reply. Press Retry."; "Codex failed: <detail>"; "This lesson no longer exists."; "Could not save. Check free disk space."; button "Retry" |
 | Lesson summary | the summary text is shown as normal prose above a block that holds the label "Lesson complete" and (D31);  "<n> items added to your knowledge list." and, when any step is shaky, " <m> step is still shaky." / " <m> steps are still shaky." |
