@@ -37,7 +37,7 @@ Lessons are JSON files under the app's data folder. On macOS this is `~/Library/
 
 If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PATH` or `LEARN_GEMINI_PATH` to its path. A variable set in a terminal reaches the app only when the app is started from that terminal, not from Finder.
 
-`settings.json` (voice settings) and `deepgram.key` (the encrypted key) live in the same folder.
+`settings.json` holds the voice settings, the theme, the teaching method, the tutor instructions and the model and effort of each CLI; an older `profile.json` is read once and left where it is. `deepgram.key` (the encrypted key) lives in the same folder.
 
 `reviews.json` (boxes, due dates and flashcard questions) lives in the same folder.
 
@@ -91,6 +91,16 @@ Side questions: the box "Ask a side question" under a lesson; the answer is save
 
 What goes where: flashcard and practice calls send only the item's text (and your tutor instructions) to the chosen CLI, with no file access and no web search; a side question is sent with the lesson, like any lesson call.
 
+## Customisation
+
+Everything here is under Profile.
+
+Theme: Dark, Light or System. It changes at once. System follows the Mac, also while the app is open.
+
+Models: for each CLI you can set a model name and an effort. They are set once and used for every call of that CLI from the next reply on. An empty model means the CLI's own default. The name is passed to the CLI as it is (`-m` for Codex and Gemini, `--model` for Claude Code), so use a name that CLI accepts, for example `sonnet` for Claude Code. Efforts are low, medium, high for Codex and low, medium, high, xhigh, max for Claude Code. Gemini has none. A name the CLI refuses shows as "<name> failed: <detail>" in the lesson. The lesson header shows what is in use, for example "Tutor: Claude Code · sonnet · medium".
+
+Teaching method: the four paragraphs that tell the tutor how to probe, plan, teach and repair can be rewritten (up to 6,000 characters). "Reset to default" brings the original back. The reply format and the lesson rules cannot be changed.
+
 ## Development
 
 - `npm test` runs the tests.
@@ -103,7 +113,7 @@ The blueprint for the app lives in `docs/blueprint/`.
 
 ## Status
 
-Version 0.2.0. Lessons with Codex, Claude Code or Gemini; material folders, files and web search; subjects; voice; review, practice and the knowledge graph; an unsigned macOS build.
+Version 0.2.0. Lessons with Codex, Claude Code or Gemini; material folders, files and web search; subjects; voice; review, practice and the knowledge graph; themes, an editable teaching method and a model and effort per CLI; an unsigned macOS build.
 
 ## License
 

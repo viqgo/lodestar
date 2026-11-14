@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { learnedToSave } from "../../../core/engine";
+import { cliChoice } from "../../../core/settings";
 import { CLI_INFO, isCliId } from "../../../shared/clis";
-import type { Action, CliId, CliStatus } from "../../../shared/types";
+import type { Action, CliId, CliStatus, Settings } from "../../../shared/types";
 import { useCall } from "../lib/useCall";
 import { useLesson } from "../lib/useLesson";
 import { buildItems } from "../lib/view";
@@ -48,6 +49,21 @@ export function LessonScreen(props: {
   const [ask, setAsk] = useState<CliId | null>(null);
   const [switchError, setSwitchError] = useState<string | null>(null);
   const [materialError, setMaterialError] = useState<string | null>(null);
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const choice = cliChoice(settings, cli);
+
+  useEffect(() => {
+    let live = true;
+    window.api
+      .getSettings()
+      .then((s) => {
+        if (live) setSettings(s);
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -170,7 +186,12 @@ export function LessonScreen(props: {
             <h3>{session.topic}</h3>
             <p className="note">Goal: {session.goal}</p>
             <div className="row">
-              <span className="note">Tutor: {CLI_INFO[cli].label}</span>
+              <span className="note">
+                {"Tutor: " +
+                  [CLI_INFO[cli].label, choice.model, choice.effort]
+                    .filter((x) => x !== null)
+                    .join(" · ")}
+              </span>
               {!isDone && (
                 <button
                   className="btn"

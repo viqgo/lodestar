@@ -18,6 +18,7 @@ import {
   toTeach,
 } from "../helpers/fixtures";
 import { startMic } from "../../src/renderer/src/lib/mic";
+import { mergeSettings } from "../../src/core/settings";
 
 vi.mock("../../src/renderer/src/components/PlanPanel", () => ({
   PlanPanel: () => <div data-testid="plan" />,
@@ -723,5 +724,90 @@ describe("LessonScreen call", () => {
     expect(screen.queryByRole("heading")).not.toBeInTheDocument();
     expect(screen.queryByText("Thinking…")).not.toBeInTheDocument();
     expect(screen.queryByRole("radio")).not.toBeInTheDocument();
+  });
+});
+
+describe("LessonScreen header", () => {
+  const withClis = (clis: Record<string, { model: string; effort: string }>) => {
+    const base = mergeSettings(null);
+    return { ...base, clis: { ...base.clis, ...clis } };
+  };
+
+  it("header_shows_model_and_effort", async () => {
+    const settings = withClis({
+      claude: { model: "sonnet", effort: "medium" },
+      codex: { model: "", effort: "low" },
+    });
+    installApi({
+      getSession: vi.fn(async () => ({ ...S([act(A.probe())]), cli: "claude" as const })),
+      getSettings: vi.fn(async () => settings),
+    });
+    const first = render(
+      <LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />,
+    );
+    expect(await screen.findByText("Tutor: Claude Code · sonnet · medium")).toBeInTheDocument();
+    first.unmount();
+
+    installApi({
+      getSession: vi.fn(async () => S([act(A.probe())])),
+      getSettings: vi.fn(async () => settings),
+    });
+    const second = render(
+      <LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />,
+    );
+    expect(await screen.findByText("Tutor: Codex · low")).toBeInTheDocument();
+    second.unmount();
+
+    installApi({
+      getSession: vi.fn(async () => S([act(A.probe())])),
+      getSettings: vi.fn(async () => withClis({ codex: { model: "gpt-x", effort: "" } })),
+    });
+    const third = render(
+      <LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />,
+    );
+    expect(await screen.findByText("Tutor: Codex · gpt-x")).toBeInTheDocument();
+    third.unmount();
+
+    const { emitUpdated } = installApi({
+      getSession: vi.fn(async () => S([act(A.probe())])),
+      getSettings: vi.fn(async () => settings),
+      setSessionCli: vi.fn(async () => ({ ok: true, session: S([act(A.probe())]) })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    expect(await screen.findByText("Tutor: Codex · low")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Change tutor" }));
+    await userEvent.click(screen.getByRole("radio", { name: "Claude Code" }));
+    await userEvent.click(screen.getByRole("button", { name: "Switch" }));
+    rtlAct(() => emitUpdated({ ...S([act(A.probe())]), cli: "claude" as const }));
+    expect(screen.getByText("Tutor: Claude Code · sonnet · medium")).toBeInTheDocument();
+  });
+
+  it("the header shows the tutor alone when nothing is set", async () => {
+    installApi({ getSession: vi.fn(async () => S([act(A.probe())])) });
+    const first = render(
+      <LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />,
+    );
+    expect(await screen.findByText("Tutor: Codex")).toBeInTheDocument();
+    first.unmount();
+
+    installApi({
+      getSession: vi.fn(async () => S([act(A.probe())])),
+      getSettings: vi.fn(async () => {
+        throw new Error("no");
+      }),
+    });
+    const second = render(
+      <LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />,
+    );
+    expect(await screen.findByText("Tutor: Codex")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    second.unmount();
+
+    installApi({
+      getSession: vi.fn(async () => ({ ...S([act(A.probe())]), cli: "gemini" as const })),
+      getSettings: vi.fn(async () => withClis({ gemini: { model: "g", effort: "high" } })),
+    });
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    expect(await screen.findByText("Tutor: Gemini · g")).toBeInTheDocument();
   });
 });
