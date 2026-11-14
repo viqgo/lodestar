@@ -62,7 +62,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T38 Tell text from questions (CR-3)
 - [x] T39 The teach step: rules, schema, prompt
 - [x] T40 Reading and Continue in the window
-- [ ] T41 Evals for the reading
+- [x] T41 Evals for the reading
 - [ ] GATE D A lesson with readings
 
 Conventions used in every task:

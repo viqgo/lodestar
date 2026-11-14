@@ -6,7 +6,7 @@ import { deriveState } from "../src/core/engine";
 import { createCodexAdapter } from "../src/main/cli/codex";
 import { modelStep } from "../src/main/turn";
 import type { Action, Question, SessionEvent } from "../src/shared/types";
-import { act, ans, pick, say, session } from "../tests/helpers/fixtures";
+import { act, ans, cont, pick, say, session } from "../tests/helpers/fixtures";
 
 describe("evals", () => {
   it("the loop holds together against real Codex", async () => {
@@ -60,6 +60,14 @@ describe("evals", () => {
       options: ["6", "3", "4"],
       correctIndex: 1,
     };
+    const teach = (id: string) =>
+      act({
+        type: "teach",
+        nodeId: id,
+        verdict: null,
+        feedback: null,
+        markdown: "The slope between two points is the change in f divided by the change in x.",
+      });
     const explain = (id: string) =>
       act({
         type: "explain",
@@ -72,6 +80,8 @@ describe("evals", () => {
     const node = (id: string, choice: number) => [
       predict(id),
       say("It settles on one value"),
+      teach(id),
+      cont(),
       explain(id),
       pick(choice),
     ];
@@ -99,6 +109,20 @@ describe("evals", () => {
       {
         n: 5,
         events: [...probeRound, done, plan, predict("avg-rate"), say("It settles on one value")],
+        type: "teach",
+        extra: (a) => a.type === "teach" && a.nodeId === "avg-rate" && a.markdown.length >= 1500,
+      },
+      {
+        n: 55,
+        events: [
+          ...probeRound,
+          done,
+          plan,
+          predict("avg-rate"),
+          say("It settles on one value"),
+          teach("avg-rate"),
+          cont(),
+        ],
         type: "explain",
         extra: (a) => a.type === "explain" && a.nodeId === "avg-rate",
       },
@@ -140,14 +164,18 @@ describe("evals", () => {
         if (seconds >= 60) slow = true;
       }
       const what = r.ok ? r.action.type : r.error.message;
+      const readingLength = r.ok && r.action.type === "teach" ? r.action.markdown.length : null;
+      const label = c.n === 55 ? "5b" : String(c.n);
       process.stdout.write(
-        `E${c.n} ${passed ? "pass" : "FAIL"} calls=${calls} seconds=${seconds.toFixed(1)} inputTokens=${tokens ?? "?"} type=${what}\n`,
+        `E${label} ${passed ? "pass" : "FAIL"} calls=${calls} seconds=${seconds.toFixed(1)} inputTokens=${tokens ?? "?"} type=${what}${readingLength === null ? "" : ` readingLength=${readingLength}`}\n`,
       );
     }
-    process.stdout.write(`EVAL SCORE first-try ${firstTry}/7, with-retry ${withRetry}/7\n`);
+    process.stdout.write(
+      `EVAL SCORE first-try ${firstTry}/${cases.length}, with-retry ${withRetry}/${cases.length}\n`,
+    );
 
-    expect(firstTry).toBeGreaterThanOrEqual(6);
-    expect(withRetry).toBe(7);
+    expect(firstTry).toBeGreaterThanOrEqual(cases.length - 1);
+    expect(withRetry).toBe(cases.length);
     expect(slow).toBe(false);
     if (e1Tokens !== null) expect(e1Tokens).toBeLessThan(30000);
   });
