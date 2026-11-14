@@ -2388,6 +2388,8 @@ What the owner can see at the end: a Profile screen where their instructions are
 - Spike result (2026-11-14): `codex exec --json` sends NO partial text: only `thread.started`, `turn.started`, then one `item.completed` with the whole reply, then `turn.completed`. A 400-word reading took 43.8 s at the default reasoning effort (1444 of 1949 output tokens were reasoning) and 19.6 s with `-c model_reasoning_effort=low` (one sample each). Claude Code has `--output-format stream-json --include-partial-messages`; Gemini CLI is unchecked. So real streaming is possible only with the Claude/Gemini adapters.
 - Faster feel: streaming of the reply. First a spike: does `codex exec --json` emit partial text of the final message, or only the whole message at the end? Other ideas: write the bridge and check while the learner reads (the Continue answer carries no information).
 
+- Owner-approved scope after milestone 2 (2026-11-14, "I like all 4"; planning to be done by Fable, not yet started): (1) packaging and an open-source release, deferred review findings; (2) practice mode, flashcards, knowledge graph, side questions; (3) more input: PDFs and images, dictation, web search, and a read-only project folder the model may read but never change; (4) model choice, themes, editing the base prompt. Streaming is dropped for now (spike result above).
+
 ## Milestone 2 - Gemini CLI and Claude Code (outline)
 Planned after Gate C. Each adapter implements `CliAdapter` (`detect`, `run`) and returns the same JSON reply.
 - Verify each CLI's non-interactive and structured-output flags by running it (owner installs Gemini CLI first).
