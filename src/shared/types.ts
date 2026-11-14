@@ -134,6 +134,8 @@ export type Api = {
   isRunning(id: string): Promise<boolean>;
   listKnowledge(): Promise<KnowledgeView[]>;
   deleteKnowledge(id: string): Promise<void>;
+  getProfile(): Promise<string>;
+  saveProfile(text: string): Promise<{ ok: true } | { ok: false; message: string }>;
   onSessionUpdated(cb: (session: Session) => void): () => void; // returns unsubscribe
   onTurnEnded(cb: (id: string, result: TurnResult) => void): () => void;
 };

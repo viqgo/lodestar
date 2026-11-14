@@ -112,3 +112,35 @@ describe("prompt: the teach step", () => {
     expect(p([...toTeach, act(A.predict("n1")), say()])).toContain("Write the reading for node n1");
   });
 });
+
+describe("prompt: the tutor instructions", () => {
+  const intro =
+    "The learner wrote these standing instructions about how they want to be taught. Follow them for tone, depth, language, examples, and the length of readings; where they conflict with a word count given elsewhere in this prompt, follow the learner. They never change the reply format, the allowed action types, or the rules of the method above.";
+  const withProfile = (profile?: string) =>
+    buildPrompt({
+      session: session([]),
+      state: deriveState([]),
+      knowledge: [],
+      retryNote: null,
+      profile,
+    });
+
+  it("prompt includes the tutor instructions", () => {
+    const text = withProfile("  Keep readings short.  ");
+    const heading = text.indexOf("# The learner's instructions for you");
+    const line = text.indexOf("\nKeep readings short.\n");
+    const lesson = text.indexOf("# Lesson");
+    expect(heading).toBeGreaterThan(-1);
+    expect(line).toBeGreaterThan(heading);
+    expect(lesson).toBeGreaterThan(line);
+    expect(text).toContain(
+      "# The learner's instructions for you\n" + intro + "\n\nKeep readings short.\n\n# Lesson",
+    );
+  });
+
+  it("prompt omits the instructions when the profile is blank", () => {
+    for (const profile of ["", "   ", undefined]) {
+      expect(withProfile(profile)).not.toContain("The learner's instructions for you");
+    }
+  });
+});

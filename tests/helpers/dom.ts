@@ -26,6 +26,8 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     isRunning: vi.fn(async () => false),
     listKnowledge: vi.fn(async () => []),
     deleteKnowledge: vi.fn(async () => undefined),
+    getProfile: vi.fn(async () => ""),
+    saveProfile: vi.fn(async () => ({ ok: true })),
     onSessionUpdated: vi.fn((cb: (s: Session) => void) => {
       updated.add(cb);
       return () => updated.delete(cb);

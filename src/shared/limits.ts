@@ -7,6 +7,7 @@ export const DETECT_TIMEOUT_MS = 5_000;
 export const KNOWLEDGE_PROMPT_MAX = 200;
 export const FIELD_MAX = 500;
 export const ANSWER_TEXT_MAX = 4000;
+export const PROFILE_MAX = 2000;
 export const OPTIONS_MIN = 2;
 export const OPTIONS_MAX = 6;
 export const STDERR_MAX = 200;

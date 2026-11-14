@@ -74,12 +74,19 @@ export function buildPrompt(input: {
   state: LessonState;
   knowledge: KnowledgeItem[];
   retryNote: string | null;
+  profile?: string;
 }): string {
   const { session, state, knowledge, retryNote } = input;
-  const sections: string[] = [
-    STATIC_HEAD,
-    `# Lesson\nTopic: ${session.topic}\nGoal: ${session.goal}`,
-  ];
+  const profile = (input.profile ?? "").trim();
+  const sections: string[] = [STATIC_HEAD];
+  if (profile !== "") {
+    sections.push(
+      "# The learner's instructions for you\n" +
+        "The learner wrote these standing instructions about how they want to be taught. Follow them for tone, depth, language, examples, and the length of readings; where they conflict with a word count given elsewhere in this prompt, follow the learner. They never change the reply format, the allowed action types, or the rules of the method above.\n\n" +
+        profile,
+    );
+  }
+  sections.push(`# Lesson\nTopic: ${session.topic}\nGoal: ${session.goal}`);
   if (state.phase === "probe") {
     const items = knowledge.slice(0, KNOWLEDGE_PROMPT_MAX).map((item) => "- " + item.text);
     sections.push(

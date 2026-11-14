@@ -7,6 +7,7 @@ import {
   learnedToSave,
   moveNotes,
   validateNewLesson,
+  validateProfile,
 } from "../../src/core/engine";
 import type { Action, Answer, SessionEvent } from "../../src/shared/types";
 import {
@@ -449,5 +450,13 @@ describe("deriveState and rules: the teach step", () => {
     expect(moveNotes(st(act(A.predict("n1")), say()))).toEqual([
       "Write the reading for node n1: the whole idea derived step by step from what the learner holds, with at least one worked example, 500 to 1000 words. Do not ask a question yet.",
     ]);
+  });
+});
+
+describe("validateProfile", () => {
+  it("validateProfile accepts blank and 2000 characters, rejects 2001", () => {
+    expect(validateProfile("")).toBeNull();
+    expect(validateProfile("a".repeat(2000))).toBeNull();
+    expect(validateProfile("a".repeat(2001))).toBe("Keep it under 2000 characters.");
   });
 });

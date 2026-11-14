@@ -14,6 +14,8 @@ const api: Api = {
   isRunning: (id) => ipcRenderer.invoke("lesson:running", id) as Promise<boolean>,
   listKnowledge: () => ipcRenderer.invoke("knowledge:list") as ReturnType<Api["listKnowledge"]>,
   deleteKnowledge: (id) => ipcRenderer.invoke("knowledge:delete", id) as Promise<void>,
+  getProfile: () => ipcRenderer.invoke("profile:get") as Promise<string>,
+  saveProfile: (text) => ipcRenderer.invoke("profile:save", text) as ReturnType<Api["saveProfile"]>,
   onSessionUpdated: (cb) => {
     const handler = (_event: unknown, session: Session): void => {
       cb(session);

@@ -47,6 +47,8 @@ describe("preload", () => {
         "isRunning",
         "listKnowledge",
         "deleteKnowledge",
+        "getProfile",
+        "saveProfile",
         "onSessionUpdated",
         "onTurnEnded",
       ].sort(),
@@ -68,6 +70,8 @@ describe("preload", () => {
       await api.isRunning("a"),
       await api.listKnowledge(),
       await api.deleteKnowledge("k"),
+      await api.getProfile(),
+      await api.saveProfile("p"),
     ];
     expect(invoke.mock.calls).toEqual([
       ["cli:detect"],
@@ -81,8 +85,10 @@ describe("preload", () => {
       ["lesson:running", "a"],
       ["knowledge:list"],
       ["knowledge:delete", "k"],
+      ["profile:get"],
+      ["profile:save", "p"],
     ]);
-    expect(results).toEqual(Array(11).fill("R"));
+    expect(results).toEqual(Array(13).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

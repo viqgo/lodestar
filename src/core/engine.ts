@@ -1,4 +1,4 @@
-import { ANSWER_TEXT_MAX, FIELD_MAX, MAX_FAILS, MAX_PROBE } from "../shared/limits";
+import { ANSWER_TEXT_MAX, FIELD_MAX, MAX_FAILS, MAX_PROBE, PROFILE_MAX } from "../shared/limits";
 import type {
   Action,
   ActionType,
@@ -12,6 +12,10 @@ import { allNodesSettled, eligibleNodes, validatePlan } from "./plan";
 export function validateNewLesson(topic: string, goal: string): string | null {
   const ok = (s: string) => s.trim().length >= 1 && s.trim().length <= FIELD_MAX;
   return ok(topic) && ok(goal) ? null : "Enter a topic and a goal.";
+}
+
+export function validateProfile(text: string): string | null {
+  return text.length <= PROFILE_MAX ? null : "Keep it under 2000 characters.";
 }
 
 function applyVerdict(state: LessonState, verdict: Verdict): LessonState {

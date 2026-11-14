@@ -64,7 +64,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T40 Reading and Continue in the window
 - [x] T41 Evals for the reading
 - [x] GATE D A lesson with readings
-- [ ] T42 Profile rules and prompt section (CR-4)
+- [x] T42 Profile rules and prompt section (CR-4)
 - [ ] T43 Save, load and use the profile
 - [ ] T44 The Profile screen
 - [ ] GATE E Tutor profile in the window
