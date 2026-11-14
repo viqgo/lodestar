@@ -598,3 +598,6 @@ The prompt is unchanged for Codex and Claude Code. For Gemini, `geminiPrompt` ap
 Reply with exactly one JSON object and nothing else: no code fence, no text before or after it. It must match this JSON Schema:
 {JSON.stringify(schema)}
 ```
+
+### CR-5 changes (D49)
+`detectVersion` runs with the same extended `PATH` and a neutral cwd (`tmpRoot`) as `runProcess` (helper `childEnv`). `runProcess` resolves before it removes the temp folder, ignores a failing removal, and turns a failing `mkdirSync`/`prepare` into `{ kind: "exit", code: 1, stdout: "", stderr: "could not prepare the working folder" }`. Gemini output is read by trying every `{` in turn (`findJson`) for both stdout (`response`) and stderr (`error.message`). `sessions:setCli` checks `isRunning` again after reading the session. `LessonScreen` treats an unknown `session.cli` as `codex`, blocks the card and "Change tutor" while the CLI check is running, and guards and catches the switch call.

@@ -79,6 +79,8 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T53 Pick a tutor for a new lesson
 - [x] T54 The tutor in a lesson, and switching
 - [x] T55 Clean up, document, and check Claude Code for real
+- [ ] T55b Review fixes in the main process (CR-5)
+- [ ] T55c Review fixes in the window (CR-5)
 - [ ] GATE F Three CLIs
 - [ ] OWNER TASK Gemini live run
 
@@ -2820,11 +2822,85 @@ Arguments, in this order: `["-p", "--output-format", "json", "--json-schema", JS
 
 **Stop and report if** step 4 fails twice. If the eval in step 5 fails, still do step 6 and put the full eval output in the report with STATUS: DEVIATED.
 
+### T55b - Review fixes in the main process (CR-5)
+
+**Implements**: change request CR-5 (decision D49) · Fable's Gate F review, findings 2, 3, 4, 7 and the main-process part of 8 · B23, B30, B32, B34
+**Depends on**: T55
+
+**Files**
+- Modify: `src/main/cli/process.ts`, `src/main/cli/gemini.ts`, `src/main/ipc.ts`, `tests/main/process.test.ts`, `tests/main/gemini.test.ts`, `tests/main/claude.test.ts`, `tests/main/ipc.test.ts`
+- Do NOT touch any other file. No new dependencies, exports or files.
+
+**Context (read `process.ts`, `gemini.ts` and the `sessions:setCli` handler in `ipc.ts` first)**
+- Finding 2: `detectVersion` spawns with `{ shell: false }` only; `runProcess` also gets an extended `PATH` and a temp cwd. From the Dock/Finder, `PATH` is `/usr/bin:/bin` and `#!/usr/bin/env node` CLIs are reported "not installed".
+- Finding 3: in `runProcess`, `finish` runs `rmSync` before `resolve`; if it throws, the promise never resolves and the lesson stays "busy". If `mkdirSync` or `prepare` throws, `root` is leaked.
+- Finding 4: `sessions:setCli` checks `isRunning` before `await store.readSession`; a turn can start in between.
+- Finding 7: Gemini's stdout and stderr are parsed with the first `{` only.
+
+**Steps**
+1. Add 8 tests (names exactly; existing tests keep passing):
+
+   | Test | File | Expect |
+   |------|------|--------|
+   | detectVersion runs with the extended PATH and a neutral folder | process.test.ts | `env: { PATH: "/bin" }`, `tmpRoot` a real temp dir: the spawn call's `opts.env.PATH` starts with `/bin:` and contains `/opt/homebrew/bin`; `opts.cwd` equals `tmpRoot`; `opts.shell` is `false` |
+   | runProcess resolves even when cleanup fails | process.test.ts | `fs` dependency `{ ...fs, rmSync: () => { throw new Error("EBUSY"); } }`, plan `{ stdout: "x" }` -> resolves `{ kind: "exit", ... }` (a plain `await`, no timeout trick) |
+   | runProcess cleans up when preparing fails | process.test.ts | `prepare` throws -> resolves `{ kind: "exit", code: 1, stdout: "", stderr: "could not prepare the working folder" }`, no spawn call, and `tmpRoot` is empty |
+   | temp dir is removed after a failed exit and a spawn error | process.test.ts | plan `{ code: 1, stderr: "x" }` and plan `{ missing: true }`: after each, `tmpRoot` is empty |
+   | geminiErrorMessage skips earlier braces | gemini.test.ts | stderr `warn {not json}\n{"session_id":"s","error":{"type":"Error","message":"Please set an Auth method","code":41}}\n` -> `"Please set an Auth method"` |
+   | gemini adapter reads the response when stdout has extra lines | gemini.test.ts | stdout `Loaded {config}\n{"session_id":"s","response":"{\"action\":1}"}\nbye\n`, code 0 -> `{ ok: true, text: "{\"action\":1}", usage: null }` |
+   | claude adapter drops both Claude Code env markers and the others keep them | claude.test.ts | env with `CLAUDECODE: "1"` and `CLAUDE_CODE_ENTRYPOINT: "cli"`: Claude spawn env has neither; a Codex run and a Gemini run (build their adapters with the same env and `fakeSpawn`) keep both |
+   | switch_tutor_refused_if_a_turn_starts_while_reading | ipc.test.ts | `turns.isRunning` returns `false` on its first call and `true` on its second: `sessions:setCli` -> `{ ok: false, message: "A reply is already on the way." }` and the stored session still has its old `cli` |
+2. Run tests. Paste the failing run. At least 5 of the 8 must fail; for any that pass before the fix, say why in the report (for example the removal-after-failure test may already pass). Fix nothing else.
+3. Fix the code:
+   - `process.ts`: add a local helper `childEnv(deps, drop: string[] = []): NodeJS.ProcessEnv` that returns `{ ...deps.env, PATH: [deps.env.PATH ?? "", ...extraPathDirs(deps.home)].filter(Boolean).join(":") }` without the names in `drop`; use it in `runProcess` (replacing its inline env code) and in `detectVersion`, whose spawn options become `{ shell: false, cwd: deps.tmpRoot, env: childEnv(deps) }`.
+   - `process.ts` `runProcess`: wrap `mkdirSync(work)` and `spec.prepare?.(dirs)` in `try { ... } catch { removeRoot(); return Promise.resolve({ kind: "exit", code: 1, stdout: "", stderr: "could not prepare the working folder" }); }`, where `removeRoot` is a local `() => { try { deps.fs.rmSync(root, { recursive: true, force: true }); } catch { /* leave it */ } }`. In `finish`, set `settled`, clear the timer, remove the abort listener, call `resolve(result)` first, then `removeRoot()` (all synchronous, so the folder is gone before the awaiting code continues).
+   - `gemini.ts`: add (not exported) `function findJson<T>(text: string, pick: (o: Record<string, unknown>) => T | undefined): T | undefined` that, for every index `i` of `"{"` in `text` in order, takes `extractJsonObject(text.slice(i))`, tries `JSON.parse`, and if the result is a non-null object and `pick` returns a value other than `undefined`, returns it. Use it in `geminiErrorMessage` (`pick`: `error.message` when a string, cut to `STDERR_MAX`; if nothing is found -> `lastStderrLine(stderr)`) and in `run` (`pick`: `response` when a string; nothing found -> failed `"Gemini returned no message"`; keep `extractJsonObject(response) ?? response` for the text).
+   - `ipc.ts` `sessions:setCli`: after `const session = await store.readSession(id);` and the not-found check, add `if (turns.isRunning(id)) return { ok: false as const, message: "A reply is already on the way." };`. Keep the check before the read as well.
+4. Run `npm test` -> `Tests  362 passed (362)`; `npm run format && npm run lint && npm run typecheck && npm run build` -> exit 0. Paste.
+5. Tick T55b, stage by name, commit `fix: process cleanup, detection environment, gemini parsing, switch race`.
+
+**Stop and report if** an existing test breaks and the fix would need an unlisted file, or tests fail after two attempts.
+
+### T55c - Review fixes in the window (CR-5)
+
+**Implements**: CR-5 (D49) · Fable's Gate F review, findings 1, 5, 6 and the window part of 8 · B27, B28, B34
+**Depends on**: T55b
+
+**Files**
+- Modify: `src/renderer/src/components/LessonScreen.tsx`, `tests/renderer/LessonScreen.test.tsx`
+- Do NOT touch any other file. No new CSS.
+
+**Context (read `LessonScreen.tsx` and its test first)**
+- Finding 1: `CLI_INFO[session.cli].label` throws when `session.cli` is missing or unknown; main falls back to Codex.
+- Finding 5: with `statuses === null` (check running) `missing` is false, so the card is usable for a missing CLI and "Change tutor" shows every CLI as "not installed".
+- Finding 6: `confirmSwitch` has no double-click guard and no `catch`.
+
+**Steps**
+1. Add 4 tests and strengthen 2 existing ones:
+
+   | Test | Expect |
+   |------|--------|
+   | a lesson with an unknown tutor opens as Codex | a session whose `cli` is `"mystery"` (cast) and one with `cli` removed: both render `Tutor: Codex` and no crash |
+   | the card stays disabled while the CLI check is running | `statuses={null}`, pending question: `Submit` is disabled, no `not found` banner, and `Change tutor` is disabled |
+   | Switch ignores a double click | choose another tutor, `Switch` clicked twice quickly with a `setSessionCli` that resolves after a tick: called exactly once |
+   | a refused or failed switch says so | `setSessionCli` resolves `{ ok: false, message: "A reply is already on the way." }` -> that text is shown and the header is unchanged; a second case where it rejects -> `Could not save. Check free disk space.` is shown and the dialog is closed |
+   - Strengthen `missing_cli_blocks_lesson_with_banner`: use a session whose last event is an answer (so the engine awaits the model) and assert both that `The last reply did not arrive.` is absent and that exactly one `Retry` button is shown.
+   - Strengthen `switch_tutor_asks_then_stores`: after `Switch`, call `emitUpdated` with the same session but `cli: "claude"` and assert the header reads `Tutor: Claude Code`.
+2. Run tests. Paste the failing run (the four new tests fail; the strengthened tests may fail or pass: say which).
+3. Fix `LessonScreen.tsx`:
+   - after `session` is known: `const cli: CliId = isCliId(session.cli) ? session.cli : "codex";` (import `isCliId` from `../../../shared/clis`); use `cli` instead of `session.cli` in the header text, in `missing`, and as the picker `value` and in the `onChange` comparison;
+   - `const blocked = session !== null && (props.statuses === null || missing)`; pass `disabled={busy || blocked}` to the question items; the missing-CLI banner shows only when `missing` (statuses known); `Change tutor` is `disabled={busy || props.statuses === null}`;
+   - `confirmSwitch`: a `useRef(false)` guard set on entry (return if already set) and cleared in `finally`; wrap the `setSessionCli` call in `try/catch`; the catch sets `setSwitchError("Could not save. Check free disk space.")`, `setAsk(null)`.
+4. Run `npm test` -> `Tests  366 passed (366)`; format, lint, typecheck, build exit 0. Paste.
+5. Tick T55c, stage by name, commit `fix: tutor edge cases in the lesson screen`.
+
+**Stop and report if** an existing App or LessonScreen test breaks and the fix would need an unlisted file.
+
 ### GATE F - Three CLIs
 
 The builder stops here.
 
-**Run**: `npm test` -> `Tests  354 passed (354)`; lint, typecheck, build exit 0; the Claude Code eval output from T55.
+**Run**: `npm test` -> `Tests  366 passed (366)`; lint, typecheck, build exit 0; the Claude Code eval output from T55.
 **Look at**: `git diff <T44 commit>..HEAD --stat` -> only `src/shared`, `src/main`, `src/preload`, `src/renderer`, `tests`, `evals`, `README.md`, `PLAN.md`.
 **Fresh review**: Fable reviews T45-T55 against SPEC (B23-B34), ARCHITECTURE "Milestone 2", UI.md and the template.
 **Try it yourself**:
