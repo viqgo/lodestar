@@ -16,3 +16,14 @@ it("styles give real hover, focus and layering rules", () => {
   expect(/\.options\s*\{/.test(css)).toBe(true);
   expect(/\.lesson-row:hover \.icon-btn/.test(css)).toBe(true);
 });
+
+it("styles mark questions apart from reading text", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
+  expect(/\.card\s*\{[^}]*border-left: 3px solid var\(--color-accent\)/.test(css)).toBe(true);
+  expect(
+    /\.card \.field input,\s*\.card \.field textarea\s*\{[^}]*background: var\(--color-bg\)/.test(
+      css,
+    ),
+  ).toBe(true);
+  expect(/\.reading\s*\{/.test(css)).toBe(true);
+});

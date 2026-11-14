@@ -24,6 +24,30 @@ function renderItem(item: ChatItem, over: Record<string, unknown> = {}) {
 }
 
 describe("ChatItemView", () => {
+  it("ChatItemView wraps tutor text as reading", () => {
+    const { container } = render(
+      <ChatItemView
+        item={{ kind: "text", key: "k", markdown: "hello" }}
+        sessionId={SESSION_ID}
+        disabled={false}
+        onSubmit={vi.fn()}
+      />,
+    );
+    expect(screen.getByText("hello").closest(".reading")).not.toBeNull();
+    expect(container.querySelector(".reading")).not.toBeNull();
+    const q = renderItem({
+      kind: "question",
+      key: "q",
+      eventIndex: 1,
+      purpose: "predict",
+      question: choiceQ,
+      answer: null,
+      grade: null,
+    } as ChatItem);
+    expect(q).toBeDefined();
+    expect(screen.getByText(choiceQ.prompt).closest(".reading")).toBeNull();
+  });
+
   it("a text item renders its markdown", () => {
     const { container } = render(
       <ChatItemView

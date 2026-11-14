@@ -13,7 +13,11 @@ type Props = {
 export function ChatItemView({ item, sessionId, disabled, onSubmit }: Props) {
   switch (item.kind) {
     case "text":
-      return <MarkdownView markdown={item.markdown} />;
+      return (
+        <div className="reading">
+          <MarkdownView markdown={item.markdown} />
+        </div>
+      );
     case "probe_summary":
       return (
         <div className="summary">
