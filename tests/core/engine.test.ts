@@ -267,6 +267,27 @@ describe("checkAnswer, learnedToSave and moveNotes", () => {
     expect(checkAnswer(state, sayAnswer("ok"))).toBeNull();
   });
 
+  it("answer_attach_allows_empty_text", () => {
+    const state = st(act(A.predict("n1")));
+    const withFiles = (text: string | null, n: number): Answer => ({
+      ...sayAnswer("x"),
+      text,
+      attachments: Array.from({ length: n }, (_, i) => `a${i + 1}-f.pdf`),
+    });
+    expect(checkAnswer(state, withFiles(null, 1))).toBeNull();
+    expect(checkAnswer(state, withFiles("  ", 2))).toBeNull();
+    expect(checkAnswer(state, withFiles(null, 0))).toBe("Write an answer.");
+  });
+
+  it("checkAnswer refuses more than 3 files", () => {
+    const state = st(act(A.predict("n1")));
+    const files = ["a1-f.pdf", "a2-f.pdf", "a3-f.pdf", "a4-f.pdf"];
+    expect(checkAnswer(state, { ...sayAnswer("ok"), attachments: files })).toBe(
+      "An answer can hold at most 3 files.",
+    );
+    expect(checkAnswer(state, { ...sayAnswer("ok"), attachments: files.slice(0, 3) })).toBeNull();
+  });
+
   it("lesson_done_saves_only_passed", () => {
     const events = [
       ...toTeach,

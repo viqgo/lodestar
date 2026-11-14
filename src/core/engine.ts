@@ -1,4 +1,11 @@
-import { ANSWER_TEXT_MAX, FIELD_MAX, MAX_FAILS, MAX_PROBE, PROFILE_MAX } from "../shared/limits";
+import {
+  ANSWER_TEXT_MAX,
+  ATTACH_PER_ANSWER,
+  FIELD_MAX,
+  MAX_FAILS,
+  MAX_PROBE,
+  PROFILE_MAX,
+} from "../shared/limits";
 import type {
   Action,
   ActionType,
@@ -233,8 +240,10 @@ export function checkAnswer(state: LessonState, answer: Answer): string | null {
       answer.text === null;
     return valid ? null : "Pick an option.";
   }
+  const files = answer.attachments?.length ?? 0;
+  if (files > ATTACH_PER_ANSWER) return "An answer can hold at most 3 files.";
   const length = answer.text === null ? 0 : answer.text.trim().length;
-  return length >= 1 && length <= ANSWER_TEXT_MAX && answer.choiceIndex === null
+  return (length >= 1 || files > 0) && length <= ANSWER_TEXT_MAX && answer.choiceIndex === null
     ? null
     : "Write an answer.";
 }

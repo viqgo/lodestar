@@ -143,4 +143,105 @@ describe("prompt: the tutor instructions", () => {
       expect(withProfile(profile)).not.toContain("The learner's instructions for you");
     }
   });
+
+  it("prompt keeps its first paragraph without material or search", () => {
+    const text = p([]);
+    expect(text).toContain("Do not run commands, read files, or use any tools.");
+    expect(text).not.toContain("# Material");
+    expect(text).not.toContain("# Web search");
+    expect(
+      buildPrompt({
+        session: session([]),
+        state: deriveState([]),
+        knowledge: [],
+        retryNote: null,
+        material: null,
+        webSearch: false,
+      }),
+    ).toBe(text);
+  });
+
+  it("prompt allows reading only the material", () => {
+    const text = buildPrompt({
+      session: session([]),
+      state: deriveState([]),
+      knowledge: [],
+      retryNote: null,
+      material: "# Material\nFolder: /x",
+    });
+    expect(text).toContain(
+      "Do not run commands or change any file. Use your file tools only to read the material listed below.",
+    );
+    expect(text).not.toContain("use any tools");
+    expect(text).not.toContain("You may search the web.");
+  });
+
+  it("prompt allows web search only when it is on", () => {
+    const base = { session: session([]), state: deriveState([]), knowledge: [], retryNote: null };
+    const on = buildPrompt({ ...base, webSearch: true });
+    expect(on).toContain(
+      "Do not run commands, read files, or change anything. You may search the web.",
+    );
+    expect(on).toContain(
+      "# Web search\nYou may search the web when the material and your own knowledge are not enough. Name the page you used in the text.",
+    );
+    const both = buildPrompt({ ...base, webSearch: true, material: "# Material\nM" });
+    expect(both).toContain(
+      "Do not run commands or change any file. Use your file tools only to read the material listed below. You may search the web.",
+    );
+    const off = buildPrompt({ ...base, webSearch: false });
+    expect(off).not.toContain("# Web search");
+    expect(off).not.toContain("You may search the web");
+  });
+
+  it("prompt places the material after the lesson", () => {
+    const text = buildPrompt({
+      session: session([]),
+      state: deriveState([]),
+      knowledge: [],
+      retryNote: null,
+      material: "# Material\nFolder: /x",
+      webSearch: true,
+    });
+    const lesson = text.indexOf("# Lesson\nTopic: T\nGoal: G");
+    const material = text.indexOf("# Material\nFolder: /x");
+    const search = text.indexOf("# Web search");
+    const transcript = text.indexOf("# Transcript so far");
+    expect(lesson).toBeGreaterThan(-1);
+    expect(material).toBeGreaterThan(lesson);
+    expect(search).toBeGreaterThan(material);
+    expect(transcript).toBeGreaterThan(search);
+  });
+
+  it("transcript lists an answer's files", () => {
+    const events: SessionEvent[] = [
+      act(A.probe()),
+      {
+        kind: "answer",
+        at: AT,
+        answer: {
+          choiceIndex: 1,
+          text: null,
+          reasoning: null,
+          confidence: null,
+          attachments: ["a1-x.pdf", "a2-y.png"],
+        },
+      },
+    ];
+    const line = renderTranscript(events, "/data/att/s1").split("\n")[1]!;
+    expect(line).toBe(
+      "LEARNER: " +
+        JSON.stringify({
+          answer: "b",
+          reasoning: null,
+          confidence: null,
+          graded: null,
+          files: ["/data/att/s1/a1-x.pdf", "/data/att/s1/a2-y.png"],
+        }),
+    );
+    expect(JSON.parse(renderTranscript(events).split("LEARNER: ")[1]!).files).toEqual([
+      "a1-x.pdf",
+      "a2-y.png",
+    ]);
+  });
 });
