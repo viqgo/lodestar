@@ -238,6 +238,7 @@ export type Api = {
   saveProfile(text: string): Promise<{ ok: true } | { ok: false; message: string }>;
   onSessionUpdated(cb: (session: Session) => void): () => void; // returns unsubscribe
   onTurnEnded(cb: (id: string, result: TurnResult) => void): () => void;
+  onAsideEnded(cb: (id: string) => void): () => void;
   listSubjects(): Promise<SubjectSummary[]>;
   createSubject(input: {
     name: string;

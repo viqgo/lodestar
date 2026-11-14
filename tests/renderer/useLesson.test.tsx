@@ -152,6 +152,26 @@ describe("useLesson", () => {
     expect(result.current.asideError).toBeNull();
   });
 
+  it("useLesson stops being busy when an aside ends", async () => {
+    const s = S([act(A.probe())]);
+    const s2 = S([act(A.probe()), asideEv()]);
+    const getSession = vi.fn(async () => s);
+    const { emitAsideEnded } = installApi({
+      getSession,
+      aside: vi.fn(() => new Promise(() => {})),
+    });
+    const { result } = renderHook(() => useLesson("s_1", false));
+    await waitFor(() => expect(result.current.session).toEqual(s));
+    rtlAct(() => result.current.ask("why"));
+    expect(result.current.busy).toBe(true);
+    getSession.mockResolvedValue(s2);
+    await rtlAct(async () => emitAsideEnded("other"));
+    expect(result.current.busy).toBe(true);
+    await rtlAct(async () => emitAsideEnded("s_1"));
+    expect(result.current.busy).toBe(false);
+    expect(result.current.session).toEqual(s2);
+  });
+
   it("a failed side question reports its message and leaves the lesson as it was", async () => {
     const s = S([act(A.probe())]);
     const message = "The model gave an unusable reply. Press Retry.";

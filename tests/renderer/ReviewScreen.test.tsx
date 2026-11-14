@@ -31,7 +31,7 @@ function renderReview(
 ) {
   const installed = installApi(api);
   const onChanged = vi.fn();
-  render(
+  const rendered = render(
     <ReviewScreen
       statuses={statuses}
       lastUsed="claude"
@@ -41,7 +41,7 @@ function renderReview(
       {...props}
     />,
   );
-  return { ...installed, onChanged, user: userEvent.setup() };
+  return { ...installed, onChanged, rerender: rendered.rerender, user: userEvent.setup() };
 }
 
 describe("ReviewScreen", () => {
@@ -167,5 +167,73 @@ describe("ReviewScreen", () => {
     expect(screen.getByRole("button", { name: "Flashcards" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Practice" })).toBeInTheDocument();
     expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("the filter is disabled while flashcards load", async () => {
+    let release: (v: unknown) => void = () => {};
+    const { user } = renderReview({
+      dueItems: vi.fn(async () => ({ due: [dueItem(1)], nextDue: null })),
+      practiceFronts: vi.fn(() => new Promise((r) => (release = r))),
+    });
+    await screen.findByText("1 due");
+    await user.click(screen.getByRole("button", { name: "Flashcards" }));
+    expect(screen.getByLabelText("Filter")).toBeDisabled();
+    expect(screen.getByLabelText("Claude Code")).toBeDisabled();
+    release({ ok: false, error: { kind: "stopped", message: "Stopped." } });
+    expect(await screen.findByText("Stopped.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Filter")).toBeEnabled();
+  });
+
+  it("starting practice clears a stale Retry banner", async () => {
+    const message = "The model gave an unusable reply. Press Retry.";
+    const { user } = renderReview({
+      dueItems: vi.fn(async () => ({ due: [dueItem(1)], nextDue: null })),
+      practiceFronts: vi.fn(async () => ({ ok: false, error: { kind: "bad_reply", message } })),
+      practiceAsk: vi.fn(async () => ({ ok: true, question: choiceQ })),
+    });
+    await screen.findByText("1 due");
+    await user.click(screen.getByRole("button", { name: "Flashcards" }));
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Practice" }));
+    expect(await screen.findByLabelText("b")).toBeInTheDocument();
+    expect(screen.queryByText(message)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+  });
+
+  it("a flashcard run ends when the last record fails", async () => {
+    const recordReview = vi.fn(async () => {
+      throw new Error("disk");
+    });
+    const { user, onChanged } = renderReview({
+      dueItems: vi.fn(async () => ({ due: [withFront(1)], nextDue: null })),
+      recordReview,
+    });
+    await screen.findByText("1 due");
+    await user.click(screen.getByRole("button", { name: "Flashcards" }));
+    await user.click(await screen.findByRole("button", { name: "Show answer" }));
+    await user.click(screen.getByRole("button", { name: "I knew it" }));
+    expect(await screen.findByRole("button", { name: "Flashcards" })).toBeInTheDocument();
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it("the filter resets when its lesson is deleted", async () => {
+    const dueItems = vi.fn(async () => ({ due: [dueItem(1)], nextDue: null }));
+    const { rerender } = renderReview({ dueItems });
+    await screen.findByText("1 due");
+    await userEvent.selectOptions(screen.getByLabelText("Filter"), "T");
+    expect(dueItems).toHaveBeenLastCalledWith({ subjectId: null, sessionId: lesson.id });
+    rerender(
+      <ReviewScreen
+        statuses={statuses}
+        lastUsed="claude"
+        sessions={[]}
+        subjects={[{ id: "u_1", name: "Physics", updatedAt: AT }]}
+        onChanged={vi.fn()}
+      />,
+    );
+    await vi.waitFor(() =>
+      expect(dueItems).toHaveBeenLastCalledWith({ subjectId: null, sessionId: null }),
+    );
+    expect((screen.getByLabelText("Filter") as HTMLSelectElement).value).toBe("");
   });
 });

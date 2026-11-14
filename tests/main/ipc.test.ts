@@ -1429,6 +1429,22 @@ describe("ipc aside", () => {
     expect(send).not.toHaveBeenCalledWith("turn:ended", expect.anything(), expect.anything());
   });
 
+  it("lesson:aside tells the window when it ends, also on failure and stop", async () => {
+    const { call, turns, send } = await setup();
+    await call("lesson:aside", ID1, "why");
+    expect(send).toHaveBeenCalledWith("aside:ended", ID1);
+    for (const kind of ["bad_reply", "stopped"] as const) {
+      send.mockClear();
+      turns.aside.mockResolvedValueOnce({
+        ok: false,
+        error: { kind, message: "m" },
+        session: null,
+      });
+      await call("lesson:aside", ID1, "why");
+      expect(send).toHaveBeenCalledWith("aside:ended", ID1);
+    }
+  });
+
   it("lesson:aside refuses an empty or over-long question", async () => {
     const { call, turns } = await setup();
     for (const bad of ["", "   ", "x".repeat(4001), 42]) {

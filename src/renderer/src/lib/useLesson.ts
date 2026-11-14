@@ -54,6 +54,16 @@ export function useLesson(
     const offUpdated = window.api.onSessionUpdated((s) => {
       if (s.id === id) setSession(s);
     });
+    const offAside = window.api.onAsideEnded((endedId) => {
+      if (endedId !== id) return;
+      setBusy(false);
+      void window.api.getSession(id).then(
+        (s) => {
+          if (!cancelled && s) setSession(s);
+        },
+        () => undefined,
+      );
+    });
     const offEnded = window.api.onTurnEnded((endedId, result) => {
       if (endedId !== id) return;
       handleResult(result);
@@ -80,6 +90,7 @@ export function useLesson(
       cancelled = true;
       offUpdated();
       offEnded();
+      offAside();
     };
   }, [id, start, onReject, handleResult]);
 

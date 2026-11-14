@@ -58,6 +58,29 @@ describe("GraphScreen", () => {
     expect(mark.closest("button")).toHaveTextContent("second fact");
   });
 
+  it("GraphScreen shows the list when the map text is too large", async () => {
+    vi.mocked(mermaid.render).mockResolvedValue({
+      svg: '<svg data-testid="map"></svg>',
+      diagramType: "flowchart",
+    });
+    const big: GraphData = {
+      groups: [
+        {
+          sessionId: "s1",
+          title: "Derivatives",
+          subject: null,
+          nodes: [{ ...n1, text: "x".repeat(50001) }],
+        },
+      ],
+      edges: [],
+    };
+    installApi({ getGraph: vi.fn(async () => big) });
+    render(<GraphScreen />);
+    expect(await screen.findByRole("button", { name: /xxxx/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("map")).toBeNull();
+    expect(mermaid.render).not.toHaveBeenCalled();
+  });
+
   it("selecting an item shows its text and due date", async () => {
     vi.mocked(mermaid.render).mockRejectedValue(new Error("bad"));
     render(<GraphScreen />);

@@ -43,7 +43,10 @@ export function GraphScreen() {
   const text = data !== null && nodes.length > 0 ? graphToMermaid(data) : null;
 
   useEffect(() => {
-    if (text === null) return;
+    if (text === null || text.length > 50000) {
+      setSvg(null);
+      return;
+    }
     let cancelled = false;
     void import("mermaid").then(async ({ default: mermaid }) => {
       if (!initialized) {

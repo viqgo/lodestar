@@ -86,6 +86,7 @@ describe("preload", () => {
         "onVoiceError",
         "onSessionUpdated",
         "onTurnEnded",
+        "onAsideEnded",
         "listSubjects",
         "createSubject",
         "getSubject",

@@ -139,7 +139,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T99 Aside box
 - [x] T100 Evals and README
 - [x] T100b Gate J fixes: data and main process
-- [ ] T100c Gate J fixes: window and the aside end signal
+- [x] T100c Gate J fixes: window and the aside end signal
 - [ ] GATE J Learning modes
 - [ ] T101 Policy and paths
 - [ ] T102 Deferred fixes: CLI and lesson files

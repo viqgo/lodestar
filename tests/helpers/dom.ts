@@ -16,6 +16,7 @@ afterEach(cleanup);
 export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
   const updated = new Set<(s: Session) => void>();
   const ended = new Set<(id: string, r: TurnResult) => void>();
+  const asideEnded = new Set<(id: string) => void>();
   const subjectUpdated = new Set<(s: Subject) => void>();
   const subjectEnded = new Set<(id: string, r: SubjectResult) => void>();
   const voiceState = new Set<(s: CallState) => void>();
@@ -110,6 +111,10 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
       ended.add(cb);
       return () => ended.delete(cb);
     }),
+    onAsideEnded: vi.fn((cb: (id: string) => void) => {
+      asideEnded.add(cb);
+      return () => asideEnded.delete(cb);
+    }),
     listSubjects: vi.fn(async () => []),
     getSubject: vi.fn(async () => null),
     deleteSubject: vi.fn(async () => undefined),
@@ -137,6 +142,7 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     api: api as unknown as Api & typeof api,
     emitUpdated: (s: Session) => updated.forEach((cb) => cb(s)),
     emitEnded: (id: string, r: TurnResult) => ended.forEach((cb) => cb(id, r)),
+    emitAsideEnded: (id: string) => asideEnded.forEach((cb) => cb(id)),
     emitSubjectUpdated: (s: Subject) => subjectUpdated.forEach((cb) => cb(s)),
     emitSubjectEnded: (id: string, r: SubjectResult) => subjectEnded.forEach((cb) => cb(id, r)),
     emitVoiceState: (s: CallState) => voiceState.forEach((cb) => cb(s)),

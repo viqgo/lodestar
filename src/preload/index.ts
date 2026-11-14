@@ -103,6 +103,15 @@ const api: Api = {
       ipcRenderer.removeListener("turn:ended", handler);
     };
   },
+  onAsideEnded: (cb) => {
+    const handler = (_event: unknown, id: string): void => {
+      cb(id);
+    };
+    ipcRenderer.on("aside:ended", handler);
+    return () => {
+      ipcRenderer.removeListener("aside:ended", handler);
+    };
+  },
   onSubjectUpdated: (cb) => {
     const handler = (_event: unknown, subject: Subject): void => {
       cb(subject);

@@ -253,7 +253,11 @@ export function registerIpc(deps: IpcDeps): void {
         session: null,
       };
     }
-    return withLock(id, () => turns.aside(id, text.trim()));
+    try {
+      return await withLock(id, () => turns.aside(id, text.trim()));
+    } finally {
+      send("aside:ended", id);
+    }
   });
 
   ipcMain.handle(

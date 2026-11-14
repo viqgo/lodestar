@@ -58,6 +58,13 @@ export function ReviewScreen(props: {
     void load(filter);
   }, [filter]);
 
+  useEffect(() => {
+    const gone =
+      (filter.startsWith("u:") && !props.subjects.some((x) => x.id === filter.slice(2))) ||
+      (filter.startsWith("s:") && !props.sessions.some((x) => x.id === filter.slice(2)));
+    if (gone) setFilter("");
+  }, [filter, props.sessions, props.subjects]);
+
   async function startFlashcards() {
     if (loaded === null || cli === null) return;
     setError(null);
@@ -89,17 +96,19 @@ export function ReviewScreen(props: {
     const saved = window.api.recordReview(itemId, correct);
     graded.current += 1;
     if (run !== null && run.kind === "cards" && graded.current === run.cards.length) {
-      void Promise.resolve(saved).then(() => {
+      const done = () => {
         setRun(null);
         void load();
         props.onChanged();
-      });
+      };
+      void Promise.resolve(saved).then(done, done);
     }
   }
 
   function startPractice() {
     if (loaded === null) return;
     counter.current += 1;
+    setError(null);
     setEnded(false);
     setRun({ kind: "practice", due: loaded.due, n: counter.current });
   }
@@ -133,7 +142,7 @@ export function ReviewScreen(props: {
         <select
           id="review-filter"
           value={filter}
-          disabled={active}
+          disabled={active || busy}
           onChange={(e) => setFilter(e.target.value)}
         >
           <option value="">All</option>
@@ -157,7 +166,12 @@ export function ReviewScreen(props: {
           ) : null}
         </select>
       </div>
-      <TutorPicker statuses={props.statuses} value={cli} disabled={active} onChange={setPicked} />
+      <TutorPicker
+        statuses={props.statuses}
+        value={cli}
+        disabled={active || busy}
+        onChange={setPicked}
+      />
       {run !== null && run.kind === "cards" ? <Flashcards due={run.cards} onGrade={grade} /> : null}
       {run !== null && run.kind === "practice" && cli !== null ? (
         <PracticeRun key={run.n} due={run.due} cli={cli} onEnd={finished} />
@@ -177,7 +191,7 @@ export function ReviewScreen(props: {
         </div>
       ) : null}
       {busy ? <ThinkingBar onStop={() => void window.api.practiceStop()} /> : null}
-      {error !== null ? (
+      {error !== null && !active ? (
         error.kind === "stopped" ? (
           <Banner
             kind="info"
