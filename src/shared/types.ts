@@ -216,6 +216,7 @@ export type Api = {
     cli: CliId,
   ): Promise<{ ok: true; verdict: Verdict; feedback: string } | { ok: false; error: TurnError }>;
   practiceStop(): Promise<void>;
+  getGraph(): Promise<GraphData>;
   getSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<{ ok: true } | { ok: false; message: string }>;
   voiceHasKey(): Promise<boolean>;
@@ -324,3 +325,11 @@ export type Review = {
 };
 export type ReviewFilter = { subjectId: string | null; sessionId: string | null };
 export type DueItem = { item: KnowledgeItem; review: Review };
+export type GraphNode = { id: string; text: string; box: number; due: string; sessionId: string };
+export type GraphGroup = {
+  sessionId: string;
+  title: string;
+  subject: string | null;
+  nodes: GraphNode[];
+};
+export type GraphData = { groups: GraphGroup[]; edges: { from: string; to: string }[] };

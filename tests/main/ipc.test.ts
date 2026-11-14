@@ -1348,6 +1348,21 @@ describe("ipc review", () => {
   });
 });
 
+describe("ipc graph", () => {
+  it("graph:get builds the graph from the stored data", async () => {
+    const { store, call } = await setup();
+    await store.writeSession({ ...withId(ID1, NOW, []), topic: "Topic" });
+    await store.addKnowledge([K(1, { sessionId: ID1 }), K(2, { sessionId: ID1 })]);
+    await call("review:record", K(2).id, true);
+    const g = await call("graph:get");
+    expect(g.groups).toHaveLength(1);
+    expect(g.groups[0].title).toBe("Topic");
+    expect(g.groups[0].nodes).toHaveLength(2);
+    expect(g.groups[0].nodes.find((n: any) => n.id === K(2).id).box).toBe(2);
+    expect(Array.isArray(g.edges)).toBe(true);
+  });
+});
+
 describe("ipc practice", () => {
   it("practice channels pass their arguments to the service with the tutor first", async () => {
     const { call, practice } = await setup();

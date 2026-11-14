@@ -3,6 +3,7 @@ import { isCliId } from "../shared/clis";
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
 import { plain } from "../core/material";
+import { knowledgeGraph } from "../core/graph";
 import { dueItems, newReview, nextDue, nextReview } from "../core/review";
 import { mergeSettings, validateSettings } from "../core/settings";
 import {
@@ -345,6 +346,15 @@ export function registerIpc(deps: IpcDeps): void {
         // nothing changes
       }
     }),
+  );
+
+  ipcMain.handle("graph:get", async () =>
+    knowledgeGraph(
+      await store.readKnowledge(),
+      await store.readReviews(),
+      await store.listSessions(),
+      await store.listSubjects(),
+    ),
   );
 
   ipcMain.handle("profile:get", () => store.readProfile());
