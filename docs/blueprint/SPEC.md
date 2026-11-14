@@ -131,8 +131,65 @@ All tests run against a fake CLI runner; none call real Codex.
 
 Pass bar: 7 of 8 on the first attempt, 8 of 8 allowing the single B11 retry. Budget: under 90 seconds per call; under 30,000 input tokens per call at the start of a lesson. Teaching quality is not measured.
 
+## Milestone 2: more CLIs (approved 2026-11-14, D44)
+
+Names: `codex` = "Codex", `claude` = "Claude Code", `gemini` = "Gemini" (shown as "Gemini (experimental)" in pickers).
+
+Finding the CLIs
+- B23. On launch the app checks all three CLIs at the same time (`codex`, `claude`, `gemini`, each `--version`, 5-second limit). This replaces the Codex-only check in B1.
+- B24. If none is found, a banner says "No AI CLI found. Install Codex, Claude Code or Gemini CLI and sign in, then press Retry." and New lesson is disabled. Retry re-runs the check. This replaces the B1 message.
+
+Choosing a CLI
+- B25. The New lesson form has a "Tutor" picker with the three CLIs. One that is not installed is disabled and shows "not installed".
+- B26. The picker starts on the CLI of the most recently updated lesson if it is installed; otherwise on the first installed one in the order Codex, Claude Code, Gemini.
+- B27. A lesson stores its CLI and uses it for every call. The lesson header shows "Tutor: <name>". Lessons saved before this milestone have `cli: "codex"` and keep working.
+- B28. If a lesson's CLI is not installed, the lesson shows the banner "<name> not found. Install it and sign in, then press Retry." in place of any Retry banner, the pending card is disabled, and no call is made. Retry re-runs the check.
+- B34. A lesson's CLI can be changed from the lesson header ("Change tutor"), only while no call is running and only to an installed CLI. A dialog asks "Switch this lesson to <name>? It will read the whole lesson so far and continue from there." with Cancel and Switch. After Switch the lesson stores the new CLI; nothing else in the lesson changes, and no call is started by the switch itself.
+
+Calling each CLI
+- B29. Claude Code is spawned with `-p --output-format json --json-schema <schema JSON> --tools "" --setting-sources "" --strict-mcp-config --no-session-persistence --disable-slash-commands`. The reply is `structured_output` (as JSON text), or `result` when `structured_output` is absent. Input tokens are `input_tokens + cache_creation_input_tokens + cache_read_input_tokens`. Non-zero exit, unparsable stdout or `is_error: true` is a failed call: "Claude Code failed: <detail>".
+- B30. Gemini is spawned with `-p "" -o json --approval-mode plan --skip-trust`. Before the call the app writes `.gemini/settings.json` into the temporary working folder with `{"tools":{"exclude":[...]}}` listing Gemini's shell, file, web, agent and MCP tools. The prompt gets a final section with the JSON Schema. The reply text is `response`; code fences are removed and the first complete JSON object in it is used. A non-zero exit shows "Gemini failed: <detail>", the detail being `error.message` from the JSON on stderr when present, else the last stderr line (cut to 200 characters).
+- B31. After an unusable reply (B11) Codex and Claude Code get one retry; Gemini gets two.
+- B32. B12 (failure and 180-second timeout, message prefix "<name> failed: "), B13 (Stop), B14 (one call per lesson) and B20 (no shell, new empty temporary folder, always removed) apply to all three CLIs.
+- B33. `LEARN_CLAUDE_PATH` and `LEARN_GEMINI_PATH` override where each CLI is looked for, like `LEARN_CODEX_PATH`.
+
+Data shapes
+- `sessions:create` input: `{ "topic": "...", "goal": "...", "cli": "claude" }`. An unknown `cli` is refused with "Choose a tutor."
+- CLI status list: `[{ "id": "codex", "installed": true, "version": "0.167.0" }, { "id": "claude", "installed": true, "version": "2.1.322" }, { "id": "gemini", "installed": false, "version": null }]`
+- Claude Code stdout (fields used): `{"is_error": false, "result": "{\"action\":{...}}", "structured_output": {"action": {...}}, "usage": {"input_tokens": 2, "cache_creation_input_tokens": 7317, "cache_read_input_tokens": 0, "output_tokens": 207}}`
+- Gemini stdout: `{"session_id": "...", "response": "```json\n{\"action\":{...}}\n```", "stats": {...}}`. Failure (exit 41, on stderr): `{"session_id": "...", "error": {"type": "Error", "message": "Please set an Auth method ...", "code": 41}}` -> "Gemini failed: Please set an Auth method ..."
+
+Tests (milestone 2)
+| Test | Checks | Behavior |
+|------|--------|----------|
+| detect_checks_all_three_clis | three version checks, one status per CLI | B23 |
+| no_cli_shows_install_banner | exact banner text, New lesson disabled | B24 |
+| picker_lists_three_and_greys_missing | missing CLIs disabled with "not installed" | B25 |
+| picker_defaults_to_last_used_then_first_installed | both default rules | B26 |
+| lesson_keeps_its_cli | each call uses the adapter named in the session | B27 |
+| old_lessons_stay_on_codex | a milestone 1 session file still runs | B27 |
+| lesson_header_names_the_tutor | "Tutor: Claude Code" | B27 |
+| missing_cli_blocks_lesson_with_banner | exact text, card disabled, no call | B28 |
+| switch_tutor_asks_then_stores | dialog text, Cancel keeps, Switch stores the new CLI, no call started | B34 |
+| switch_tutor_refused_while_running | refused with "A reply is already on the way." | B34 |
+| claude_spawn_uses_safe_flags | exact argument list, stdin prompt, no shell, empty cwd | B29, B32 |
+| claude_reads_structured_output | reply and summed usage | B29 |
+| claude_error_names_the_cli | exit code, bad stdout and `is_error` | B29 |
+| gemini_spawn_uses_safe_flags | exact argument list, stdin prompt, no shell | B30, B32 |
+| gemini_writes_tool_exclusion_settings | settings file present in cwd at spawn time | B30 |
+| gemini_prompt_carries_the_schema | schema text at the end of stdin | B30 |
+| gemini_reads_fenced_or_plain_json | fenced, plain, and text-then-JSON replies | B30 |
+| gemini_error_uses_json_message | exit 41 JSON error -> message | B30 |
+| gemini_gets_two_retries_others_one | attempts per CLI | B31 |
+| temp_dir_removed_for_every_cli | after success, error, stop | B32 |
+| timeout_and_stop_work_for_every_cli | 180-second kill, Stop | B32 |
+| path_overrides_are_used | both new variables | B33 |
+
+Evals (milestone 2): the same eight cases (E1-E7, E5b), run with `LEARN_EVAL_CLI=claude`. Pass bar 7 of 8 first try, 8 of 8 with the retry; under 90 seconds per call. Gemini: run later by the owner with a paid account; until it passes, Gemini stays labelled experimental.
+
+Out of scope for milestone 2: streaming; choosing a model; signing in or installing a CLI from the app; Antigravity CLI; Windows and Linux.
+
 ## Out of scope
-- Gemini CLI and Claude Code adapters (milestone 2)
 - Practice mode, knowledge graph view, flashcards
 - Word-by-word streaming
 - Attaching PDFs or images, dictation, web search
