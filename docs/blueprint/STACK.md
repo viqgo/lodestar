@@ -55,3 +55,24 @@ Unverified (updated 2026-11-14):
 
 ## Running cost
 No new bills. Each lesson turn uses the owner's existing Codex plan or API billing, at least ~17k input tokens per turn.
+
+## Milestone 2 additions (approved 2026-11-14, D43)
+No new npm packages. Two more CLIs, each called without a shell, in a new empty temporary folder, prompt on stdin.
+
+| CLI | Minimum version | Command | Status |
+|-----|-----------------|---------|--------|
+| Claude Code | 2.1.322 | `claude -p --output-format json --json-schema <schema JSON> --tools "" --setting-sources "" --strict-mcp-config --no-session-persistence --disable-slash-commands` | verified by a real call on 2026-11-14 |
+| Gemini CLI | 0.68.0 | `gemini -p "" -o json --approval-mode plan --skip-trust` | experimental: built from the installed code and `--help`, never run signed in |
+
+Verified facts (2026-11-14):
+- Claude Code: stdout is one JSON object. Fields used: `is_error` (boolean), `result` (string, the reply as JSON text), `structured_output` (object, the reply matching the schema), `usage.input_tokens`, `usage.output_tokens`. A one-sentence reply took 4 s with about 3,600 input tokens of overhead. `--setting-sources ""` means the user's own Claude settings, CLAUDE.md, hooks and plugins are not loaded (so their configured default model is not used either).
+- Gemini CLI: has no schema flag. Read from the installed bundle: a successful `-o json` run prints `{ "session_id", "response", "stats", "warnings" }` on stdout, the text in `response`. Run without sign-in: exit code 41 and `{ "session_id", "error": { "type", "message", "code" } }` on stderr. Settings key `tools.exclude` (array of tool names) removes tools; a `.gemini/settings.json` in the working folder is read as project settings.
+- Gemini CLI's README says that since 2026-06-18 it has no free tier: it serves Gemini Code Assist licences and paid API or Vertex keys; consumer Google AI plans moved to Antigravity CLI (`agy`).
+
+Unverified:
+- Gemini: a real successful reply; whether `--approval-mode plan` plus `tools.exclude` blocks every tool; how often its replies are usable without a schema flag.
+- Which Claude model `claude -p` uses with `--setting-sources ""`.
+
+Other picks: each CLI uses its own default model (no model flag). Detection: `claude --version`, `gemini --version`, 5-second limit. Path overrides: `LEARN_CLAUDE_PATH`, `LEARN_GEMINI_PATH` (like `LEARN_CODEX_PATH`). Evals: `LEARN_EVAL_CLI=codex|claude|gemini npm run eval` (default `codex`).
+
+Owner setup for milestone 2: Claude Code installed and signed in (done). Gemini: a paid account is expected in a few days; the live run is a separate owner task after the milestone.
