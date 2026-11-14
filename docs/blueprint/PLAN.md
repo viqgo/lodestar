@@ -55,7 +55,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T34 LessonScreen
 - [x] T35 KnowledgeScreen
 - [x] T36 App wiring
-- [ ] T36b Keyboard access, double-click guard, map fallback symbol
+- [x] T36b Keyboard access, double-click guard, map fallback symbol
 - [ ] T37 README
 - [ ] GATE C A full lesson in the window
 

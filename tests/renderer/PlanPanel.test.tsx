@@ -55,4 +55,12 @@ describe("PlanPanel", () => {
     await waitFor(() => expect(screen.getByText("✓ One")).toBeInTheDocument());
     expect(container.querySelector("svg")).toBeNull();
   });
+
+  it("PlanPanel fallback shows a passed current node as passed", async () => {
+    vi.mocked(mermaid.render).mockRejectedValue(new Error("bad"));
+    render(<PlanPanel plan={PLAN} nodes={nodes} currentNodeId="n1" />);
+    await waitFor(() => expect(vi.mocked(mermaid.render)).toHaveBeenCalled());
+    await waitFor(() => expect(screen.getByText("✓ One")).toBeInTheDocument());
+    expect(screen.queryByText("→ One")).toBeNull();
+  });
 });

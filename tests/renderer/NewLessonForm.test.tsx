@@ -57,4 +57,22 @@ describe("NewLessonForm", () => {
     expect(screen.getByLabelText("Goal")).toBeDisabled();
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
   });
+  it("NewLessonForm creates a lesson only once when Start is clicked twice", async () => {
+    const S = session();
+    let resolve: (v: { ok: true; session: typeof S }) => void = () => {};
+    const { api } = installApi({
+      createSession: vi.fn(
+        () =>
+          new Promise((r) => {
+            resolve = r;
+          }),
+      ),
+    });
+    const onCreated = vi.fn();
+    render(<NewLessonForm disabled={false} onCreated={onCreated} />);
+    await userEvent.dblClick(screen.getByRole("button", { name: "Start" }));
+    expect(api.createSession).toHaveBeenCalledTimes(1);
+    resolve({ ok: true, session: S });
+    await vi.waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+  });
 });

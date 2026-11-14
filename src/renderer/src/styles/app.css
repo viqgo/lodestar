@@ -370,3 +370,23 @@ body {
   justify-content: center;
   background: color-mix(in srgb, var(--color-bg) 85%, transparent);
 }
+
+.row-main {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  flex: 1;
+  min-width: 0;
+}
+.row-main b,
+.row-main small {
+  display: block;
+}
+.row-main:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}

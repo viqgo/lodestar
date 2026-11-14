@@ -9,10 +9,18 @@ export function NewLessonForm(props: { disabled: boolean; onCreated(session: Ses
   const goalId = useId();
   const goalRef = useRef<HTMLTextAreaElement>(null);
 
+  const busy = useRef(false);
+
   async function submit() {
-    const result = await window.api.createSession({ topic, goal });
-    if (result.ok) props.onCreated(result.session);
-    else setError(result.message);
+    if (busy.current) return;
+    busy.current = true;
+    try {
+      const result = await window.api.createSession({ topic, goal });
+      if (result.ok) props.onCreated(result.session);
+      else setError(result.message);
+    } finally {
+      busy.current = false;
+    }
   }
 
   return (

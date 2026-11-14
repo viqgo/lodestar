@@ -23,15 +23,11 @@ export function Sidebar(props: {
       <div className="list">
         {props.sessions.length === 0 ? <span className="note">No lessons yet.</span> : null}
         {props.sessions.map((s) => (
-          <div
-            key={s.id}
-            className={"lesson-row" + (s.id === props.activeId ? " is-active" : "")}
-            onClick={() => props.onOpen(s.id)}
-          >
-            <div>
+          <div key={s.id} className={"lesson-row" + (s.id === props.activeId ? " is-active" : "")}>
+            <button type="button" className="row-main" onClick={() => props.onOpen(s.id)}>
               <b>{s.topic}</b>
               <small>{`${phaseLabel(s.phase)} · ${relativeTime(s.updatedAt, nowIso)}`}</small>
-            </div>
+            </button>
             <button
               className="icon-btn"
               aria-label="Delete lesson"

@@ -6,10 +6,10 @@ let initialized = false;
 let counter = 0;
 
 function prefix(id: string, nodes: Record<string, NodeState>, currentNodeId: string | null) {
-  if (id === currentNodeId) return "→ ";
   const status = nodes[id]?.status;
   if (status === "passed") return "✓ ";
   if (status === "shaky") return "~ ";
+  if (id === currentNodeId) return "→ ";
   return "";
 }
 

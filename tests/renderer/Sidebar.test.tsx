@@ -79,4 +79,15 @@ describe("Sidebar", () => {
     view.rerender(<Sidebar {...props} newDisabled={true} />);
     expect(screen.getByRole("button", { name: "New lesson" })).toBeDisabled();
   });
+  it("Sidebar lets a lesson be opened with the keyboard", async () => {
+    const { props, user } = setup();
+    for (let i = 0; i < 3; i++) {
+      if (screen.getByRole("button", { name: /Derivatives/ }) === document.activeElement) break;
+      await user.tab();
+    }
+    expect(screen.getByRole("button", { name: /Derivatives/ })).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(props.onOpen).toHaveBeenCalledTimes(1);
+    expect(props.onOpen).toHaveBeenCalledWith("s_1");
+  });
 });
