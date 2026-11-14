@@ -30,7 +30,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T11 Finding the CLI on disk
 - [x] T12 Reading Codex output
 - [x] T13 Codex adapter: detect
-- [ ] T14 Codex adapter: run
+- [x] T14 Codex adapter: run
 - [ ] T15 Store: sessions
 - [ ] T16 Store: knowledge
 - [ ] T17 One model step with retry

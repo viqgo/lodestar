@@ -102,3 +102,104 @@ describe("detect", () => {
     expect(f.calls.length).toBe(0);
   });
 });
+
+const req = (over: Record<string, unknown> = {}) => ({
+  prompt: "PROMPT",
+  schema: { a: 1 },
+  signal: new AbortController().signal,
+  timeoutMs: 1000,
+  ...over,
+});
+const OK = SAMPLE;
+const empty = (dir: string) => fs.readdirSync(dir).length === 0;
+
+describe("run", () => {
+  it("codex_spawn_uses_safe_flags", async () => {
+    const { adapter, f } = make({ stdout: OK });
+    await adapter.run(req());
+    const call = f.calls[0];
+    expect(call.cmd).toBe("/fake/codex");
+    expect(call.args.slice(0, 3)).toEqual(["exec", "--json", "--output-schema"]);
+    expect(call.args[3].endsWith("schema.json")).toBe(true);
+    expect(call.args.slice(4)).toEqual([
+      "--ephemeral",
+      "--sandbox",
+      "read-only",
+      "--skip-git-repo-check",
+      "-",
+    ]);
+    expect(call.opts.shell).toBe(false);
+    expect(call.opts.cwd.endsWith("/work")).toBe(true);
+    expect(call.opts.env.PATH).toContain("/opt/homebrew/bin");
+  });
+
+  it("run returns the message and usage", async () => {
+    const { adapter } = make({ stdout: OK });
+    expect(await adapter.run(req())).toEqual({
+      ok: true,
+      text: "REPLY",
+      usage: { inputTokens: 17302, outputTokens: 20 },
+    });
+  });
+
+  it("run writes the prompt to stdin", async () => {
+    const { adapter, f } = make({ stdout: OK });
+    await adapter.run(req());
+    expect(f.calls[0].stdin).toBe("PROMPT");
+  });
+
+  it("run reports a non-zero exit with the last stderr line", async () => {
+    const { adapter } = make({ code: 1, stderr: "warn\nstream disconnected\n" });
+    expect(await adapter.run(req())).toEqual({
+      ok: false,
+      kind: "failed",
+      message: "stream disconnected",
+    });
+  });
+
+  it("run reports an exit with no message", async () => {
+    const { adapter } = make({ stdout: '{"type":"turn.started"}' });
+    expect(await adapter.run(req())).toEqual({
+      ok: false,
+      kind: "failed",
+      message: "Codex returned no message",
+    });
+  });
+
+  it("cli_timeout_after_180s", async () => {
+    const { adapter, f } = make({ hang: true });
+    const result = await adapter.run(req({ timeoutMs: 30 }));
+    expect(result).toMatchObject({ ok: false, kind: "timeout" });
+    expect(result.ok === false && result.message).toBe("no reply after 0.03 seconds");
+    expect(f.calls[0].killed).toBe(true);
+  });
+
+  it("stop_kills_process_and_restores", async () => {
+    const { adapter, f } = make({ hang: true });
+    const c = new AbortController();
+    const p = adapter.run(req({ signal: c.signal }));
+    setTimeout(() => c.abort(), 10);
+    expect(await p).toEqual({ ok: false, kind: "aborted", message: "stopped" });
+    expect(f.calls[0].killed).toBe(true);
+  });
+
+  it("temp_dir_removed_after_call", async () => {
+    const a = make({ stdout: OK });
+    await a.adapter.run(req());
+    expect(a.f.calls.length).toBe(1);
+    expect(empty(a.tmpRoot)).toBe(true);
+
+    const b = make({ code: 1, stderr: "boom" });
+    await b.adapter.run(req());
+    expect(b.f.calls.length).toBe(1);
+    expect(empty(b.tmpRoot)).toBe(true);
+
+    const c = make({ hang: true });
+    const ctl = new AbortController();
+    const p = c.adapter.run(req({ signal: ctl.signal }));
+    setTimeout(() => ctl.abort(), 10);
+    await p;
+    expect(c.f.calls.length).toBe(1);
+    expect(empty(c.tmpRoot)).toBe(true);
+  });
+});

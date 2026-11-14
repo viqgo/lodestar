@@ -1,5 +1,6 @@
+import path from "node:path";
 import { DETECT_TIMEOUT_MS, STDERR_MAX } from "../../shared/limits";
-import type { DetectResult, Usage } from "../../shared/types";
+import type { DetectResult, RunRequest, RunResult, Usage } from "../../shared/types";
 import { extraPathDirs, resolveCommand, type CliAdapter } from "./adapter";
 
 type CodexEvent = {
@@ -80,8 +81,86 @@ export function createCodexAdapter(deps: {
         });
       });
     },
-    run() {
-      return Promise.resolve({ ok: false, kind: "failed", message: "not implemented" });
+    run(req: RunRequest): Promise<RunResult> {
+      const command = findCommand();
+      if (!command) {
+        return Promise.resolve({ ok: false, kind: "failed", message: "Codex CLI not found" });
+      }
+      if (req.signal.aborted) {
+        return Promise.resolve({ ok: false, kind: "aborted", message: "stopped" });
+      }
+      const root = deps.fs.mkdtempSync(path.join(deps.tmpRoot, "lh-"));
+      const schemaFile = path.join(root, "schema.json");
+      const work = path.join(root, "work");
+      deps.fs.writeFileSync(schemaFile, JSON.stringify(req.schema));
+      deps.fs.mkdirSync(work);
+      return new Promise((resolve) => {
+        let settled = false;
+        let stdout = "";
+        let stderr = "";
+        const child = deps.spawn(
+          command,
+          [
+            "exec",
+            "--json",
+            "--output-schema",
+            schemaFile,
+            "--ephemeral",
+            "--sandbox",
+            "read-only",
+            "--skip-git-repo-check",
+            "-",
+          ],
+          {
+            cwd: work,
+            shell: false,
+            stdio: ["pipe", "pipe", "pipe"],
+            env: {
+              ...deps.env,
+              PATH: [deps.env.PATH ?? "", ...extraPathDirs(deps.home)].filter(Boolean).join(":"),
+            },
+          },
+        );
+        const onAbort = () => {
+          child.kill("SIGKILL");
+          finish({ ok: false, kind: "aborted", message: "stopped" });
+        };
+        const timer = setTimeout(() => {
+          child.kill("SIGKILL");
+          finish({
+            ok: false,
+            kind: "timeout",
+            message: "no reply after " + req.timeoutMs / 1000 + " seconds",
+          });
+        }, req.timeoutMs);
+        const finish = (result: RunResult) => {
+          if (settled) return;
+          settled = true;
+          deps.fs.rmSync(root, { recursive: true, force: true });
+          clearTimeout(timer);
+          req.signal.removeEventListener("abort", onAbort);
+          resolve(result);
+        };
+        req.signal.addEventListener("abort", onAbort);
+        child.stdout?.on("data", (d: Buffer) => (stdout += d.toString()));
+        child.stderr?.on("data", (d: Buffer) => (stderr += d.toString()));
+        child.on("error", () =>
+          finish({ ok: false, kind: "failed", message: "Codex CLI not found" }),
+        );
+        child.on("close", (code) => {
+          if (code === 0) {
+            const { text, usage } = parseCodexEvents(stdout);
+            finish(
+              text === null
+                ? { ok: false, kind: "failed", message: "Codex returned no message" }
+                : { ok: true, text, usage },
+            );
+          } else {
+            finish({ ok: false, kind: "failed", message: lastStderrLine(stderr) });
+          }
+        });
+        child.stdin?.end(req.prompt);
+      });
     },
   };
 }
