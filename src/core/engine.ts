@@ -1,5 +1,6 @@
-import { FIELD_MAX, MAX_FAILS } from "../shared/limits";
-import type { LessonState, SessionEvent, Verdict } from "../shared/types";
+import { FIELD_MAX, MAX_FAILS, MAX_PROBE } from "../shared/limits";
+import type { Action, ActionType, LessonState, SessionEvent, Verdict } from "../shared/types";
+import { allNodesSettled, eligibleNodes, validatePlan } from "./plan";
 
 export function validateNewLesson(topic: string, goal: string): string | null {
   const ok = (s: string) => s.trim().length >= 1 && s.trim().length <= FIELD_MAX;
@@ -132,4 +133,52 @@ export function deriveState(events: SessionEvent[]): LessonState {
   });
 
   return state;
+}
+
+export function allowedActions(state: LessonState): ActionType[] {
+  if (state.awaiting.who !== "model") return [];
+  if (state.phase === "probe") {
+    return state.probeAnswered < MAX_PROBE ? ["probe", "probe_done"] : ["probe_done"];
+  }
+  if (state.phase === "plan") return ["plan"];
+  if (state.phase === "teach") {
+    switch (state.teachStep) {
+      case "need_predict":
+        return allNodesSettled(state.nodes) ? ["lesson_done"] : ["predict"];
+      case "need_explain":
+      case "need_repair":
+        return ["explain"];
+      case "need_verdict":
+        return ["explain", "predict", "lesson_done"];
+    }
+  }
+  return [];
+}
+
+export function checkAction(state: LessonState, action: Action): string | null {
+  if (!allowedActions(state).includes(action.type)) return `${action.type} is not allowed now`;
+  if (state.teachStep === "need_verdict") {
+    if (!("verdict" in action) || action.verdict === null) return "verdict is required";
+    return checkAction(applyVerdict(state, action.verdict), action);
+  }
+  switch (action.type) {
+    case "probe_done":
+      return action.goal.trim().length === 0 ? "goal is empty" : null;
+    case "plan":
+      return validatePlan(action.nodes);
+    case "predict":
+      return eligibleNodes(state.plan!, state.nodes).includes(action.nodeId)
+        ? null
+        : `node ${action.nodeId} cannot start now`;
+    case "explain":
+      if (action.nodeId !== state.currentNodeId) {
+        return `explain must be for node ${state.currentNodeId}`;
+      }
+      if (action.check.kind === "choice" && action.check.correctIndex === null) {
+        return "check needs a correctIndex";
+      }
+      return null;
+    default:
+      return null;
+  }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { deriveState, validateNewLesson } from "../../src/core/engine";
+import { allowedActions, checkAction, deriveState, validateNewLesson } from "../../src/core/engine";
 import type { SessionEvent } from "../../src/shared/types";
 import {
   A,
@@ -153,5 +153,78 @@ describe("deriveState: teaching", () => {
     expect(r.phase).toBe("done");
     expect(r.summary).toBe("s");
     expect(r.awaiting).toEqual({ who: "nobody" });
+  });
+});
+
+describe("allowedActions and checkAction", () => {
+  const st = (...events: SessionEvent[]) => deriveState([...toTeach, ...events]);
+  const eight = Array.from({ length: 8 }, () => [act(A.probe()), pick(1)]).flat();
+
+  it("probing allows probe and probe_done", () => {
+    expect(allowedActions(deriveState([]))).toEqual(["probe", "probe_done"]);
+  });
+
+  it("probe_forces_conclusion_after_8", () => {
+    const state = deriveState(eight);
+    expect(allowedActions(state)).toEqual(["probe_done"]);
+    expect(checkAction(state, A.probe())).toBe("probe is not allowed now");
+    expect(checkAction(state, A.probeDone())).toBeNull();
+  });
+
+  it("the plan phase allows only a valid plan", () => {
+    const state = deriveState(toPlan);
+    expect(checkAction(state, A.predict())).toBe("predict is not allowed now");
+    expect(checkAction(state, A.plan([PLAN[0]!]))).toBe("plan must have 2 to 12 nodes");
+    expect(checkAction(state, A.plan())).toBeNull();
+  });
+
+  it("teach_rejects_step_with_unmet_deps", () => {
+    expect(checkAction(st(), A.predict("n2"))).toBe("node n2 cannot start now");
+    expect(checkAction(st(), A.predict("n1"))).toBeNull();
+  });
+
+  it("teach_orders_predict_explain_check", () => {
+    expect(checkAction(st(), A.explain("n1"))).toBe("explain is not allowed now");
+  });
+
+  it("explain must be for the current node", () => {
+    expect(checkAction(st(act(A.predict("n1")), say()), A.explain("n2"))).toBe(
+      "explain must be for node n1",
+    );
+  });
+
+  it("a choice check needs a correctIndex", () => {
+    expect(
+      checkAction(
+        st(act(A.predict("n1")), say()),
+        A.explain("n1", { ...choiceQ, correctIndex: null }),
+      ),
+    ).toBe("check needs a correctIndex");
+  });
+
+  it("failed_check_requires_same_node", () => {
+    const state = st(...toCheck("n1"), pick(0));
+    expect(checkAction(state, A.predict("n1"))).toBe("predict is not allowed now");
+    expect(checkAction(state, A.explain("n1"))).toBeNull();
+  });
+
+  it("lesson_done_rejected_while_steps_remain", () => {
+    expect(checkAction(st(...toCheck("n1"), pick(1)), A.done())).toBe(
+      "lesson_done is not allowed now",
+    );
+  });
+
+  it("lesson_done is allowed when every node is settled", () => {
+    const state = st(...toCheck("n1"), pick(1), ...toCheck("n2"), pick(1));
+    expect(allowedActions(state)).toEqual(["lesson_done"]);
+    expect(checkAction(state, A.done())).toBeNull();
+  });
+
+  it("a text check needs a verdict and the verdict decides what follows", () => {
+    const state = st(...toCheck("n1", textQ), say());
+    expect(checkAction(state, A.predict("n2"))).toBe("verdict is required");
+    expect(checkAction(state, A.predict("n2", "pass"))).toBeNull();
+    expect(checkAction(state, A.predict("n2", "fail"))).toBe("predict is not allowed now");
+    expect(checkAction(state, A.explain("n1", choiceQ, "fail"))).toBeNull();
   });
 });
