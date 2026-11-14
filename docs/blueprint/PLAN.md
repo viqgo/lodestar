@@ -75,7 +75,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T49 Gemini adapter (experimental)
 - [x] T50 A registry, and one adapter per lesson
 - [x] T51 Channels for the CLI list, the choice and the switch
-- [ ] T52 The tutor picker
+- [x] T52 The tutor picker
 - [ ] T53 Pick a tutor for a new lesson
 - [ ] T54 The tutor in a lesson, and switching
 - [ ] T55 Clean up, document, and check Claude Code for real

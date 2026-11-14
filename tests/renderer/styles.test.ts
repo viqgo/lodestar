@@ -27,3 +27,9 @@ it("styles mark questions apart from reading text", () => {
   ).toBe(true);
   expect(/\.reading\s*\{/.test(css)).toBe(true);
 });
+
+it("styles have the disabled option and row rules", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
+  expect(/\.option\.is-disabled\s*\{[^}]*color: var\(--color-muted\)/.test(css)).toBe(true);
+  expect(/\.row\s*\{[^}]*display: flex/.test(css)).toBe(true);
+});
