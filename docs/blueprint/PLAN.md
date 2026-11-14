@@ -36,6 +36,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T17 One model step with retry
 - [x] T18 The advance loop
 - [x] T19 Evals against real Codex
+- [ ] T19b Gate B fixes (CR-1)
 - [ ] GATE B A lesson runs headless against real Codex
 - [ ] T20-T37 Stage C (outline)
 - [ ] GATE C A full lesson in the window
@@ -1136,11 +1137,81 @@ What the owner can see working at the end: `npm run eval` drives seven real Code
 - Codex reports a login, quota or network error,
 - any call exceeds 60 seconds or E1 exceeds 30,000 input tokens.
 
+### T19b - Gate B fixes (CR-1)
+
+**Implements**: change request CR-1 (decision D29) · B12, B15, B18, B10 · `run` (stdin error, UTF-8 decoding), `createStore` (serialized writes, unique temp files, de-duplicated knowledge), `advance` (order of saving)
+**Depends on**: T19
+
+**Context**
+- Fable's Gate B review found three Important defects in code that T14, T16 and T18 prescribed:
+  1. `run` in `src/main/cli/codex.ts` writes the prompt with `child.stdin?.end(req.prompt)` and has no `error` listener on `child.stdin`. If Codex exits before reading, Node raises `EPIPE` on that stream, which is an uncaught exception in the main process.
+  2. `run` collects output with `(d: Buffer) => (stdout += d.toString())`. A multi-byte character split across two chunks decodes to garbage.
+  3. `createStore` in `src/main/store.ts` has one fixed temp name per file (`file + ".tmp"`) and `addKnowledge` / `deleteKnowledge` read, change and write without any lock, so concurrent calls lose items or fail on rename. And `advance` in `src/main/turn.ts` saves the session (with `lesson_done`) before it calls `addKnowledge`; if `addKnowledge` fails, a Retry sees a finished lesson and never adds the items.
+- `tests/helpers/fakes.ts` has `FakePlan = { stdout?, stderr?, code?, hang?, missing? }` and `fakeSpawn(...plans)`. In `tests/main/codex.test.ts` the helper `make(plan, env, fsDep)` and `req()` / `OK` exist (see T14). In `tests/main/store.test.ts` the helpers `mk()` and `ki(n, createdAt)` exist (see T15, T16). In `tests/main/turn.test.ts` the helper `setup(events, ...replies)` and the constant `ID` exist (see T18).
+
+**Files**
+- Modify: `src/main/cli/codex.ts`, `src/main/store.ts`, `src/main/turn.ts`, `tests/helpers/fakes.ts`, `tests/main/codex.test.ts`, `tests/main/store.test.ts`, `tests/main/turn.test.ts`
+- Do NOT touch any other file. Do NOT add dependencies. Do NOT change any exported signature or any user-facing message.
+
+**Steps**
+
+1. In `tests/helpers/fakes.ts` extend the fake (no other change):
+   - add to `FakePlan`: `stdoutChunks?: Buffer[]; stdinError?: boolean;`
+   - in `fakeSpawn`, inside the `setImmediate` block, directly after the `plan.hang` line: if `plan.stdinError`, call `child.stdin.emit("error", Object.assign(new Error("write EPIPE"), { code: "EPIPE" }))` (before ending stdout). Replace `child.stdout.end(plan.stdout ?? "")` with: if `plan.stdoutChunks` is set, `for (const c of plan.stdoutChunks) child.stdout.write(c); child.stdout.end();` else the existing `end`.
+2. Add 5 tests (names exactly as shown):
+
+   In `tests/main/codex.test.ts` (2 tests):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | run survives a write error on stdin | `make({ stdinError: true, code: 1, stderr: "not signed in\n" })`, `await run(req())` | result equals `{ ok: false, kind: "failed", message: "not signed in" }` and the test process does not report an unhandled error |
+   | run decodes characters split across output chunks | build `full = Buffer.from(JSON.stringify({ type: "item.completed", item: { type: "agent_message", text: "café ✓" } }) + "\n")`; `cut = full.indexOf(0xc3) + 1` (the "é" is the two bytes 0xC3 0xA9, so this cuts it in half); `make({ stdoutChunks: [full.subarray(0, cut), full.subarray(cut)] })` | `run(req())` is `{ ok: true, text: "café ✓", usage: null }` |
+
+   In `tests/main/store.test.ts` (2 tests):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | concurrent knowledge writes keep every item | `Promise.all([addKnowledge([ki(1, d1)]), addKnowledge([ki(2, d2)]), addKnowledge([ki(3, d3)])])` with three different ISO dates | all three promises resolve; `readKnowledge()` has length 3 |
+   | adding the same knowledge item twice stores it once | `a = ki(1, d1)`; `b = { ...ki(1, d2), id: "k_00000009-0000-0000-0000-000000000000" }`; `addKnowledge([a])`; `addKnowledge([b])` | `readKnowledge()` has length 1 and its id is `a.id` |
+
+   In `tests/main/turn.test.ts` (1 test):
+
+   | Test | Given | Expect |
+   |------|-------|--------|
+   | a failed knowledge save does not finish the lesson | the lesson_done events from the existing `lesson_done adds knowledge for passed nodes only` test, replies `A.done(), A.done()`, and a store that is the real store except `addKnowledge` rejects with `new Error("disk")` on its first call and delegates to the real one afterwards | first `advance(ID)` rejects with `"disk"`; the stored session still has no `lesson_done` event (`deriveState(events).phase` is `"teach"`); second `advance(ID)` is `ok: true` with `deriveState(events).phase` `"done"`; `readKnowledge()` equals one item with text `"t1"` |
+
+3. Replace the two fixed waits in `tests/main/turn.test.ts`: in `second_call_refused_while_running` and `stop ends the running call`, create `let reached!: () => void; const reachedP = new Promise<void>((r) => (reached = r));`, call `reached()` as the first line inside the adapter's `run` function of that test, and replace `await new Promise((r) => setTimeout(r, 20));` with `await reachedP;`. Behavior and assertions stay the same.
+4. Run tests. Expected: `Tests  5 failed | 120 passed (125)`: the five new tests fail and nothing else (the stdin test may also print an unhandled-error line). Paste the output. If anything else fails, stop and report.
+5. Fix the code:
+   - `src/main/cli/codex.ts` (`run` only): immediately after the `deps.spawn(...)` call add `child.stdin?.on("error", () => {});` (the `close` handler already reports the failure). Add `child.stdout?.setEncoding("utf8"); child.stderr?.setEncoding("utf8");` and change the two data handlers to `(d: string) => (stdout += d)` and `(d: string) => (stderr += d)`.
+   - `src/main/store.ts`:
+     - add inside `createStore`:
+       ```ts
+       const tails = new Map<string, Promise<unknown>>();
+       const serial = <T>(key: string, fn: () => Promise<T>): Promise<T> => {
+         const result = (tails.get(key) ?? Promise.resolve()).then(fn, fn);
+         tails.set(key, result.catch(() => undefined));
+         return result;
+       };
+       let tmpCounter = 0;
+       ```
+     - in `writeJsonAtomic` use `const tmp = file + "." + process.pid + "." + tmpCounter++ + ".tmp";` for both the write and the rename (and remove the temp file with `fs.rm(tmp, { force: true })` in a `catch` before rethrowing, so a failed rename leaves nothing behind);
+     - wrap the whole body of `addKnowledge` and of `deleteKnowledge` in `serial(knowledgeFile, async () => { ... })`;
+     - in `addKnowledge`, before writing, drop every incoming item for which an existing item (or an earlier item in the same call) has the same `sessionId`, `nodeId` and `text`; if nothing is left to add, return without writing.
+   - `src/main/turn.ts` (`advance` only): build the new session value first (`const next = { ...session, updatedAt: deps.now(), events: [...session.events, event] }`); if `step.action.type === "lesson_done"`, call `deps.store.addKnowledge(...)` (same item mapping as today, computed from `learnedToSave(deriveState(next.events), step.action)`) BEFORE `deps.store.writeSession(next)`; then `session = next`, then `deps.notify(session)`.
+6. Run tests. Expected: `Tests  125 passed (125)`. Run `npm run format && npm run lint && npm run typecheck`: exit 0. Paste.
+7. Tick T19b in the Progress list, then `git add src tests docs/blueprint/PLAN.md && git commit -m "fix: crash on early Codex exit, split characters, lost knowledge items"`.
+
+**Stop and report instead of continuing if**
+- step 4 shows any failure other than the five new tests,
+- a test hangs (paste which),
+- tests fail after two attempts, or you need a file not named here.
+
 ### GATE B - A lesson runs headless against real Codex
 
 The builder stops here. Nothing continues until the owner says so.
 
-**Run**: `npm test` -> expect `Tests  120 passed (120)`; `npm run eval` -> expect `EVAL SCORE first-try N/7, with-retry 7/7`, N >= 6
+**Run**: `npm test` -> expect `Tests  125 passed (125)`; `npm run eval` -> expect `EVAL SCORE first-try N/7, with-retry 7/7`, N >= 6
 **Look at**: `git diff <gate-A-commit>..HEAD --stat` -> only `src/main/cli/`, `src/main/store.ts`, `src/main/turn.ts`, `tests/`, `evals/`, `PLAN.md`
 **Fresh review**: run the reviewer prompt from the skill's `references/execution.md` over T11-T19 against SPEC.md and ARCHITECTURE.md. Attach its verdict.
 **Try it yourself**: read the seven `E` lines from the eval output: how many seconds and input tokens does one call cost on your account? Decide whether that is acceptable for a 40-call lesson before the window is built.
