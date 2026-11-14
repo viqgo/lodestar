@@ -602,7 +602,7 @@ Reply with exactly one JSON object and nothing else: no code fence, no text befo
 ### CR-5 changes (D49)
 `detectVersion` runs with the same extended `PATH` and a neutral cwd (`tmpRoot`) as `runProcess` (helper `childEnv`). `runProcess` resolves before it removes the temp folder, ignores a failing removal, and turns a failing `mkdirSync`/`prepare` into `{ kind: "exit", code: 1, stdout: "", stderr: "could not prepare the working folder" }`. Gemini output is read by trying every `{` in turn (`findJson`) for both stdout (`response`) and stderr (`error.message`). `sessions:setCli` checks `isRunning` again after reading the session. `LessonScreen` treats an unknown `session.cli` as `codex`, blocks the card and "Change tutor" while the CLI check is running, and guards and catches the switch call.
 
-## Milestones 3-8 (DRAFT 2026-11-14, awaiting owner approval)
+## Milestones 3-8 (approved 2026-11-14, D55)
 
 Rules that hold for all of it: `src/core` and `src/shared` stay pure; every CLI process still starts through `runProcess` in an empty temporary cwd; the window never sees a file path it did not get from the main process, never sees the Deepgram key, and never touches `fs`. Saved files gain fields but keep `version: 1`: every reader fills a missing field with its default (`folder: null`, `attachments: []`, `webSearch: false`, `subjectId: null`, `unitId: null`, `answer.attachments: []`).
 

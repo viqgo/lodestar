@@ -126,7 +126,7 @@ All screens share the sidebar. Minimum window 960x600; there are no narrow-scree
 - Options in a choice card are shown in a shuffled order that stays the same every time that card is drawn.
 - Accessibility: every input has a label; icon buttons have `aria-label` ("Delete lesson", "Delete item"); grades and node states use text or a symbol as well as color (✓ passed, ~ shaky); focus is always visible (accent outline).
 
-## Milestones 3-8 (DRAFT 2026-11-14, awaiting owner approval)
+## Milestones 3-8 (approved 2026-11-14, D55)
 All copy is in SPEC (B35-B86), character for character. New pieces use the existing tokens; the only new values are the light theme's colors (milestone 8).
 
 ### New components
