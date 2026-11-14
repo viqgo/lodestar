@@ -33,7 +33,6 @@ export function registerIpc(deps: IpcDeps): void {
     return result;
   };
 
-  ipcMain.handle("cli:detect", () => adapters.codex.detect());
   ipcMain.handle("clis:detect", () => detectAll(adapters));
 
   ipcMain.handle("sessions:list", async (): Promise<SessionSummary[]> => {
@@ -56,10 +55,10 @@ export function registerIpc(deps: IpcDeps): void {
 
   ipcMain.handle(
     "sessions:create",
-    async (_event, input: { topic: string; goal: string; cli?: CliId }) => {
+    async (_event, input: { topic: string; goal: string; cli: CliId }) => {
       const message = validateNewLesson(input.topic, input.goal);
       if (message !== null) return { ok: false as const, message };
-      const cli = input.cli ?? "codex";
+      const cli = input.cli;
       if (!isCliId(cli)) return { ok: false as const, message: "Choose a tutor." };
       const session: Session = {
         version: 1,

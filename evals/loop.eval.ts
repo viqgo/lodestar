@@ -3,20 +3,23 @@ import fs from "node:fs";
 import os from "node:os";
 import { describe, expect, it } from "vitest";
 import { deriveState } from "../src/core/engine";
-import { createCodexAdapter } from "../src/main/cli/codex";
+import { createAdapters } from "../src/main/cli/registry";
+import { isCliId } from "../src/shared/clis";
 import { modelStep } from "../src/main/turn";
 import type { Action, Question, SessionEvent } from "../src/shared/types";
 import { act, ans, cont, pick, say, session } from "../tests/helpers/fixtures";
 
 describe("evals", () => {
-  it("the loop holds together against real Codex", async () => {
-    const adapter = createCodexAdapter({
+  it("the loop holds together against the real CLI", async () => {
+    const cli = process.env.LEARN_EVAL_CLI ?? "codex";
+    if (!isCliId(cli)) throw new Error("LEARN_EVAL_CLI must be codex, claude or gemini");
+    const adapter = createAdapters({
       spawn,
       env: process.env,
       home: os.homedir(),
       tmpRoot: os.tmpdir(),
       fs,
-    });
+    })[cli];
 
     const base = {
       ...session(),
@@ -171,7 +174,7 @@ describe("evals", () => {
       );
     }
     process.stdout.write(
-      `EVAL SCORE first-try ${firstTry}/${cases.length}, with-retry ${withRetry}/${cases.length}\n`,
+      `EVAL SCORE ${cli} first-try ${firstTry}/${cases.length}, with-retry ${withRetry}/${cases.length}\n`,
     );
 
     expect(firstTry).toBeGreaterThanOrEqual(cases.length - 1);

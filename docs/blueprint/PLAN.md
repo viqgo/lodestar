@@ -78,7 +78,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T52 The tutor picker
 - [x] T53 Pick a tutor for a new lesson
 - [x] T54 The tutor in a lesson, and switching
-- [ ] T55 Clean up, document, and check Claude Code for real
+- [x] T55 Clean up, document, and check Claude Code for real
 - [ ] GATE F Three CLIs
 - [ ] OWNER TASK Gemini live run
 

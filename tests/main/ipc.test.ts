@@ -50,11 +50,6 @@ const withId = (id: string, updatedAt: string, events: Session["events"]): Sessi
 });
 
 describe("ipc", () => {
-  it("cli:detect passes the adapter result through", async () => {
-    const { call } = await setup();
-    expect(await call("cli:detect")).toEqual({ ok: true, version: "1.2.3" });
-  });
-
   it("clis:detect returns a status per CLI", async () => {
     const { call } = await setup();
     expect(await call("clis:detect")).toEqual([
@@ -70,8 +65,10 @@ describe("ipc", () => {
     expect(r.ok).toBe(true);
     expect(r.session.cli).toBe("claude");
     expect((await store.readSession(r.session.id))?.cli).toBe("claude");
-    const d = await call("sessions:create", { topic: "Maths", goal: "Limits" });
-    expect(d.session.cli).toBe("codex");
+    expect(await call("sessions:create", { topic: "Maths", goal: "Limits" })).toEqual({
+      ok: false,
+      message: "Choose a tutor.",
+    });
   });
 
   it("sessions:create refuses an unknown CLI", async () => {
@@ -143,7 +140,7 @@ describe("ipc", () => {
 
   it("sessions:create rejects bad input", async () => {
     const { store, call } = await setup();
-    expect(await call("sessions:create", { topic: "", goal: "g" })).toEqual({
+    expect(await call("sessions:create", { topic: "", goal: "g", cli: "codex" })).toEqual({
       ok: false,
       message: "Enter a topic and a goal.",
     });
@@ -162,7 +159,9 @@ describe("ipc", () => {
       updatedAt: NOW,
       events: [],
     };
-    expect(await call("sessions:create", { topic: "  Maths ", goal: " Limits " })).toEqual({
+    expect(
+      await call("sessions:create", { topic: "  Maths ", goal: " Limits ", cli: "codex" }),
+    ).toEqual({
       ok: true,
       session: expected,
     });

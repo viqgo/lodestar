@@ -36,7 +36,6 @@ describe("preload", () => {
     expect(expose.mock.calls[0][0]).toBe("api");
     expect(Object.keys(api).sort()).toEqual(
       [
-        "detectCli",
         "detectClis",
         "setSessionCli",
         "listSessions",
@@ -59,9 +58,8 @@ describe("preload", () => {
 
   it("each method calls its channel with its arguments", async () => {
     const api = await load();
-    const input = { topic: "t", goal: "g" };
+    const input = { topic: "t", goal: "g", cli: "codex" as const };
     const results = [
-      await api.detectCli(),
       await api.detectClis(),
       await api.listSessions(),
       await api.createSession(input),
@@ -78,7 +76,6 @@ describe("preload", () => {
       await api.setSessionCli("a", "claude"),
     ];
     expect(invoke.mock.calls).toEqual([
-      ["cli:detect"],
       ["clis:detect"],
       ["sessions:list"],
       ["sessions:create", input],
@@ -94,7 +91,7 @@ describe("preload", () => {
       ["profile:save", "p"],
       ["sessions:setCli", "a", "claude"],
     ]);
-    expect(results).toEqual(Array(15).fill("R"));
+    expect(results).toEqual(Array(14).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

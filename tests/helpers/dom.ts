@@ -15,7 +15,6 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     session: null,
   };
   const api = {
-    detectCli: vi.fn(async () => ({ ok: true, version: "0.0.0" })),
     detectClis: vi.fn(async () => [
       { id: "codex", installed: true, version: "0.0.0" },
       { id: "claude", installed: true, version: "0.0.0" },

@@ -130,13 +130,12 @@ export type TurnResult =
   { ok: true; session: Session } | { ok: false; error: TurnError; session: Session | null };
 
 export type Api = {
-  detectCli(): Promise<DetectResult>;
   detectClis(): Promise<CliStatus[]>;
   listSessions(): Promise<SessionSummary[]>;
   createSession(input: {
     topic: string;
     goal: string;
-    cli?: CliId;
+    cli: CliId;
   }): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
   setSessionCli(
     id: string,

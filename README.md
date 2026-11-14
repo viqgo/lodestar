@@ -12,7 +12,7 @@ Items you learn are saved to a knowledge list. Later lessons read that list.
 
 - macOS. Other systems are untested.
 - Node 26 and npm 11.
-- The Codex CLI, installed and signed in. `codex --version` should print a version.
+- At least one of: Codex CLI, Claude Code, Gemini CLI (experimental: not yet run against a real Gemini account), installed and signed in. `codex --version`, `claude --version` or `gemini --version` should print a version.
 
 ## Run it
 
@@ -27,24 +27,24 @@ If the window does not open and the log says `Electron uninstall`, run `node nod
 
 Lessons are JSON files under the app's data folder. On macOS this is `~/Library/Application Support/lodestar`. You can change the folder with the `LEARN_DATA_DIR` environment variable.
 
-If the Codex binary is in a non-standard place, set `LEARN_CODEX_PATH` to its path.
+If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PATH` or `LEARN_GEMINI_PATH` to its path.
 
 ## What goes to the model
 
-Each turn runs `codex exec` read-only, in an empty temporary folder, with the lesson so far. Nothing else is sent.
+Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far and the tutor instructions from the Profile screen are sent. Nothing else is sent.
 
 ## Development
 
 - `npm test` runs the tests.
 - `npm run lint` checks formatting and lint rules.
 - `npm run typecheck` runs the TypeScript type check.
-- `npm run eval` runs checks against the real Codex. It spends Codex quota.
+- `npm run eval` runs checks against a real CLI. It spends that CLI's quota. Choose the CLI with `LEARN_EVAL_CLI=codex|claude|gemini` (default `codex`).
 
 The blueprint for the app lives in `docs/blueprint/`.
 
 ## Status
 
-Milestone 1 supports Codex only. Gemini CLI and Claude Code are planned.
+Milestone 2: choose Codex, Claude Code or Gemini per lesson and switch mid-lesson.
 
 ## License
 

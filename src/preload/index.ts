@@ -2,7 +2,6 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { Api, Session, TurnResult } from "../shared/types";
 
 const api: Api = {
-  detectCli: () => ipcRenderer.invoke("cli:detect") as ReturnType<Api["detectCli"]>,
   detectClis: () => ipcRenderer.invoke("clis:detect") as ReturnType<Api["detectClis"]>,
   listSessions: () => ipcRenderer.invoke("sessions:list") as ReturnType<Api["listSessions"]>,
   createSession: (input) =>
