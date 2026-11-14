@@ -1,6 +1,6 @@
 import path from "node:path";
 import { attachmentKind, checkAttachment } from "../core/material";
-import type { Attachment, KnowledgeItem, Session } from "../shared/types";
+import type { Attachment, KnowledgeItem, Session, Subject } from "../shared/types";
 
 export type Store = {
   writeJsonAtomic(file: string, data: unknown): Promise<void>;
@@ -16,6 +16,10 @@ export type Store = {
     limit: number,
   ): Promise<{ ok: true; attachment: Attachment } | { ok: false; message: string }>;
   removeAttachment(sessionId: string, file: string): Promise<void>;
+  listSubjects(): Promise<Subject[]>;
+  readSubject(id: string): Promise<Subject | null>;
+  writeSubject(subject: Subject): Promise<void>;
+  deleteSubject(id: string): Promise<void>;
   readKnowledge(): Promise<KnowledgeItem[]>;
   addKnowledge(items: KnowledgeItem[]): Promise<void>;
   deleteKnowledge(id: string): Promise<void>;
@@ -24,6 +28,7 @@ export type Store = {
 };
 
 const ID = /^[sk]_[0-9a-f-]{36}$/;
+const SUBJECT_ID = /^u_[0-9a-f-]{36}$/;
 
 export async function createStore(
   dir: string,
@@ -31,6 +36,9 @@ export async function createStore(
 ): Promise<Store> {
   const sessionsDir = path.join(dir, "sessions");
   await fs.mkdir(sessionsDir, { recursive: true });
+  const subjectsDir = path.join(dir, "subjects");
+  await fs.mkdir(subjectsDir, { recursive: true });
+  const subjectFile = (id: string) => path.join(subjectsDir, id + ".json");
   const fileFor = (id: string) => path.join(sessionsDir, id + ".json");
 
   const tails = new Map<string, Promise<unknown>>();
@@ -60,6 +68,8 @@ export async function createStore(
     folder: s.folder ?? null,
     attachments: s.attachments ?? [],
     webSearch: s.webSearch ?? false,
+    subjectId: s.subjectId ?? null,
+    unitId: s.unitId ?? null,
   });
 
   const attachmentsDir = (id: string): string => {
@@ -144,6 +154,42 @@ export async function createStore(
     await fs.rm(attachmentsDir(id), { recursive: true, force: true });
   };
 
+  const readSubject = async (id: string): Promise<Subject | null> => {
+    if (!SUBJECT_ID.test(id)) return null;
+    try {
+      return JSON.parse(await fs.readFile(subjectFile(id), "utf8")) as Subject;
+    } catch {
+      return null;
+    }
+  };
+
+  const listSubjects = async (): Promise<Subject[]> => {
+    const names = (await fs.readdir(subjectsDir)).filter((n) => n.endsWith(".json"));
+    const subjects: Subject[] = [];
+    for (const name of names) {
+      try {
+        subjects.push(
+          JSON.parse(await fs.readFile(path.join(subjectsDir, name), "utf8")) as Subject,
+        );
+      } catch {
+        // skip unparsable files
+      }
+    }
+    return subjects.sort((a, b) =>
+      a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0,
+    );
+  };
+
+  const writeSubject = (s: Subject): Promise<void> => writeJsonAtomic(subjectFile(s.id), s);
+
+  const deleteSubject = async (id: string): Promise<void> => {
+    if (!SUBJECT_ID.test(id)) return;
+    for (const s of await listSessions()) {
+      if (s.subjectId === id) await deleteSession(s.id);
+    }
+    await fs.rm(subjectFile(id), { force: true });
+  };
+
   const knowledgeFile = path.join(dir, "knowledge.json");
 
   const readAllKnowledge = async (): Promise<KnowledgeItem[]> => {
@@ -212,6 +258,10 @@ export async function createStore(
     attachmentsDir,
     addAttachment,
     removeAttachment,
+    listSubjects,
+    readSubject,
+    writeSubject,
+    deleteSubject,
     readKnowledge,
     addKnowledge,
     deleteKnowledge,

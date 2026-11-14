@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { createStore } from "../../src/main/store";
-import { session } from "../helpers/fixtures";
+import { session, subject } from "../helpers/fixtures";
 
 const mk = async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-store-"));
@@ -288,5 +288,79 @@ describe("store attachments", () => {
     const b = await store.addAttachment(SID, two, 3, 10);
     expect(a.ok && a.attachment.file).toBe("a1-same.txt");
     expect(b.ok && b.attachment.file).toBe("a2-same.txt");
+  });
+});
+
+describe("store subjects", () => {
+  const UID = (n: number) => "u_0000000" + n + "-0000-0000-0000-000000000000";
+  const SUB = (n: number, updatedAt: string) => ({ ...subject(), id: UID(n), updatedAt });
+  const source = async (name: string) => {
+    const d = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-src-"));
+    const p = path.join(d, name);
+    await fsp.writeFile(p, "hello");
+    return p;
+  };
+
+  it("a subject round-trips", async () => {
+    const { dir, store } = await mk();
+    await store.writeSubject(subject());
+    expect(await store.readSubject(subject().id)).toEqual(subject());
+    await expect(
+      fsp.access(path.join(dir, "subjects", subject().id + ".json")),
+    ).resolves.toBeUndefined();
+  });
+
+  it("subjects are listed newest first and unreadable files are skipped", async () => {
+    const { dir, store } = await mk();
+    await store.writeSubject(SUB(1, "2026-01-01T00:00:00.000Z"));
+    await store.writeSubject(SUB(2, "2026-01-03T00:00:00.000Z"));
+    await store.writeSubject(SUB(3, "2026-01-02T00:00:00.000Z"));
+    await fsp.writeFile(path.join(dir, "subjects", "bad.json"), "{nope", "utf8");
+    expect((await store.listSubjects()).map((s) => s.id)).toEqual([UID(2), UID(3), UID(1)]);
+    expect(await store.readSubject(UID(9))).toBeNull();
+  });
+
+  it("readSubject refuses ids that are not subject ids", async () => {
+    const { store } = await mk();
+    await store.writeSession({ ...session(), id: SID });
+    expect(await store.readSubject(SID)).toBeNull();
+    expect(await store.readSubject("../x")).toBeNull();
+  });
+
+  it("delete_subject_removes_its_lessons_keeps_knowledge (store)", async () => {
+    const { dir, store } = await mk();
+    const S1 = "s_00000001-0000-0000-0000-000000000000";
+    const S2 = "s_00000002-0000-0000-0000-000000000000";
+    const S3 = "s_00000003-0000-0000-0000-000000000000";
+    await store.writeSubject(subject());
+    await store.writeSession({ ...session(), id: S1, subjectId: subject().id, unitId: "u1" });
+    await store.writeSession({ ...session(), id: S2, subjectId: subject().id, unitId: "u2" });
+    await store.writeSession({ ...session(), id: S3 });
+    expect((await store.addAttachment(S1, await source("a.txt"), 0, 10)).ok).toBe(true);
+    await store.addKnowledge([
+      ki(1, "2026-01-01T00:00:00.000Z"),
+      ki(2, "2026-01-02T00:00:00.000Z"),
+    ]);
+    const knowledgeBefore = await store.readKnowledge();
+    const otherBefore = await store.readSession(S3);
+    await store.deleteSubject(subject().id);
+    expect(await store.readSubject(subject().id)).toBeNull();
+    expect(await store.readSession(S1)).toBeNull();
+    expect(await store.readSession(S2)).toBeNull();
+    await expect(fsp.access(path.join(dir, "attachments", S1))).rejects.toThrow();
+    expect(await store.readSession(S3)).toEqual(otherBefore);
+    expect(await store.readKnowledge()).toEqual(knowledgeBefore);
+    await expect(store.deleteSubject("../x")).resolves.toBeUndefined();
+  });
+
+  it("old session files get subjectId and unitId defaults", async () => {
+    const { dir, store } = await mk();
+    const old: Record<string, unknown> = { ...session(), id: SID };
+    delete old.subjectId;
+    delete old.unitId;
+    await fsp.writeFile(path.join(dir, "sessions", SID + ".json"), JSON.stringify(old), "utf8");
+    const want = { subjectId: null, unitId: null };
+    expect(await store.readSession(SID)).toMatchObject(want);
+    expect((await store.listSessions())[0]).toMatchObject(want);
   });
 });
