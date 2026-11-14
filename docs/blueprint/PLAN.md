@@ -95,7 +95,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T65 Files on an answer
 - [x] T66 Document it and check it for real
 - [x] T66b Gate G safety and race fixes (D59)
-- [ ] T66c Resume after the material folder is fixed (D59)
+- [x] T66c Resume after the material folder is fixed (D59)
 - [ ] GATE G More input (milestone 3)
 - [ ] T67-T78 Milestone 4: subjects (outline, expanded at stage start)
 - [ ] GATE H Subjects

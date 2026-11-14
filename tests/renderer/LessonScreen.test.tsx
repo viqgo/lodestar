@@ -434,4 +434,39 @@ describe("LessonScreen", () => {
     expect(screen.getByRole("button", { name: "Change" })).toBeEnabled();
     expect(api.advance).not.toHaveBeenCalled();
   });
+
+  it("choosing another folder after folder_missing resumes the lesson", async () => {
+    const { api, emitEnded } = installApi({
+      getSession: vi.fn(async () => withMaterial()),
+      pickFolder: vi.fn(async () => "/other"),
+      setSessionFolder: vi.fn(async () => ({ ok: true, session: withMaterial() })),
+    });
+    const message = "The material folder was not found. Choose it again or remove it.";
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await screen.findByText("notes");
+    rtlAct(() =>
+      emitEnded(ID, { ok: false, error: { kind: "folder_missing", message }, session: null }),
+    );
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Change" }));
+    await vi.waitFor(() => expect(api.advance).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+  });
+
+  it("removing the folder after folder_missing resumes the lesson", async () => {
+    const { api, emitEnded } = installApi({
+      getSession: vi.fn(async () => withMaterial()),
+      setSessionFolder: vi.fn(async () => ({ ok: true, session: withMaterial() })),
+    });
+    const message = "The material folder was not found. Choose it again or remove it.";
+    render(<LessonScreen id={ID} start={false} statuses={ALL} onRetryDetect={() => {}} />);
+    await screen.findByText("notes");
+    rtlAct(() =>
+      emitEnded(ID, { ok: false, error: { kind: "folder_missing", message }, session: null }),
+    );
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Remove" }));
+    await vi.waitFor(() => expect(api.advance).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(message)).not.toBeInTheDocument();
+  });
 });

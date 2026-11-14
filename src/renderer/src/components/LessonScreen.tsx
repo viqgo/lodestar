@@ -112,10 +112,12 @@ export function LessonScreen(props: {
 
   const material = async (
     call: () => Promise<{ ok: true; session: unknown } | { ok: false; message: string }>,
+    resume = false,
   ) => {
     try {
       const result = await call();
       setMaterialError(result.ok ? null : result.message);
+      if (result.ok && resume && error?.kind === "folder_missing") retry();
     } catch {
       setMaterialError("Could not save. Check free disk space.");
     }
@@ -124,7 +126,8 @@ export function LessonScreen(props: {
   const pickFolder = async () => {
     try {
       const picked = await window.api.pickFolder();
-      if (picked !== null) await material(() => window.api.setSessionFolder(props.id, picked));
+      if (picked !== null)
+        await material(() => window.api.setSessionFolder(props.id, picked), true);
     } catch {
       setMaterialError("Could not save. Check free disk space.");
     }
@@ -166,7 +169,9 @@ export function LessonScreen(props: {
               webSearch={session.webSearch ?? false}
               disabled={busy || isDone}
               onPickFolder={pickFolder}
-              onRemoveFolder={() => material(() => window.api.setSessionFolder(props.id, null))}
+              onRemoveFolder={() =>
+                material(() => window.api.setSessionFolder(props.id, null), true)
+              }
               onAttach={attach}
               onRemoveAttachment={(file) =>
                 material(() => window.api.removeAttachment(props.id, file))
