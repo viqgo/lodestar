@@ -9,9 +9,12 @@ import {
   createGeminiAdapter,
   geminiExcluded,
 } from "../../src/main/cli/gemini";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
+import { runOptions } from "../../src/main/turn";
 import { NO_OPTIONS } from "../../src/shared/clis";
 import type { RunOptions } from "../../src/shared/types";
 import { fakeSpawn, type FakePlan } from "../helpers/fakes";
+import { session } from "../helpers/fixtures";
 
 const lines = (text: string) => [
   '{"type":"thread.started","thread_id":"01a1"}',
@@ -371,6 +374,75 @@ describe("tool safety", () => {
             }
           }
         }
+      }
+    }
+  });
+});
+
+describe("settings to cli flags", () => {
+  const adaptersFor = () => {
+    const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), "lh-test-"));
+    const claude = fakeSpawn({ stdout: "{}" });
+    const gemini = fakeSpawn({ stdout: "{}" });
+    return {
+      claude,
+      gemini,
+      claudeAdapter: createClaudeAdapter({
+        spawn: claude.spawn,
+        env: { LEARN_CLAUDE_PATH: "/fake/claude", PATH: "" },
+        home: "/home/x",
+        tmpRoot: tmp(),
+        fs,
+      }),
+      geminiAdapter: createGeminiAdapter({
+        spawn: gemini.spawn,
+        env: { LEARN_GEMINI_PATH: "/fake/gemini", PATH: "" },
+        home: "/home/x",
+        tmpRoot: tmp(),
+        fs,
+      }),
+    };
+  };
+
+  it("model_and_effort_become_codex_flags", async () => {
+    const o = runOptions(session(), "/att", {
+      ...DEFAULT_SETTINGS,
+      clis: {
+        ...DEFAULT_SETTINGS.clis,
+        codex: { model: "gpt-x", effort: "low" },
+        claude: { model: "sonnet", effort: "max" },
+      },
+    });
+    expect(o.model).toBe("gpt-x");
+    expect(o.effort).toBe("low");
+    const codex = make({ stdout: OK });
+    await codex.adapter.run({ ...req(), options: o });
+    const a = codex.f.calls[0].args;
+    expect(a.slice(a.indexOf("--skip-git-repo-check") + 1)).toEqual([
+      "-m",
+      "gpt-x",
+      "-c",
+      "model_reasoning_effort=low",
+      "-",
+    ]);
+  });
+
+  it("blank_settings_add_no_flags", async () => {
+    for (const cli of ["codex", "claude", "gemini"] as const) {
+      const blank = runOptions({ ...session(), cli }, "/att", DEFAULT_SETTINGS);
+      const none = runOptions({ ...session(), cli }, "/att", null);
+      for (const o of [blank, none]) {
+        expect(o.model).toBeNull();
+        expect(o.effort).toBeNull();
+      }
+      const codex = make({ stdout: OK });
+      const x = adaptersFor();
+      await codex.adapter.run({ ...req(), options: blank });
+      await x.claudeAdapter.run({ ...req(), options: blank });
+      await x.geminiAdapter.run({ ...req(), options: blank });
+      for (const args of [codex.f.calls[0].args, x.claude.calls[0].args, x.gemini.calls[0].args]) {
+        for (const flag of ["-m", "--model", "--effort", "-c"]) expect(args).not.toContain(flag);
+        expect(args.some((v: string) => v.startsWith("model_reasoning_effort"))).toBe(false);
       }
     }
   });

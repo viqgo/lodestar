@@ -153,7 +153,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [ ] GATE K Packaging
 - [x] T107 Settings grow
 - [x] T108 Method text
-- [ ] T109 Model and effort reach the CLI
+- [x] T109 Model and effort reach the CLI
 - [ ] T110 Theme
 - [ ] T111 Profile sections: models and method
 - [ ] T112 Header, evals, README

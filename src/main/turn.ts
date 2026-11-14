@@ -1,6 +1,7 @@
 import path from "node:path";
 import { allowedActions, checkAction, deriveState, learnedToSave } from "../core/engine";
 import { buildPrompt } from "../core/prompt";
+import { cliChoice } from "../core/settings";
 import { deriveSubject, handoverNote, renderSubjectSection } from "../core/subject";
 import { callModel } from "./call";
 import { attachmentKind, renderMaterial } from "../core/material";
@@ -15,6 +16,7 @@ import type {
   RunOptions,
   Session,
   SessionEvent,
+  Settings,
   TurnError,
   TurnResult,
   Usage,
@@ -22,8 +24,11 @@ import type {
 import type { CliAdapter } from "./cli/adapter";
 import type { Store } from "./store";
 
-export function runOptions(session: Session, attachmentsDir: string, settings: null): RunOptions {
-  void settings;
+export function runOptions(
+  session: Session,
+  attachmentsDir: string,
+  settings: Settings | null,
+): RunOptions {
   const answers = session.events.flatMap((e) => (e.kind === "answer" ? [e.answer] : []));
   const last = [...answers].reverse().find((a) => (a.attachments?.length ?? 0) > 0);
   const anyAnswerFiles = answers.some((a) => (a.attachments?.length ?? 0) > 0);
@@ -35,7 +40,7 @@ export function runOptions(session: Session, attachmentsDir: string, settings: n
     ...session.attachments.filter((a) => a.kind === "image").map((a) => a.file),
     ...(last?.attachments ?? []).filter((f) => attachmentKind(f) === "image"),
   ].map((f) => path.join(attachmentsDir, f));
-  return { readDirs, images, webSearch: session.webSearch, model: null, effort: null };
+  return { readDirs, images, webSearch: session.webSearch, ...cliChoice(settings, session.cli) };
 }
 
 export async function modelStep(
@@ -143,7 +148,7 @@ export function createTurnRunner(deps: {
         subjectSection = null;
       }
     }
-    const options = runOptions(session, attachmentsDir, null);
+    const options = runOptions(session, attachmentsDir, settings);
     const timeoutMs =
       options.readDirs.length > 0 || options.webSearch ? CALL_TIMEOUT_TOOLS_MS : CALL_TIMEOUT_MS;
     const adapter = deps.adapters[session.cli] ?? deps.adapters.codex;

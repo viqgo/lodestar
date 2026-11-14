@@ -1,3 +1,4 @@
+import { cliChoice } from "../core/settings";
 import { plain } from "../core/material";
 import { checkChange, deriveSubject, unitStatuses, validateOutline } from "../core/subject";
 import { buildOutlinePrompt, buildSeniorPrompt } from "../core/subjectPrompt";
@@ -76,13 +77,13 @@ export function createSubjectRunner(deps: {
         };
       }
       const profile = await deps.store.readProfile();
+      const settings = await deps.store.readSettings();
       const adapter = deps.adapters[subject.cli] ?? deps.adapters.codex;
       const options: RunOptions = {
         readDirs: [subject.folder],
         images: [],
         webSearch: false,
-        model: null,
-        effort: null,
+        ...cliChoice(settings, subject.cli),
       };
       const timeoutMs = CALL_TIMEOUT_TOOLS_MS;
       const known = listing.files.map((f) => f.path);

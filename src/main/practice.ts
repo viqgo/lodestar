@@ -1,4 +1,5 @@
 import { buildAskPrompt, buildFrontsPrompt, buildGradePrompt } from "../core/practicePrompt";
+import { cliChoice } from "../core/settings";
 import { newReview } from "../core/review";
 import { NO_OPTIONS } from "../shared/clis";
 import { CALL_TIMEOUT_MS, CARD_BATCH } from "../shared/limits";
@@ -48,6 +49,7 @@ export function createPractice(deps: {
     try {
       const adapter = deps.adapters[cli] ?? deps.adapters.codex;
       const profile = await deps.store.readProfile();
+      const options = { ...NO_OPTIONS, ...cliChoice(await deps.store.readSettings(), cli) };
       const knowledge = await deps.store.readKnowledge();
       const reviews = await deps.store.readReviews();
       const need: KnowledgeItem[] = [];
@@ -78,7 +80,7 @@ export function createPractice(deps: {
               return blank === undefined ? null : "empty front: " + blank.itemId;
             },
             allowed: "one front per item",
-            options: NO_OPTIONS,
+            options,
             timeoutMs: CALL_TIMEOUT_MS,
             signal: controller.signal,
           },
@@ -115,6 +117,7 @@ export function createPractice(deps: {
     try {
       const adapter = deps.adapters[cli] ?? deps.adapters.codex;
       const profile = await deps.store.readProfile();
+      const options = { ...NO_OPTIONS, ...cliChoice(await deps.store.readSettings(), cli) };
       const item = (await deps.store.readKnowledge()).find((k) => k.id === itemId);
       if (item === undefined) return { ok: false, error: GONE };
       const result = await callModel(
@@ -128,7 +131,7 @@ export function createPractice(deps: {
               ? "check needs a correctIndex"
               : null,
           allowed: "a question",
-          options: NO_OPTIONS,
+          options,
           timeoutMs: CALL_TIMEOUT_MS,
           signal: controller.signal,
         },
@@ -154,6 +157,7 @@ export function createPractice(deps: {
     try {
       const adapter = deps.adapters[cli] ?? deps.adapters.codex;
       const profile = await deps.store.readProfile();
+      const options = { ...NO_OPTIONS, ...cliChoice(await deps.store.readSettings(), cli) };
       const item = (await deps.store.readKnowledge()).find((k) => k.id === itemId);
       if (item === undefined) return { ok: false, error: GONE };
       const result = await callModel(
@@ -164,7 +168,7 @@ export function createPractice(deps: {
           parse: parseGrade,
           check: (v) => (v.feedback.trim() === "" ? "feedback is empty" : null),
           allowed: "a verdict and feedback",
-          options: NO_OPTIONS,
+          options,
           timeoutMs: CALL_TIMEOUT_MS,
           signal: controller.signal,
         },

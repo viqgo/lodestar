@@ -10,8 +10,11 @@ import {
   geminiExcluded,
   geminiPrompt,
 } from "../../src/main/cli/gemini";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
+import { runOptions } from "../../src/main/turn";
 import { NO_OPTIONS } from "../../src/shared/clis";
 import { fakeSpawn, type FakePlan } from "../helpers/fakes";
+import { session } from "../helpers/fixtures";
 
 const AUTH_ERROR =
   '{"session_id":"s","error":{"type":"Error","message":"Please set an Auth method","code":41}}';
@@ -210,5 +213,22 @@ describe("gemini adapter", () => {
     const b = make({ stdout: '{"response":"{}"}' });
     await b.adapter.run(req());
     expect(b.f.calls[0].cmd).toBe("/fake/gemini");
+  });
+});
+
+describe("settings to gemini flags", () => {
+  it("model_becomes_gemini_flag", async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      clis: { ...DEFAULT_SETTINGS.clis, gemini: { model: "gemini-x", effort: "high" } },
+    };
+    const o = runOptions({ ...session(), cli: "gemini" }, "/att", settings);
+    expect(o.model).toBe("gemini-x");
+    expect(o.effort).toBeNull();
+    const { adapter, f } = make({ stdout: '{"response":"{}"}' });
+    await adapter.run({ ...req(), options: o });
+    const a = f.calls[0].args;
+    expect(a.slice(-2)).toEqual(["-m", "gemini-x"]);
+    expect(a).not.toContain("high");
   });
 });

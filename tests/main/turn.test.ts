@@ -343,6 +343,45 @@ describe("turn method", () => {
   });
 });
 
+describe("turn model and effort", () => {
+  const claudeSettings = {
+    ...DEFAULT_SETTINGS,
+    clis: { ...DEFAULT_SETTINGS.clis, claude: { model: "sonnet", effort: "medium" } },
+  };
+
+  it("a lesson call carries the model and effort of its tutor", async () => {
+    const f = fakeAdapter(A.probe(), A.probe());
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+    const store = await createStore(dir, fsp);
+    await store.writeSession({ ...session([]), cli: "claude" });
+    const runner = createTurnRunner({
+      adapters: fakeAdapters(f.adapter),
+      store,
+      now: () => NOW,
+      newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+      listFolder: async () => ({ files: [], more: 0 }),
+      notify: () => {},
+    });
+    await store.writeSettings(claudeSettings);
+    await runner.advance(ID);
+    expect(f.requests[0]!.options).toMatchObject({ model: "sonnet", effort: "medium" });
+    await store.writeSettings(DEFAULT_SETTINGS);
+    await store.writeSession({ ...session([]), cli: "claude" });
+    await runner.advance(ID);
+    expect(f.requests[1]!.options).toMatchObject({ model: null, effort: null });
+  });
+
+  it("a side question carries the model and effort", async () => {
+    const side = await setup([act(A.probe())], JSON.stringify({ markdown: "because" }));
+    await side.store.writeSettings({
+      ...DEFAULT_SETTINGS,
+      clis: { ...DEFAULT_SETTINGS.clis, codex: { model: "gpt-x", effort: "high" } },
+    });
+    await side.runner.aside(ID, "why");
+    expect(side.f.requests[0]!.options).toMatchObject({ model: "gpt-x", effort: "high" });
+  });
+});
+
 describe("turn per-lesson cli", () => {
   const withCli = async (cli: string, adapters: ReturnType<typeof fakeAdapters>) => {
     const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));

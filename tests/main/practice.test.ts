@@ -2,6 +2,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
 import { NO_OPTIONS } from "../../src/shared/clis";
 import { CALL_TIMEOUT_MS } from "../../src/shared/limits";
 import { ASK_JSON_SCHEMA, FRONTS_JSON_SCHEMA, GRADE_JSON_SCHEMA } from "../../src/shared/schema";
@@ -196,6 +197,35 @@ describe("practice service", () => {
       expect(r.options).toEqual(NO_OPTIONS);
       expect(r.timeoutMs).toBe(CALL_TIMEOUT_MS);
     }
+  });
+
+  it("practice calls carry the model and effort", async () => {
+    const f = await setup(
+      1,
+      frontsReply([K(1).id]),
+      JSON.stringify({ question: choiceQ }),
+      JSON.stringify({ verdict: "pass", feedback: "ok" }),
+      frontsReply([K(1).id]),
+      JSON.stringify({ question: choiceQ }),
+      JSON.stringify({ verdict: "pass", feedback: "ok" }),
+    );
+    await f.store.writeSettings({
+      ...DEFAULT_SETTINGS,
+      clis: { ...DEFAULT_SETTINGS.clis, claude: { model: "sonnet", effort: "low" } },
+    });
+    await f.practice.fronts("claude", [K(1).id]);
+    await f.practice.ask("claude", K(1).id);
+    await f.practice.grade("claude", K(1).id, textQ, "a");
+    expect(f.requests).toHaveLength(3);
+    for (const r of f.requests) {
+      expect(r.options).toEqual({ ...NO_OPTIONS, model: "sonnet", effort: "low" });
+    }
+    await f.store.updateReviews(() => []);
+    await f.practice.fronts("codex", [K(1).id]);
+    await f.practice.ask("codex", K(1).id);
+    await f.practice.grade("codex", K(1).id, textQ, "a");
+    expect(f.requests).toHaveLength(6);
+    for (const r of f.requests.slice(3)) expect(r.options).toEqual(NO_OPTIONS);
   });
 
   it("practice is one call at a time and can be stopped", async () => {

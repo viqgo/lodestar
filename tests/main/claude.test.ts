@@ -5,8 +5,11 @@ import { describe, expect, it } from "vitest";
 import { createCodexAdapter } from "../../src/main/cli/codex";
 import { createGeminiAdapter } from "../../src/main/cli/gemini";
 import { createClaudeAdapter, parseClaudeResult } from "../../src/main/cli/claude";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
+import { runOptions } from "../../src/main/turn";
 import { NO_OPTIONS } from "../../src/shared/clis";
 import { fakeSpawn, type FakePlan } from "../helpers/fakes";
+import { session } from "../helpers/fixtures";
 
 const SAMPLE = JSON.stringify({
   type: "result",
@@ -201,5 +204,26 @@ describe("env markers", () => {
       expect(o.f.calls[0].opts.env.CLAUDECODE).toBe("1");
       expect(o.f.calls[0].opts.env.CLAUDE_CODE_ENTRYPOINT).toBe("cli");
     }
+  });
+});
+
+describe("settings to claude flags", () => {
+  it("model_and_effort_become_claude_flags", async () => {
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      clis: {
+        ...DEFAULT_SETTINGS.clis,
+        claude: { model: "sonnet", effort: "medium" },
+        codex: { model: "gpt-x", effort: "low" },
+      },
+    };
+    const o = runOptions({ ...session(), cli: "claude" }, "/att", settings);
+    expect(o.model).toBe("sonnet");
+    expect(o.effort).toBe("medium");
+    const { adapter, f } = make({ stdout: SAMPLE });
+    await adapter.run({ ...req(), options: o });
+    const a = f.calls[0].args;
+    expect(a.slice(-4)).toEqual(["--model", "sonnet", "--effort", "medium"]);
+    expect(a[a.indexOf("--tools") + 1]).toBe("");
   });
 });

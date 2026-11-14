@@ -2,6 +2,7 @@ import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_SETTINGS } from "../../src/core/settings";
 import { createStore } from "../../src/main/store";
 import { createSubjectRunner } from "../../src/main/subjectTurn";
 import type { CliAdapter } from "../../src/main/cli/adapter";
@@ -184,6 +185,31 @@ describe("createSubjectRunner", () => {
       });
       expect(req.timeoutMs).toBe(300000);
     }
+  });
+
+  it("subject calls carry the model and effort", async () => {
+    const chosen = {
+      ...DEFAULT_SETTINGS,
+      clis: { ...DEFAULT_SETTINGS.clis, codex: { model: "gpt-x", effort: "high" } },
+    };
+    const o = await setup([], [unitsJson(GOOD)]);
+    await o.store.writeSettings(chosen);
+    await o.runner.outline(o.id);
+    const p = await setup(asking, [seniorJson("ok")]);
+    await p.store.writeSettings(chosen);
+    await p.runner.reply(p.id);
+    for (const req of [o.f.requests[0]!, p.f.requests[0]!]) {
+      expect(req.options).toEqual({
+        readDirs: ["/course"],
+        images: [],
+        webSearch: false,
+        model: "gpt-x",
+        effort: "high",
+      });
+    }
+    const d = await setup([], [unitsJson(GOOD)]);
+    await d.runner.outline(d.id);
+    expect(d.f.requests[0]!.options).toMatchObject({ model: null, effort: null });
   });
 
   it("subject_call_is_single_and_stoppable", async () => {
