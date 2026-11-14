@@ -26,7 +26,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T9 Answer checks, learned items, move notes
 - [x] T10 The prompt
 - [x] T10b Hardening fixes after the Gate A review
-- [ ] GATE A The lesson rules work from the test suite
+- [x] GATE A The lesson rules work from the test suite
 - [ ] T11 Finding the CLI on disk
 - [ ] T12 Reading Codex output
 - [ ] T13 Codex adapter: detect
