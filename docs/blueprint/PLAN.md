@@ -32,7 +32,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T13 Codex adapter: detect
 - [x] T14 Codex adapter: run
 - [x] T15 Store: sessions
-- [ ] T16 Store: knowledge
+- [x] T16 Store: knowledge
 - [ ] T17 One model step with retry
 - [ ] T18 The advance loop
 - [ ] T19 Evals against real Codex

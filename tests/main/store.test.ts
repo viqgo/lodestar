@@ -73,3 +73,44 @@ describe("store sessions", () => {
     await expect(store.deleteSession(session().id)).resolves.toBeUndefined();
   });
 });
+
+const ki = (n: number, createdAt: string) => ({
+  id: "k_0000000" + n + "-0000-0000-0000-000000000000",
+  text: "t" + n,
+  sessionId: "s",
+  nodeId: "n1",
+  createdAt,
+});
+
+describe("store knowledge", () => {
+  it("knowledge is empty when the file is missing", async () => {
+    const { store } = await mk();
+    expect(await store.readKnowledge()).toEqual([]);
+  });
+
+  it("knowledge_listed_newest_first", async () => {
+    const { store } = await mk();
+    await store.addKnowledge([ki(1, "2026-01-01T00:00:00.000Z")]);
+    await store.addKnowledge([ki(2, "2026-01-02T00:00:00.000Z")]);
+    expect((await store.readKnowledge()).map((k) => k.text)).toEqual(["t2", "t1"]);
+  });
+
+  it("knowledge_item_deleted", async () => {
+    const { dir, store } = await mk();
+    await store.addKnowledge([ki(1, "2026-01-01T00:00:00.000Z")]);
+    await store.addKnowledge([ki(2, "2026-01-02T00:00:00.000Z")]);
+    await store.deleteKnowledge(ki(1, "").id);
+    expect((await store.readKnowledge()).map((k) => k.text)).toEqual(["t2"]);
+    const onDisk = JSON.parse(await fsp.readFile(path.join(dir, "knowledge.json"), "utf8"));
+    expect(onDisk).toHaveLength(1);
+  });
+
+  it("deleting an unknown id changes nothing", async () => {
+    const { store } = await mk();
+    await store.addKnowledge([ki(1, "2026-01-01T00:00:00.000Z")]);
+    await expect(
+      store.deleteKnowledge("k_99999999-0000-0000-0000-000000000000"),
+    ).resolves.toBeUndefined();
+    expect((await store.readKnowledge()).map((k) => k.text)).toEqual(["t1"]);
+  });
+});

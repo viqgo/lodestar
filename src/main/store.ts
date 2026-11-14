@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { Session } from "../shared/types";
+import type { KnowledgeItem, Session } from "../shared/types";
 
 export type Store = {
   writeJsonAtomic(file: string, data: unknown): Promise<void>;
@@ -7,6 +7,9 @@ export type Store = {
   readSession(id: string): Promise<Session | null>;
   writeSession(session: Session): Promise<void>;
   deleteSession(id: string): Promise<void>;
+  readKnowledge(): Promise<KnowledgeItem[]>;
+  addKnowledge(items: KnowledgeItem[]): Promise<void>;
+  deleteKnowledge(id: string): Promise<void>;
 };
 
 const ID = /^[sk]_[0-9a-f-]{36}$/;
@@ -57,5 +60,43 @@ export async function createStore(
     await fs.rm(fileFor(id), { force: true });
   };
 
-  return { writeJsonAtomic, listSessions, readSession, writeSession, deleteSession };
+  const knowledgeFile = path.join(dir, "knowledge.json");
+
+  const readAllKnowledge = async (): Promise<KnowledgeItem[]> => {
+    try {
+      const parsed: unknown = JSON.parse(await fs.readFile(knowledgeFile, "utf8"));
+      return Array.isArray(parsed) ? (parsed as KnowledgeItem[]) : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const readKnowledge = async (): Promise<KnowledgeItem[]> =>
+    (await readAllKnowledge()).sort((a, b) =>
+      a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0,
+    );
+
+  const addKnowledge = async (items: KnowledgeItem[]): Promise<void> => {
+    if (items.length === 0) return;
+    await writeJsonAtomic(knowledgeFile, [...(await readAllKnowledge()), ...items]);
+  };
+
+  const deleteKnowledge = async (id: string): Promise<void> => {
+    const all = await readAllKnowledge();
+    await writeJsonAtomic(
+      knowledgeFile,
+      all.filter((k) => k.id !== id),
+    );
+  };
+
+  return {
+    writeJsonAtomic,
+    listSessions,
+    readSession,
+    writeSession,
+    deleteSession,
+    readKnowledge,
+    addKnowledge,
+    deleteKnowledge,
+  };
 }
