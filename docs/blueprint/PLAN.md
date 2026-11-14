@@ -58,7 +58,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T36b Keyboard access, double-click guard, map fallback symbol
 - [x] T37 README
 - [x] T37b Gate C fixes (CR-2)
-- [ ] GATE C A full lesson in the window
+- [x] GATE C A full lesson in the window
 
 Conventions used in every task:
 - "Run tests" means `npm test`. The expected line is the vitest summary line, e.g. `Tests  9 passed (9)`.
