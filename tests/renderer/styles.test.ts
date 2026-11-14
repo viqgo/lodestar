@@ -44,3 +44,9 @@ it("styles have the unit row rule", () => {
   const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
   expect(/\.unit-row\s*\{[^}]*display: grid/.test(css)).toBe(true);
 });
+
+it("styles have the chat rules", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
+  expect(/\.chat\s*\{[^}]*flex-direction: column/.test(css)).toBe(true);
+  expect(/\.chat-msg\.is-owner\s*\{[^}]*align-self: flex-end/.test(css)).toBe(true);
+});

@@ -498,3 +498,18 @@ body {
   padding: var(--space-3) 0;
   border-bottom: 1px solid var(--color-border);
 }
+
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+}
+
+.chat-msg.is-owner {
+  align-self: flex-end;
+  background: var(--color-surface-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  max-width: 80%;
+}
