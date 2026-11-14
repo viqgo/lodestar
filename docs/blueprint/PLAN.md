@@ -49,7 +49,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T28 QuestionCard
 - [x] T29 ChatItemView
 - [x] T30 PlanPanel
-- [ ] T31 useLesson
+- [x] T31 useLesson
 - [ ] T32 Sidebar, CliGate, time helpers
 - [ ] T33 NewLessonForm
 - [ ] T34 LessonScreen
