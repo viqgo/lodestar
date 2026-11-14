@@ -118,6 +118,10 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
     listSubjects: vi.fn(async () => []),
     getSubject: vi.fn(async () => null),
     deleteSubject: vi.fn(async () => undefined),
+    setSubjectFolder: vi.fn(async () => ({
+      ok: false as const,
+      message: "This subject no longer exists.",
+    })),
     stopSubject: vi.fn(async () => undefined),
     isSubjectRunning: vi.fn(async () => false),
     subjectStatuses: vi.fn(async () => []),

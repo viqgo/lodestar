@@ -231,20 +231,11 @@ export function createTurnRunner(deps: {
             })),
           );
           if (next.subjectId !== null && next.unitId !== null) {
-            const subject = await deps.store.readSubject(next.subjectId);
-            if (
-              subject !== null &&
-              !subject.events.some((e) => e.kind === "note" && e.note.sessionId === next.id)
-            ) {
-              await deps.store.writeSubject({
-                ...subject,
-                updatedAt: deps.now(),
-                events: [
-                  ...subject.events,
-                  { kind: "note", at: deps.now(), note: handoverNote(next) },
-                ],
-              });
-            }
+            await deps.store.appendSubjectEvent(next.subjectId, (s) =>
+              s.events.some((e) => e.kind === "note" && e.note.sessionId === next.id)
+                ? null
+                : { kind: "note", at: deps.now(), note: handoverNote(next) },
+            );
           }
         }
         await deps.store.writeSession(next);

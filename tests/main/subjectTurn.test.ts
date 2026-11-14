@@ -243,4 +243,35 @@ describe("createSubjectRunner", () => {
     expect(kinds.at(-2)).toBe("note");
     expect(kinds.at(-1)).toBe("reply");
   });
+
+  it("the senior reply is added through the store's queue", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-subj-"));
+    const real = await createStore(dir, fsp);
+    await real.writeSubject(subject(asking));
+    const store = {
+      ...real,
+      writeSubject: async () => {
+        throw new Error("disk");
+      },
+    };
+    const adapter: CliAdapter = {
+      ...fakeAdapter().adapter,
+      run: async () => {
+        await real.appendSubjectEvent(subject().id, () => SE.note("u1", "s_x"));
+        return { ok: true, text: seniorJson("done"), usage: null };
+      },
+    };
+    const runner = createSubjectRunner({
+      adapters: fakeAdapters(adapter),
+      store,
+      listFolder: async () => FILES,
+      now: () => NOW,
+      notify: () => {},
+    });
+    const r = await runner.reply(subject().id);
+    expect(r.ok).toBe(true);
+    const kinds = (await real.readSubject(subject().id))!.events.map((e) => e.kind);
+    expect(kinds.at(-2)).toBe("note");
+    expect(kinds.at(-1)).toBe("reply");
+  });
 });

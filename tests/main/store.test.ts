@@ -330,6 +330,74 @@ describe("store subjects", () => {
     ).resolves.toBeUndefined();
   });
 
+  it("appendSubjectEvent adds each event to the newest file", async () => {
+    const { dir, store } = await mk();
+    await store.writeSubject(subject());
+    const at = (n: number) => "2026-04-01T00:00:" + String(n).padStart(2, "0") + ".000Z";
+    const calls = Array.from({ length: 10 }, (_, n) =>
+      store.appendSubjectEvent(subject().id, () => ({
+        kind: "message" as const,
+        at: at(n),
+        text: "m" + n,
+      })),
+    );
+    const results = await Promise.all(calls);
+    const file = JSON.parse(
+      await fsp.readFile(path.join(dir, "subjects", subject().id + ".json"), "utf8"),
+    );
+    expect(file.events.map((e: { text: string }) => e.text)).toEqual(
+      Array.from({ length: 10 }, (_, n) => "m" + n),
+    );
+    results.forEach((r, n) => {
+      expect(r!.events.at(-1)).toMatchObject({ text: "m" + n });
+    });
+    expect(file.updatedAt).toBe(at(9));
+  });
+
+  it("appendSubjectEvent writes nothing for a null event or a missing subject", async () => {
+    const { dir, store } = await mk();
+    await store.writeSubject(subject());
+    const file = path.join(dir, "subjects", subject().id + ".json");
+    const before = await fsp.readFile(file, "utf8");
+    expect(await store.appendSubjectEvent(subject().id, () => null)).toEqual(subject());
+    expect(await fsp.readFile(file, "utf8")).toBe(before);
+    expect(
+      await store.appendSubjectEvent(UID(9), () => ({ kind: "message", at: "x", text: "t" })),
+    ).toBeNull();
+    let called = false;
+    expect(
+      await store.appendSubjectEvent("nope", () => {
+        called = true;
+        return null;
+      }),
+    ).toBeNull();
+    expect(called).toBe(false);
+  });
+
+  it("setSubjectFolder changes the folder and keeps the events", async () => {
+    const { dir, store } = await mk();
+    const events = [{ kind: "message" as const, at: "2026-01-01T00:00:00.000Z", text: "hi" }];
+    await store.writeSubject(subject(events));
+    const at = "2026-05-05T00:00:00.000Z";
+    const updated = await store.setSubjectFolder(subject().id, "/new", at);
+    expect(updated).toEqual({ ...subject(events), folder: "/new", updatedAt: at });
+    expect(await store.readSubject(subject().id)).toEqual(updated);
+    expect(await store.setSubjectFolder(UID(9), "/new", at)).toBeNull();
+    await expect(fsp.access(path.join(dir, "subjects", UID(9) + ".json"))).rejects.toThrow();
+    const both = await Promise.all([
+      store.setSubjectFolder(subject().id, "/newer", at),
+      store.appendSubjectEvent(subject().id, () => ({
+        kind: "message" as const,
+        at: "2026-06-06T00:00:00.000Z",
+        text: "second",
+      })),
+    ]);
+    expect(both[0]).not.toBeNull();
+    const stored = await store.readSubject(subject().id);
+    expect(stored!.folder).toBe("/newer");
+    expect(stored!.events.at(-1)).toMatchObject({ text: "second" });
+  });
+
   it("subjects are listed newest first and unreadable files are skipped", async () => {
     const { dir, store } = await mk();
     await store.writeSubject(SUB(1, "2026-01-01T00:00:00.000Z"));

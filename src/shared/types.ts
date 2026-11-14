@@ -247,6 +247,10 @@ export type Api = {
   }): Promise<{ ok: true; subject: Subject } | { ok: false; message: string }>;
   getSubject(id: string): Promise<Subject | null>;
   deleteSubject(id: string): Promise<void>;
+  setSubjectFolder(
+    id: string,
+    folder: string,
+  ): Promise<{ ok: true; subject: Subject } | { ok: false; message: string }>;
   advanceSubject(id: string): Promise<SubjectResult>;
   acceptOutline(
     id: string,

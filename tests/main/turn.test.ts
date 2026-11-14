@@ -1,7 +1,7 @@
 import fsp from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { deriveState } from "../../src/core/engine";
 import type { CliAdapter } from "../../src/main/cli/adapter";
 import { createStore } from "../../src/main/store";
@@ -592,6 +592,33 @@ describe("units in the lesson turn", () => {
     });
     expect(stored!.updatedAt).toBe(NOW);
     expect(f.prompts.length).toBe(1);
+  });
+
+  it("the handover note is added through the store's queue", async () => {
+    const dir = await fsp.mkdtemp(path.join(os.tmpdir(), "lh-turn-"));
+    const real = await createStore(dir, fsp);
+    await real.writeSession({ ...session(doneEvents()), subjectId: subject().id, unitId: "u1" });
+    await real.writeSubject(subject(readySubject));
+    const writeSubject = vi.fn(real.writeSubject);
+    const appendSubjectEvent = vi.fn(real.appendSubjectEvent);
+    const store = { ...real, writeSubject, appendSubjectEvent };
+    const make = () =>
+      createTurnRunner({
+        adapters: fakeAdapters(fakeAdapter(A.done(), A.done()).adapter),
+        store,
+        now: () => NOW,
+        newId: (p) => p + "_00000001-0000-0000-0000-000000000000",
+        listFolder: async () => ({ files: [], more: 0 }),
+        notify: () => {},
+      });
+    await make().advance(ID);
+    expect(writeSubject).not.toHaveBeenCalled();
+    expect(appendSubjectEvent).toHaveBeenCalledTimes(1);
+    const stored = await real.readSubject(subject().id);
+    expect(stored!.events.at(-1)).toMatchObject({ kind: "note", note: { sessionId: ID } });
+    await make().advance(ID);
+    const again = await real.readSubject(subject().id);
+    expect(again!.events.filter((e) => e.kind === "note").length).toBe(1);
   });
 
   it("a handover note is written once per lesson", async () => {

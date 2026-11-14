@@ -72,6 +72,8 @@ const api: Api = {
     ipcRenderer.invoke("subjects:create", input) as ReturnType<Api["createSubject"]>,
   getSubject: (id) => ipcRenderer.invoke("subjects:get", id) as ReturnType<Api["getSubject"]>,
   deleteSubject: (id) => ipcRenderer.invoke("subjects:delete", id) as Promise<void>,
+  setSubjectFolder: (id, folder) =>
+    ipcRenderer.invoke("subjects:setFolder", id, folder) as ReturnType<Api["setSubjectFolder"]>,
   advanceSubject: (id) => ipcRenderer.invoke("subject:advance", id) as Promise<SubjectResult>,
   acceptOutline: (id, units) =>
     ipcRenderer.invoke("subject:accept", id, units) as ReturnType<Api["acceptOutline"]>,

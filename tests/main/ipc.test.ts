@@ -1166,6 +1166,104 @@ describe("ipc subjects", () => {
     expect((await store.readKnowledge()).map((k) => k.id)).toEqual(["k_1"]);
   });
 
+  it("a note that lands during a subject write is kept", async () => {
+    const { store, call } = await setup();
+    const realRead = store.readSubject;
+    let armed = true;
+    store.readSubject = async (id: string) => {
+      const read = await realRead(id);
+      if (armed && id === SID) {
+        armed = false;
+        await store.appendSubjectEvent(SID, () => SE.note("u1", "s_x"));
+      }
+      return read;
+    };
+    await store.writeSubject(withSubject(SID, readySubject));
+    await call("subject:message", SID, "hi");
+    const kinds = (await realRead(SID))!.events.map((e) => e.kind);
+    expect(kinds.slice(-2)).toEqual(["note", "message"]);
+
+    const add = {
+      kind: "add" as const,
+      unit: { id: "u4", title: "Four", goal: "G4", files: [] },
+      afterId: null,
+    };
+    await store.writeSubject(
+      withSubject(SID2, [...readySubject, SE.message(), SE.reply("ok", add)]),
+    );
+    store.readSubject = async (id: string) => {
+      const read = await realRead(id);
+      if (armed && id === SID2) {
+        armed = false;
+        await store.appendSubjectEvent(SID2, () => SE.note("u1", "s_y"));
+      }
+      return read;
+    };
+    armed = true;
+    const r = await call("subject:resolveChange", SID2, true);
+    expect(r.ok).toBe(true);
+    const kinds2 = (await realRead(SID2))!.events.map((e) => e.kind);
+    expect(kinds2.slice(-2)).toEqual(["note", "change"]);
+  });
+
+  it("subjects:setFolder stores the folder and tells the window", async () => {
+    const { store, call, send } = await setup();
+    const events = [...readySubject, SE.message()];
+    await store.writeSubject(withSubject(SID, events));
+    await store.writeSession({
+      ...session(),
+      id: ID1,
+      subjectId: SID,
+      unitId: "u1",
+      folder: "/old",
+    });
+    const r = await call("subjects:setFolder", SID, "/new/folder");
+    expect(r.ok).toBe(true);
+    expect(r.subject.folder).toBe("/new/folder");
+    const stored = (await store.readSubject(SID))!;
+    expect(stored.folder).toBe("/new/folder");
+    expect(stored.events).toEqual(events);
+    expect(send).toHaveBeenCalledWith("subject:updated", r.subject);
+    expect((await store.readSession(ID1))!.folder).toBe("/old");
+  });
+
+  it("subjects:setFolder refuses a bad folder, a running subject and a missing subject", async () => {
+    const { store, call, send } = await setup();
+    await store.writeSubject(withSubject(SID, readySubject));
+    for (const bad of ["relative/path", null, 42]) {
+      expect(await call("subjects:setFolder", SID, bad)).toEqual({
+        ok: false,
+        message: "Choose a folder.",
+      });
+    }
+    expect(await call("subjects:setFolder", SID2, "/new")).toEqual({
+      ok: false,
+      message: "This subject no longer exists.",
+    });
+    const failing = {
+      ...store,
+      setSubjectFolder: async () => {
+        throw new Error("disk");
+      },
+    };
+    const real = store.setSubjectFolder;
+    store.setSubjectFolder = failing.setSubjectFolder;
+    expect(await call("subjects:setFolder", SID, "/new")).toEqual({
+      ok: false,
+      message: "Could not save. Check free disk space.",
+    });
+    store.setSubjectFolder = real;
+    expect(send).not.toHaveBeenCalled();
+
+    const busy = await setup(false, undefined, true);
+    await busy.store.writeSubject(withSubject(SID, readySubject));
+    expect(await busy.call("subjects:setFolder", SID, "/new")).toEqual({
+      ok: false,
+      message: RUNNING_TEXT,
+    });
+    expect(busy.send).not.toHaveBeenCalled();
+  });
+
   it("subject:statuses, subject:stop and subject:running pass through", async () => {
     const { store, call, subjects } = await setup();
     await store.writeSubject(withSubject(SID, readySubject));

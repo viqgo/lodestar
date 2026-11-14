@@ -152,14 +152,8 @@ export function createSubjectRunner(deps: {
           usage: r.usage,
         };
       }
-      const fresh = await deps.store.readSubject(id);
-      if (fresh === null) return notFound();
-      const written: Subject = {
-        ...fresh,
-        updatedAt: deps.now(),
-        events: [...fresh.events, event],
-      };
-      await deps.store.writeSubject(written);
+      const written = await deps.store.appendSubjectEvent(id, () => event);
+      if (written === null) return notFound();
       deps.notify(written);
       return { ok: true, subject: written };
     } finally {

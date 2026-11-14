@@ -91,6 +91,7 @@ describe("preload", () => {
         "createSubject",
         "getSubject",
         "deleteSubject",
+        "setSubjectFolder",
         "advanceSubject",
         "acceptOutline",
         "subjectMessage",
@@ -166,6 +167,7 @@ describe("preload", () => {
       await api.practiceStop(),
       await api.getGraph(),
       await api.aside("a", "why"),
+      await api.setSubjectFolder("u", "/f"),
     ];
     expect(invoke.mock.calls).toEqual([
       ["clis:detect"],
@@ -217,8 +219,9 @@ describe("preload", () => {
       ["practice:stop"],
       ["graph:get"],
       ["lesson:aside", "a", "why"],
+      ["subjects:setFolder", "u", "/f"],
     ]);
-    expect(results).toEqual(Array(49).fill("R"));
+    expect(results).toEqual(Array(50).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

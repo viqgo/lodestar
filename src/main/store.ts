@@ -9,6 +9,7 @@ import type {
   Session,
   Settings,
   Subject,
+  SubjectEvent,
 } from "../shared/types";
 
 export type Store = {
@@ -28,6 +29,11 @@ export type Store = {
   listSubjects(): Promise<Subject[]>;
   readSubject(id: string): Promise<Subject | null>;
   writeSubject(subject: Subject): Promise<void>;
+  appendSubjectEvent(
+    id: string,
+    make: (subject: Subject) => SubjectEvent | null,
+  ): Promise<Subject | null>;
+  setSubjectFolder(id: string, folder: string, at: string): Promise<Subject | null>;
   deleteSubject(id: string): Promise<void>;
   readKnowledge(): Promise<KnowledgeItem[]>;
   addKnowledge(items: KnowledgeItem[]): Promise<void>;
@@ -206,7 +212,39 @@ export async function createStore(
     );
   };
 
-  const writeSubject = (s: Subject): Promise<void> => writeJsonAtomic(subjectFile(s.id), s);
+  const writeSubject = (s: Subject): Promise<void> =>
+    serial(subjectFile(s.id), () => writeJsonAtomic(subjectFile(s.id), s));
+
+  const appendSubjectEvent = async (
+    id: string,
+    make: (subject: Subject) => SubjectEvent | null,
+  ): Promise<Subject | null> => {
+    if (!SUBJECT_ID.test(id)) return null;
+    return serial(subjectFile(id), async () => {
+      const subject = await readSubject(id);
+      if (subject === null) return null;
+      const event = make(subject);
+      if (event === null) return subject;
+      const next: Subject = { ...subject, updatedAt: event.at, events: [...subject.events, event] };
+      await writeJsonAtomic(subjectFile(id), next);
+      return next;
+    });
+  };
+
+  const setSubjectFolder = async (
+    id: string,
+    folder: string,
+    at: string,
+  ): Promise<Subject | null> => {
+    if (!SUBJECT_ID.test(id)) return null;
+    return serial(subjectFile(id), async () => {
+      const subject = await readSubject(id);
+      if (subject === null) return null;
+      const next: Subject = { ...subject, folder, updatedAt: at };
+      await writeJsonAtomic(subjectFile(id), next);
+      return next;
+    });
+  };
 
   const deleteSubject = async (id: string): Promise<void> => {
     if (!SUBJECT_ID.test(id)) return;
@@ -356,6 +394,8 @@ export async function createStore(
     listSubjects,
     readSubject,
     writeSubject,
+    appendSubjectEvent,
+    setSubjectFolder,
     deleteSubject,
     readKnowledge,
     addKnowledge,

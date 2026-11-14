@@ -481,12 +481,10 @@ export function registerIpc(deps: IpcDeps): void {
         if (subjects.isRunning(id)) return busy;
         const { event, message } = await change(subject, deriveSubject(subject.events));
         if (event !== undefined) {
-          const updated: Subject = {
-            ...subject,
-            updatedAt: now(),
-            events: [...subject.events, event],
-          };
-          await store.writeSubject(updated);
+          const updated = await store.appendSubjectEvent(id, () => event);
+          if (updated === null) {
+            return { ok: false as const, message: "This subject no longer exists." };
+          }
           send("subject:updated", updated);
           return { ok: true as const, subject: updated };
         }
@@ -532,6 +530,29 @@ export function registerIpc(deps: IpcDeps): void {
   );
 
   ipcMain.handle("subjects:get", (_event, id: string) => store.readSubject(id));
+
+  ipcMain.handle("subjects:setFolder", async (_event, id: string, folder: unknown) => {
+    if (typeof folder !== "string" || !isAbsolute(folder)) {
+      return { ok: false as const, message: "Choose a folder." };
+    }
+    const busy = { ok: false as const, message: RUNNING_TEXT };
+    if (subjects.isRunning(id)) return busy;
+    return withLock("start:" + id, () =>
+      withLock(id, async () => {
+        if (subjects.isRunning(id)) return busy;
+        try {
+          const updated = await store.setSubjectFolder(id, folder, now());
+          if (updated === null) {
+            return { ok: false as const, message: "This subject no longer exists." };
+          }
+          send("subject:updated", updated);
+          return { ok: true as const, subject: updated };
+        } catch {
+          return { ok: false as const, message: SAVE_TEXT };
+        }
+      }),
+    );
+  });
 
   ipcMain.handle("subjects:delete", async (_event, id: string) => {
     subjects.stop(id);
@@ -604,12 +625,18 @@ export function registerIpc(deps: IpcDeps): void {
             subject,
           };
         }
-        const updated: Subject = {
-          ...subject,
-          updatedAt: now(),
-          events: [...subject.events, { kind: "message", at: now(), text: text.trim() }],
-        };
-        await store.writeSubject(updated);
+        const updated = await store.appendSubjectEvent(id, () => ({
+          kind: "message",
+          at: now(),
+          text: text.trim(),
+        }));
+        if (updated === null) {
+          return {
+            ok: false,
+            error: { kind: "not_found", message: "This subject no longer exists." },
+            subject: null,
+          };
+        }
         send("subject:updated", updated);
         return null;
       });
