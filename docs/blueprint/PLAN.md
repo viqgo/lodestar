@@ -149,6 +149,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T104 Build config
 - [x] T105 Build and check
 - [x] T106 User README
+- [ ] T106b Gate K fixes
 - [ ] GATE K Packaging
 - [ ] T107 Settings grow
 - [ ] T108 Method text
@@ -4512,6 +4513,23 @@ Left as it is, on purpose
 **Tests**: none. **Verify**: the standard step 4 (prettier reads `README.md`).
 **Totals**: 834 -> 834. **Commit**: `docs: install, first open and what is sent where`
 **Stop and report**: a fact above contradicts the code or T105's pasted output (name it; do not change the code); the section "Learning modes" is missing (Stage J's T100 did not land): go on without it and say so.
+
+### T106b - Gate K fixes
+**Implements**: Gate K findings M2, M3, M4, M5 · D56, D64
+**Depends on**: T106
+**Files**: modify `src/main/index.ts`, `src/main/store.ts`, `src/renderer/src/components/MarkdownView.tsx`, `README.md`, `tests/main/csp.test.ts`, `tests/main/store.test.ts`, `tests/renderer/MarkdownView.test.tsx`. Do NOT touch any other file.
+**Details**
+- M2: in `index.ts` one value `const devUrl = app.isPackaged ? undefined : process.env.ELECTRON_RENDERER_URL;` replaces every read of `process.env.ELECTRON_RENDERER_URL` (the window load and the policy `if`).
+- M3: in `MarkdownView.tsx` the remote-image test runs on `src.replace(/[\t\n\r]/g, "").trim().replace(/\\/g, "/")` instead of `src`.
+- M4: in `store.ts` `deleteSubject` removes the file inside `serial(subjectFile(id), ...)`; `writeSession` checks `deleted` again after the temp file is written and before the rename (when marked, it removes the temp file and returns).
+- M5: the README sentence that says nothing else is sent is replaced by: "The lesson so far, your knowledge list, the tutor instructions and, when the lesson has material, the files the CLI reads from that folder and your attachments are sent to the CLI you chose." (keep the rest of that section as it is).
+**Tests (+4)**: `the packaged app ignores ELECTRON_RENDERER_URL` (csp.test: the text of `index.ts` contains `app.isPackaged` and no other use of `process.env.ELECTRON_RENDERER_URL`) · `remote images with tabs or backslashes are blocked` (MarkdownView) · `deleteSubject waits for a write in flight and nothing is resurrected` (store) · `a lesson deleted between the temp write and the rename is not recreated` (store).
+**Expected failure**: each new test fails before its change.
+**Totals**: 847 -> 851. **Commit**: `fix: gate K fixes`
+**Stop and report**: an existing test needs an edit.
+
+### Gate K findings not fixed (owner decides, all also in the final report)
+I2 / D67 C5: the unsigned bundle has a broken seal, so a downloaded copy shows "damaged" on Apple silicon until `xattr -cr` is run; `mac.identity: "-"` (ad-hoc signing) fixes it but is a blueprint change. M1 / D67 default 28: moving `katex`, `mermaid`, `react`, `react-dom`, `react-markdown`, `rehype-katex`, `remark-math` to `devDependencies` would cut about 195 MB from the app (vite bundles them anyway). M6 (Knowledge screen times do not tick), N1 (a Gemini error nested in a Node object dump shows as the last stderr line; needs a real Gemini run), N2 (a corrupt unit lesson cannot be deleted without deleting the subject), N3 (a spawn that throws synchronously leaks a temp folder), N4 (subjects:setFolder can queue behind a call). The packaged CSP was proven in T105: a remote request was refused by `connect-src` and a remote image by `img-src` on the built app.
 
 ### Where each milestone 7 SPEC test lives
 - csp_string_is_exact, finder_path_finds_homebrew_clis: T101
