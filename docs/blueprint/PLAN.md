@@ -51,7 +51,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T30 PlanPanel
 - [x] T31 useLesson
 - [x] T32 Sidebar, CliGate, time helpers
-- [ ] T33 NewLessonForm
+- [x] T33 NewLessonForm
 - [ ] T34 LessonScreen
 - [ ] T35 KnowledgeScreen
 - [ ] T36 App wiring
