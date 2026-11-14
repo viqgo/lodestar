@@ -52,6 +52,7 @@ export function useSubject(
 
   useEffect(() => {
     let cancelled = false;
+    let endedDuring = false;
     setSubject(null);
     setStatuses([]);
     setBusy(false);
@@ -71,6 +72,7 @@ export function useSubject(
     });
     const offEnded = window.api.onSubjectEnded((endedId, result) => {
       if (endedId !== id) return;
+      endedDuring = true;
       handleResult(result);
     });
     const offSession = window.api.onSessionUpdated((s) => {
@@ -84,6 +86,14 @@ export function useSubject(
           window.api.subjectStatuses(id),
         ]);
         if (cancelled) return;
+        if (endedDuring) {
+          const fresh = await window.api.getSubject(id);
+          if (cancelled) return;
+          setSubject(fresh);
+          setBusy(false);
+          setStatuses(list);
+          return;
+        }
         setSubject(loaded);
         setBusy(running);
         setStatuses(list);
@@ -104,7 +114,15 @@ export function useSubject(
     };
   }, [id, start, onReject, handleResult]);
 
-  const state = useMemo(() => (subject ? deriveSubject(subject.events) : null), [subject]);
+  const derived = useMemo(() => {
+    if (!subject) return { state: null, corrupt: false };
+    try {
+      return { state: deriveSubject(subject.events), corrupt: false };
+    } catch {
+      return { state: null, corrupt: true };
+    }
+  }, [subject]);
+  const state = derived.state;
 
   const send = useCallback(
     (text: string) => {
@@ -125,5 +143,17 @@ export function useSubject(
     void window.api.stopSubject(id);
   }, [id]);
 
+  if (derived.corrupt) {
+    return {
+      subject: null,
+      state: null,
+      statuses,
+      busy,
+      error: { kind: "not_found", message: "This subject no longer exists." },
+      send,
+      retry,
+      stop,
+    };
+  }
   return { subject, state, statuses, busy, error, send, retry, stop };
 }

@@ -45,6 +45,39 @@ describe("useSubject", () => {
     await waitFor(() => expect(result.current.busy).toBe(true));
   });
 
+  it("useSubject does not stay busy when the call ended during the load", async () => {
+    const s = U([SE.outline()]);
+    let release: (v: boolean) => void = () => undefined;
+    const running = new Promise<boolean>((r) => {
+      release = r;
+    });
+    const getSubject = vi.fn(async () => s);
+    const { emitSubjectEnded } = installApi({ getSubject, isSubjectRunning: () => running });
+    const { result } = renderHook(() => useSubject("u_1", false));
+    await waitFor(() => expect(getSubject).toHaveBeenCalledTimes(1));
+    rtlAct(() => emitSubjectEnded("u_1", { ok: true, subject: s }));
+    await rtlAct(async () => {
+      release(true);
+      await running;
+    });
+    await waitFor(() => expect(getSubject).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.subject).toEqual(s));
+    expect(result.current.busy).toBe(false);
+  });
+
+  it("useSubject shows a missing subject when the events are corrupt", async () => {
+    installApi({ getSubject: async () => U([SE.outline(), SE.outline()]) });
+    const { result } = renderHook(() => useSubject("u_1", false));
+    await waitFor(() =>
+      expect(result.current.error).toEqual({
+        kind: "not_found",
+        message: "This subject no longer exists.",
+      }),
+    );
+    expect(result.current.subject).toBeNull();
+    expect(result.current.state).toBeNull();
+  });
+
   it("useSubject follows its own updates and results only", async () => {
     const first = U([SE.outline()]);
     const statusCalls = vi.fn(async () => [] as UnitStatus[]);
