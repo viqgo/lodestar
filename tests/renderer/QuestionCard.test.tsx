@@ -262,4 +262,24 @@ describe("QuestionCard", () => {
     expect(screen.queryByLabelText("Your answer")).toBeNull();
     expect(screen.queryByDisplayValue("ignored")).toBeNull();
   });
+
+  it("Start call keeps a typed draft", async () => {
+    const props = {
+      seed: "s:1",
+      purpose: "check" as const,
+      question: textQ,
+      answer: null,
+      grade: null,
+      disabled: false,
+      onSubmit: vi.fn(),
+    };
+    const { rerender } = render(<QuestionCard {...props} heard={null} />);
+    await userEvent.type(screen.getByLabelText("Your answer"), "my draft");
+    rerender(<QuestionCard {...props} heard="" />);
+    expect(screen.getByLabelText("Your answer")).toHaveValue("my draft");
+    rerender(<QuestionCard {...props} heard="spoken" />);
+    expect(screen.getByLabelText("Your answer")).toHaveValue("spoken");
+    rerender(<QuestionCard {...props} heard="" />);
+    expect(screen.getByLabelText("Your answer")).toHaveValue("");
+  });
 });

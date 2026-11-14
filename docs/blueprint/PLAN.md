@@ -124,7 +124,7 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T87 Voice settings
 - [x] T88 README
 - [x] T88b Gate I fixes: main process
-- [ ] T88c Gate I fixes: call logic in the window
+- [x] T88c Gate I fixes: call logic in the window
 - [ ] GATE I Voice
 - [ ] T89-T100 Milestone 6: learning modes (outline)
 - [ ] GATE J Learning modes
@@ -3717,7 +3717,7 @@ Known gap, not planned here: the production policy in `index.ts` has no `media-s
 - N1 [D]: `limits.ts`: `VOICE_SAY_MAX = 4000`, `VOICE_CHUNK_MAX = 8192` (bytes), `KEY_MAX = 200`. `voice:say` ignores text longer than `VOICE_SAY_MAX` or not a string; `voice:audio` ignores a chunk that is not an `ArrayBuffer`/typed array or is longer than `VOICE_CHUNK_MAX`; `voice:setKey` refuses a key longer than `KEY_MAX` with `Enter a key.`. Add the three numbers and `SPEAK_TIMEOUT_MS` to `limits match the spec`.
 **Tests (+9)**: `speak never returns the key in an error text` (fetch rejects with a message holding `dg_test_key_123`) · `a listener error never carries the key` · `secrets refuse a key with a line break or space inside` · `speak request carries a timeout signal` (changes the exact-request test, count the change as no new test) · `a hung speak does not block the next call's speech` · `one failing speech link does not silence later speech` · `voice:start refuses a lesson id that is not text` · `voice:say and voice:audio and voice:setKey refuse oversized input` · `limits` extended (no new test).
 **Expected failure**: each new test fails before its change.
-**Totals**: 678 -> 686 (the builder reports the real number and the plan is corrected). **Commit**: `fix: gate I main process fixes`
+**Totals**: 678 -> 686. **Commit**: `fix: gate I main process fixes`
 **Stop and report**: an existing test needs an edit beyond the named exact-request test.
 
 ### T88c - Gate I fixes: call logic in the window
@@ -3730,6 +3730,7 @@ Known gap, not planned here: the production policy in `index.ts` has no `media-s
 - M3: `skip()` sets `speakingRef.current = false`; the `onVoiceAudio` handler drops a chunk unless `speakingRef.current` is true.
 - M4: `QuestionCard` applies `heard` only when it is non-empty or the previous `heard` was non-empty (so Start call does not wipe a typed draft; Start over still empties the box).
 - M5: when the call state changes to `speaking`, call `clearHeard()`.
+- Ripple (my plan fault, D65): M3 makes two existing tests in `useCall.test.tsx` (`tutor audio is played one piece after the other`, `skip stops the audio and tells the hub`) fail because they emit audio without a `speaking` state first. Edit only those two: add `rtlAct(() => s.emitVoiceState("speaking"));` right after `const s = await started(probeText);`; their assertions stay unchanged.
 - M8: `start` catches a rejected `voiceStart` and shows `Voice stopped: could not start the call.` through the existing error value; no new copy elsewhere. [D]
 **Tests (+6)**: `Skip revokes the playing piece's URL` · `finished runs once per piece` · `audio arriving after Skip is dropped` · `Start call keeps a typed draft` · `speaking clears words heard before it` · `a rejected voiceStart shows an error and leaves no call`.
 **Expected failure**: each new test fails before its change.

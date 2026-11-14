@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent } from "react";
 import type { Answer, Confidence, Question, Verdict } from "../../../shared/types";
 import { displayName } from "../../../core/material";
@@ -49,8 +49,17 @@ export function QuestionCard({
   const locked = disabled || answered;
   const isChoice = question.kind === "choice";
   const canSubmit = isChoice ? picked !== null : text.trim() !== "" || files.length > 0;
+  const prevHeard = useRef("");
   useEffect(() => {
-    if (heard !== null && heard !== undefined && !isChoice && !answered)
+    const before = prevHeard.current;
+    prevHeard.current = heard ?? "";
+    if (
+      heard !== null &&
+      heard !== undefined &&
+      !isChoice &&
+      !answered &&
+      (heard !== "" || before !== "")
+    )
       setText(heard.slice(0, ANSWER_TEXT_MAX));
   }, [heard, isChoice, answered]);
   const selected = answered ? answer.choiceIndex : picked;

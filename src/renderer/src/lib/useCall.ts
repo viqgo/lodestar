@@ -40,6 +40,7 @@ export function useCall(lesson: CallLesson): {
   const spokenUpToRef = useRef(0);
   const queueRef = useRef<string[]>([]);
   const currentRef = useRef<HTMLAudioElement | null>(null);
+  const currentUrlRef = useRef<string | null>(null);
   const openRef = useRef(0);
   const epochRef = useRef(0);
   const startingRef = useRef(false);
@@ -68,6 +69,8 @@ export function useCall(lesson: CallLesson): {
       c.onended = null;
       c.onerror = null;
     }
+    if (currentUrlRef.current !== null) URL.revokeObjectURL(currentUrlRef.current);
+    currentUrlRef.current = null;
     for (const url of queueRef.current) URL.revokeObjectURL(url);
     queueRef.current = [];
     currentRef.current = null;
@@ -92,9 +95,14 @@ export function useCall(lesson: CallLesson): {
     }
     const a = new Audio(url);
     currentRef.current = a;
+    currentUrlRef.current = url;
+    let ended = false;
     const finished = (): void => {
+      if (ended || currentRef.current !== a) return;
+      ended = true;
       URL.revokeObjectURL(url);
-      if (currentRef.current === a) currentRef.current = null;
+      currentUrlRef.current = null;
+      currentRef.current = null;
       playNext();
     };
     a.onended = a.onerror = finished;
@@ -128,7 +136,13 @@ export function useCall(lesson: CallLesson): {
       try {
         setError(null);
         const mine = ++epochRef.current;
-        const r = await window.api.voiceStart(lessonRef.current.id);
+        let r: Awaited<ReturnType<typeof window.api.voiceStart>>;
+        try {
+          r = await window.api.voiceStart(lessonRef.current.id);
+        } catch {
+          setError("Voice stopped: could not start the call.");
+          return;
+        }
         if (!r.ok) {
           setError(r.message);
           return;
@@ -163,6 +177,7 @@ export function useCall(lesson: CallLesson): {
   const skip = (): void => {
     if (!onRef.current) return;
     stopPlayback();
+    speakingRef.current = false;
     void window.api.voiceSkip();
   };
   const startOver = (): void => clearHeard();
@@ -176,6 +191,7 @@ export function useCall(lesson: CallLesson): {
         else if (s === "listening" || s === "speaking") {
           setHub(s);
           speakingRef.current = s === "speaking";
+          if (s === "speaking") clearHeard();
         }
       }),
       window.api.onVoiceTranscript((text, final) => {
@@ -222,7 +238,7 @@ export function useCall(lesson: CallLesson): {
         }
       }),
       window.api.onVoiceAudio((bytes) => {
-        if (!onRef.current) return;
+        if (!onRef.current || !speakingRef.current) return;
         queueRef.current.push(
           URL.createObjectURL(new Blob([bytes as BlobPart], { type: "audio/mpeg" })),
         );

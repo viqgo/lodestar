@@ -271,6 +271,7 @@ describe("useCall", () => {
 
   it("tutor audio is played one piece after the other", async () => {
     const s = await started(probeText);
+    rtlAct(() => s.emitVoiceState("speaking"));
     rtlAct(() => s.emitVoiceAudio(new Uint8Array([1])));
     rtlAct(() => s.emitVoiceAudio(new Uint8Array([1])));
     expect(FakeAudio.instances).toHaveLength(1);
@@ -309,6 +310,7 @@ describe("useCall", () => {
 
   it("skip stops the audio and tells the hub", async () => {
     const s = await started(probeText);
+    rtlAct(() => s.emitVoiceState("speaking"));
     rtlAct(() => s.emitVoiceAudio(new Uint8Array([1])));
     rtlAct(() => s.emitVoiceAudio(new Uint8Array([1])));
     rtlAct(() => s.result.current.skip());
@@ -344,6 +346,61 @@ describe("useCall", () => {
     expect(s.result.current.state).toBe("off");
     expect(micStop).toHaveBeenCalled();
     expect(s.initial.submit).not.toHaveBeenCalled();
+  });
+
+  it("Skip revokes the playing piece's URL", async () => {
+    const s = await started(probeText);
+    rtlAct(() => s.emitVoiceState("speaking"));
+    rtlAct(() => s.emitVoiceAudio(new Uint8Array([1])));
+    rtlAct(() => s.result.current.skip());
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:1");
+  });
+
+  it("finished runs once per piece", async () => {
+    const s = await started(probeText);
+    rtlAct(() => s.emitVoiceState("speaking"));
+    rtlAct(() => s.emitVoiceAudio(new Uint8Array([1])));
+    rtlAct(() => s.emitVoiceAudio(new Uint8Array([1])));
+    const first = FakeAudio.instances[0]!;
+    rtlAct(() => first.onended!());
+    rtlAct(() => first.onerror!());
+    expect(FakeAudio.instances).toHaveLength(2);
+    expect(vi.mocked(URL.revokeObjectURL).mock.calls.filter((c) => c[0] === "blob:1")).toHaveLength(
+      1,
+    );
+  });
+
+  it("audio arriving after Skip is dropped", async () => {
+    const s = await started(probeText);
+    rtlAct(() => s.emitVoiceState("speaking"));
+    rtlAct(() => s.result.current.skip());
+    rtlAct(() => s.emitVoiceAudio(new Uint8Array([1])));
+    expect(FakeAudio.instances).toHaveLength(0);
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+  });
+
+  it("speaking clears words heard before it", async () => {
+    const s = await started(probeText);
+    rtlAct(() => s.emitVoiceTranscript("half a thought", false));
+    expect(s.result.current.heard).toBe("half a thought");
+    rtlAct(() => s.emitVoiceState("speaking"));
+    expect(s.result.current.heard).toBe("");
+  });
+
+  it("a rejected voiceStart shows an error and leaves no call", async () => {
+    const s = setup(probeText, false, {
+      voiceStart: vi.fn(async () => {
+        throw new Error("boom");
+      }),
+    });
+    await rtlAct(async () => {
+      s.result.current.start();
+    });
+    await waitFor(() =>
+      expect(s.result.current.error).toBe("Voice stopped: could not start the call."),
+    );
+    expect(s.result.current.state).toBe("off");
+    expect(startMic).not.toHaveBeenCalled();
   });
 
   it("call_ends_when_lesson_closes", async () => {
