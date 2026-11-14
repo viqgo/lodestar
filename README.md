@@ -8,13 +8,21 @@ A lesson has four parts. First it probes what you already know with a few questi
 
 Items you learn are saved to a knowledge list. Later lessons read that list.
 
+## Install
+
+Download the file for your Mac from the Releases page, `https://github.com/viqgo/lodestar/releases`: `lodestar-0.2.0-arm64.dmg` for a Mac with Apple silicon, `lodestar-0.2.0-x64.dmg` for an Intel Mac. Open it and drag lodestar into Applications.
+
+## First open
+
+lodestar is not signed with an Apple developer certificate, so macOS stops it the first time. Right-click lodestar in Applications and choose "Open", then "Open" again. On newer versions of macOS that way is gone: try to open the app once, then open System Settings, "Privacy & Security", and press "Open Anyway". If macOS says the app is damaged, run `xattr -cr /Applications/lodestar.app` in Terminal once and open it again. This is needed once.
+
 ## Requirements
 
-- macOS. Other systems are untested.
-- Node 26 and npm 11.
-- At least one of: Codex CLI, Claude Code, Gemini CLI (experimental: not yet run against a real Gemini account), installed and signed in. `codex --version`, `claude --version` or `gemini --version` should print a version.
+- macOS, on Apple silicon or Intel. Other systems are untested.
+- At least one of: Codex CLI, Claude Code, Gemini CLI (experimental: not yet run against a real Gemini account), installed and signed in. `codex --version`, `claude --version` or `gemini --version` should print a version. The app, also when started from Finder, looks for them on your `PATH` and in `/opt/homebrew/bin`, `/usr/local/bin`, `~/.local/bin` and `~/.npm-global/bin`.
+- Node 26 and npm 11 are needed only to run or build from source.
 
-## Run it
+## Run from source
 
 ```
 npm ci
@@ -27,15 +35,17 @@ If the window does not open and the log says `Electron uninstall`, run `node nod
 
 Lessons are JSON files under the app's data folder. On macOS this is `~/Library/Application Support/lodestar`. You can change the folder with the `LEARN_DATA_DIR` environment variable.
 
-If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PATH` or `LEARN_GEMINI_PATH` to its path.
+If a binary is in a non-standard place, set `LEARN_CODEX_PATH`, `LEARN_CLAUDE_PATH` or `LEARN_GEMINI_PATH` to its path. A variable set in a terminal reaches the app only when the app is started from that terminal, not from Finder.
 
 `settings.json` (voice settings) and `deepgram.key` (the encrypted key) live in the same folder.
 
 `reviews.json` (boxes, due dates and flashcard questions) lives in the same folder.
 
-## What goes to the model
+## What is sent where
 
 Each turn runs the lesson's tutor in an empty temporary folder, read-only: `codex exec`, `claude -p` or `gemini -p`. The lesson so far and the tutor instructions from the Profile screen are sent. Nothing else is sent.
+
+During a call the microphone audio and the text that is read aloud also go to Deepgram, and only there (see "Voice"). The app itself makes no other connection: in the installed app the window may load nothing from the network.
 
 ## Material, files and web search
 
@@ -57,7 +67,7 @@ A subject is a course folder. The senior tutor reads the folder and proposes an 
 
 ## Voice
 
-"Start call" in a lesson header starts a spoken lesson. Your answers are heard and sent after a pause of 1.2 seconds. A choice is picked by its letter, its position ("the second one") or its words. A reading is read aloud when you say "read it" and passed when you say "continue" or "next". The tutor's feedback and questions are read aloud. "Skip" or the Space key stops the tutor, "Start over" clears what was heard, and "End call" or leaving the lesson ends the call.
+"Start call" in a lesson header starts a spoken lesson. Your answers are heard and sent after a pause of 1.2 seconds. A choice is picked by its letter, its position ("the second one") or its words. A reading is read aloud when you say "read it" and passed when you say "continue" or "next". The tutor's feedback and questions are read aloud. "Skip" or the Space key stops the tutor, "Start over" clears what was heard, and "End call" or leaving the lesson ends the call. The first call makes macOS ask for the microphone, with the reason "lodestar listens to your spoken answers during a call."
 
 Voice needs your own Deepgram API key: make an account at deepgram.com (a new account comes with free credit) and enter the key under Profile, "Voice". It is stored encrypted with the macOS keychain in `deepgram.key` in the data folder. The app shows only "Key saved", and you can remove the key there. "Speech language" (default `en`) and "Voice" (default `aura-2-thalia-en`) are set in the same place and kept in `settings.json`.
 
@@ -86,13 +96,14 @@ What goes where: flashcard and practice calls send only the item's text (and you
 - `npm test` runs the tests.
 - `npm run lint` checks formatting and lint rules.
 - `npm run typecheck` runs the TypeScript type check.
+- `npm run dist` builds the two disk images into `dist/` (unsigned; it downloads Electron for the other processor type the first time).
 - `npm run eval` runs checks against a real CLI. It spends that CLI's quota. Choose the CLI with `LEARN_EVAL_CLI=codex|claude|gemini` (default `codex`).
 
 The blueprint for the app lives in `docs/blueprint/`.
 
 ## Status
 
-Milestone 2: choose Codex, Claude Code or Gemini per lesson and switch mid-lesson.
+Version 0.2.0. Lessons with Codex, Claude Code or Gemini; material folders, files and web search; subjects; voice; review, practice and the knowledge graph; an unsigned macOS build.
 
 ## License
 
