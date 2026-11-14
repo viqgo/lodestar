@@ -55,13 +55,81 @@ describe("ipc", () => {
     expect(await call("cli:detect")).toEqual({ ok: true, version: "1.2.3" });
   });
 
+  it("clis:detect returns a status per CLI", async () => {
+    const { call } = await setup();
+    expect(await call("clis:detect")).toEqual([
+      { id: "codex", installed: true, version: "1.2.3" },
+      { id: "claude", installed: true, version: "1.2.3" },
+      { id: "gemini", installed: true, version: "1.2.3" },
+    ]);
+  });
+
+  it("sessions:create stores the chosen CLI", async () => {
+    const { store, call } = await setup();
+    const r = await call("sessions:create", { topic: "Maths", goal: "Limits", cli: "claude" });
+    expect(r.ok).toBe(true);
+    expect(r.session.cli).toBe("claude");
+    expect((await store.readSession(r.session.id))?.cli).toBe("claude");
+    const d = await call("sessions:create", { topic: "Maths", goal: "Limits" });
+    expect(d.session.cli).toBe("codex");
+  });
+
+  it("sessions:create refuses an unknown CLI", async () => {
+    const { store, call } = await setup();
+    expect(await call("sessions:create", { topic: "Maths", goal: "Limits", cli: "gpt" })).toEqual({
+      ok: false,
+      message: "Choose a tutor.",
+    });
+    expect(await store.listSessions()).toEqual([]);
+  });
+
+  it("sessions:list carries the CLI", async () => {
+    const { store, call } = await setup();
+    await store.writeSession({ ...withId(ID1, "2026-01-01T00:00:00.000Z", []), cli: "gemini" });
+    const list = await call("sessions:list");
+    expect(list[0].cli).toBe("gemini");
+  });
+
+  it("switch_tutor_asks_then_stores (ipc part)", async () => {
+    const { store, turns, send, call } = await setup();
+    await store.writeSession(withId(ID1, "2026-01-01T00:00:00.000Z", []));
+    const r = await call("sessions:setCli", ID1, "claude");
+    expect(r.ok).toBe(true);
+    expect(r.session.cli).toBe("claude");
+    expect(r.session.updatedAt).toBe(NOW);
+    expect(await store.readSession(ID1)).toEqual(r.session);
+    expect(send).toHaveBeenCalledWith("session:updated", r.session);
+    expect(turns.advance).not.toHaveBeenCalled();
+    expect(await call("sessions:setCli", ID1, "gpt")).toEqual({
+      ok: false,
+      message: "Choose a tutor.",
+    });
+    expect(
+      await call("sessions:setCli", "s_99999999-0000-0000-0000-000000000000", "claude"),
+    ).toEqual({
+      ok: false,
+      message: "This lesson no longer exists.",
+    });
+  });
+
+  it("switch_tutor_refused_while_running", async () => {
+    const { store, call } = await setup(true);
+    const before = withId(ID1, "2026-01-01T00:00:00.000Z", []);
+    await store.writeSession(before);
+    expect(await call("sessions:setCli", ID1, "claude")).toEqual({
+      ok: false,
+      message: "A reply is already on the way.",
+    });
+    expect(await store.readSession(ID1)).toEqual(before);
+  });
+
   it("sessions:list returns summaries newest first", async () => {
     const { store, call } = await setup();
     await store.writeSession(withId(ID1, "2026-01-01T00:00:00.000Z", []));
     await store.writeSession(withId(ID2, "2026-01-02T00:00:00.000Z", [act(A.probe())]));
     expect(await call("sessions:list")).toEqual([
-      { id: ID2, topic: "T", phase: "probe", updatedAt: "2026-01-02T00:00:00.000Z" },
-      { id: ID1, topic: "T", phase: "probe", updatedAt: "2026-01-01T00:00:00.000Z" },
+      { id: ID2, topic: "T", phase: "probe", cli: "codex", updatedAt: "2026-01-02T00:00:00.000Z" },
+      { id: ID1, topic: "T", phase: "probe", cli: "codex", updatedAt: "2026-01-01T00:00:00.000Z" },
     ]);
   });
 

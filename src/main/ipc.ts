@@ -1,3 +1,4 @@
+import { isCliId } from "../shared/clis";
 import type { IpcMain } from "electron";
 import { checkAnswer, deriveState, validateNewLesson, validateProfile } from "../core/engine";
 import type {
@@ -9,6 +10,7 @@ import type {
   TurnResult,
 } from "../shared/types";
 import type { CliAdapter } from "./cli/adapter";
+import { detectAll } from "./cli/registry";
 import type { Store } from "./store";
 import type { TurnRunner } from "./turn";
 
@@ -32,6 +34,7 @@ export function registerIpc(deps: IpcDeps): void {
   };
 
   ipcMain.handle("cli:detect", () => adapters.codex.detect());
+  ipcMain.handle("clis:detect", () => detectAll(adapters));
 
   ipcMain.handle("sessions:list", async (): Promise<SessionSummary[]> => {
     const out: SessionSummary[] = [];
@@ -41,6 +44,7 @@ export function registerIpc(deps: IpcDeps): void {
           id: s.id,
           topic: s.topic,
           phase: deriveState(s.events).phase,
+          cli: s.cli,
           updatedAt: s.updatedAt,
         });
       } catch {
@@ -50,21 +54,41 @@ export function registerIpc(deps: IpcDeps): void {
     return out;
   });
 
-  ipcMain.handle("sessions:create", async (_event, input: { topic: string; goal: string }) => {
-    const message = validateNewLesson(input.topic, input.goal);
-    if (message !== null) return { ok: false as const, message };
-    const session: Session = {
-      version: 1,
-      id: newId("s"),
-      topic: input.topic.trim(),
-      goal: input.goal.trim(),
-      cli: "codex",
-      createdAt: now(),
-      updatedAt: now(),
-      events: [],
-    };
-    await store.writeSession(session);
-    return { ok: true as const, session };
+  ipcMain.handle(
+    "sessions:create",
+    async (_event, input: { topic: string; goal: string; cli?: CliId }) => {
+      const message = validateNewLesson(input.topic, input.goal);
+      if (message !== null) return { ok: false as const, message };
+      const cli = input.cli ?? "codex";
+      if (!isCliId(cli)) return { ok: false as const, message: "Choose a tutor." };
+      const session: Session = {
+        version: 1,
+        id: newId("s"),
+        topic: input.topic.trim(),
+        goal: input.goal.trim(),
+        cli,
+        createdAt: now(),
+        updatedAt: now(),
+        events: [],
+      };
+      await store.writeSession(session);
+      return { ok: true as const, session };
+    },
+  );
+
+  ipcMain.handle("sessions:setCli", async (_event, id: string, cli: unknown) => {
+    if (!isCliId(cli)) return { ok: false as const, message: "Choose a tutor." };
+    if (turns.isRunning(id)) {
+      return { ok: false as const, message: "A reply is already on the way." };
+    }
+    const session = await store.readSession(id);
+    if (session === null) {
+      return { ok: false as const, message: "This lesson no longer exists." };
+    }
+    const updated: Session = { ...session, cli, updatedAt: now() };
+    await store.writeSession(updated);
+    send("session:updated", updated);
+    return { ok: true as const, session: updated };
   });
 
   ipcMain.handle("sessions:get", (_event, id: string) => store.readSession(id));

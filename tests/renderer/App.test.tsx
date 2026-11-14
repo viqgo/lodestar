@@ -17,6 +17,7 @@ const summary = (id: string, topic: string): SessionSummary => ({
   id,
   topic,
   phase: "probe",
+  cli: "codex",
   updatedAt: AT,
 });
 

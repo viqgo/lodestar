@@ -37,6 +37,8 @@ describe("preload", () => {
     expect(Object.keys(api).sort()).toEqual(
       [
         "detectCli",
+        "detectClis",
+        "setSessionCli",
         "listSessions",
         "createSession",
         "getSession",
@@ -60,6 +62,7 @@ describe("preload", () => {
     const input = { topic: "t", goal: "g" };
     const results = [
       await api.detectCli(),
+      await api.detectClis(),
       await api.listSessions(),
       await api.createSession(input),
       await api.getSession("a"),
@@ -72,9 +75,11 @@ describe("preload", () => {
       await api.deleteKnowledge("k"),
       await api.getProfile(),
       await api.saveProfile("p"),
+      await api.setSessionCli("a", "claude"),
     ];
     expect(invoke.mock.calls).toEqual([
       ["cli:detect"],
+      ["clis:detect"],
       ["sessions:list"],
       ["sessions:create", input],
       ["sessions:get", "a"],
@@ -87,8 +92,9 @@ describe("preload", () => {
       ["knowledge:delete", "k"],
       ["profile:get"],
       ["profile:save", "p"],
+      ["sessions:setCli", "a", "claude"],
     ]);
-    expect(results).toEqual(Array(13).fill("R"));
+    expect(results).toEqual(Array(15).fill("R"));
   });
 
   it("event subscriptions return an unsubscribe", async () => {

@@ -3,9 +3,12 @@ import type { Api, Session, TurnResult } from "../shared/types";
 
 const api: Api = {
   detectCli: () => ipcRenderer.invoke("cli:detect") as ReturnType<Api["detectCli"]>,
+  detectClis: () => ipcRenderer.invoke("clis:detect") as ReturnType<Api["detectClis"]>,
   listSessions: () => ipcRenderer.invoke("sessions:list") as ReturnType<Api["listSessions"]>,
   createSession: (input) =>
     ipcRenderer.invoke("sessions:create", input) as ReturnType<Api["createSession"]>,
+  setSessionCli: (id, cli) =>
+    ipcRenderer.invoke("sessions:setCli", id, cli) as ReturnType<Api["setSessionCli"]>,
   getSession: (id) => ipcRenderer.invoke("sessions:get", id) as ReturnType<Api["getSession"]>,
   deleteSession: (id) => ipcRenderer.invoke("sessions:delete", id) as Promise<void>,
   advance: (id) => ipcRenderer.invoke("lesson:advance", id) as Promise<TurnResult>,

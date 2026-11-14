@@ -8,7 +8,13 @@ import type { SessionSummary } from "../../src/shared/types";
 
 const NOW = new Date("2026-03-03T12:00:00.000Z");
 const sessions: SessionSummary[] = [
-  { id: "s_1", topic: "Derivatives", phase: "teach", updatedAt: "2026-03-03T10:00:00.000Z" },
+  {
+    id: "s_1",
+    topic: "Derivatives",
+    phase: "teach",
+    cli: "codex",
+    updatedAt: "2026-03-03T10:00:00.000Z",
+  },
 ];
 
 function setup(over: Partial<Parameters<typeof Sidebar>[0]> = {}) {

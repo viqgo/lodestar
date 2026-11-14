@@ -16,6 +16,12 @@ export function installApi(over: Partial<Record<keyof Api, unknown>> = {}) {
   };
   const api = {
     detectCli: vi.fn(async () => ({ ok: true, version: "0.0.0" })),
+    detectClis: vi.fn(async () => [
+      { id: "codex", installed: true, version: "0.0.0" },
+      { id: "claude", installed: true, version: "0.0.0" },
+      { id: "gemini", installed: false, version: null },
+    ]),
+    setSessionCli: vi.fn(async () => ({ ok: false, message: "unused" })),
     listSessions: vi.fn(async () => []),
     createSession: vi.fn(async () => ({ ok: false, message: "unused" })),
     getSession: vi.fn(async () => null),

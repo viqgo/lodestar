@@ -70,7 +70,13 @@ export type Session = {
   updatedAt: string;
   events: SessionEvent[];
 };
-export type SessionSummary = { id: string; topic: string; phase: Phase; updatedAt: string };
+export type SessionSummary = {
+  id: string;
+  topic: string;
+  phase: Phase;
+  cli: CliId;
+  updatedAt: string;
+};
 
 export type KnowledgeItem = {
   id: string;
@@ -125,11 +131,17 @@ export type TurnResult =
 
 export type Api = {
   detectCli(): Promise<DetectResult>;
+  detectClis(): Promise<CliStatus[]>;
   listSessions(): Promise<SessionSummary[]>;
   createSession(input: {
     topic: string;
     goal: string;
+    cli?: CliId;
   }): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
+  setSessionCli(
+    id: string,
+    cli: CliId,
+  ): Promise<{ ok: true; session: Session } | { ok: false; message: string }>;
   getSession(id: string): Promise<Session | null>;
   deleteSession(id: string): Promise<void>;
   advance(id: string): Promise<TurnResult>;
