@@ -33,3 +33,9 @@ it("styles have the disabled option and row rules", () => {
   expect(/\.option\.is-disabled\s*\{[^}]*color: var\(--color-muted\)/.test(css)).toBe(true);
   expect(/\.row\s*\{[^}]*display: flex/.test(css)).toBe(true);
 });
+
+it("styles have the switch and chip rules", () => {
+  const css = fs.readFileSync(path.join(process.cwd(), "src/renderer/src/styles/app.css"), "utf8");
+  expect(/\.switch\s*\{[^}]*display: flex/.test(css)).toBe(true);
+  expect(/\.chip\s*\{[^}]*display: inline-flex/.test(css)).toBe(true);
+});
