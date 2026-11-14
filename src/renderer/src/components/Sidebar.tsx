@@ -1,5 +1,5 @@
-import { useState } from "react";
-import type { SessionSummary } from "../../../shared/types";
+import { Fragment, useState } from "react";
+import type { SessionSummary, SubjectSummary } from "../../../shared/types";
 import { phaseLabel, relativeTime } from "../lib/time";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -12,35 +12,84 @@ export function Sidebar(props: {
   onKnowledge(): void;
   onProfile(): void;
   newDisabled: boolean;
+  subjects: SubjectSummary[];
+  activeSubjectId: string | null;
+  onNewSubject(): void;
+  onOpenSubject(id: string): void;
+  onDeleteSubject(id: string): void;
 }) {
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [confirmSubjectId, setConfirmSubjectId] = useState<string | null>(null);
   const nowIso = new Date().toISOString();
+  const subjectIds = new Set(props.subjects.map((x) => x.id));
+  const free = props.sessions.filter((s) => s.subjectId === null || !subjectIds.has(s.subjectId));
+  const lessonRow = (s: SessionSummary, unit: boolean) => (
+    <div
+      key={s.id}
+      className={
+        "lesson-row" + (unit ? " is-unit" : "") + (s.id === props.activeId ? " is-active" : "")
+      }
+    >
+      <button type="button" className="row-main" onClick={() => props.onOpen(s.id)}>
+        <b>{s.topic}</b>
+        <small>{`${phaseLabel(s.phase)} · ${relativeTime(s.updatedAt, nowIso)}`}</small>
+      </button>
+      <button
+        className="icon-btn"
+        aria-label="Delete lesson"
+        onClick={(e) => {
+          e.stopPropagation();
+          setConfirmId(s.id);
+        }}
+      >
+        ×
+      </button>
+    </div>
+  );
   return (
     <div className="sidebar">
       <button className="btn is-primary" onClick={props.onNew} disabled={props.newDisabled}>
         New lesson
       </button>
+      <button className="btn" onClick={props.onNewSubject} disabled={props.newDisabled}>
+        New subject
+      </button>
+      <span className="label">Subjects</span>
+      <div className="list">
+        {props.subjects.map((subject) => (
+          <Fragment key={subject.id}>
+            <div
+              className={"lesson-row" + (subject.id === props.activeSubjectId ? " is-active" : "")}
+            >
+              <button
+                type="button"
+                className="row-main"
+                onClick={() => props.onOpenSubject(subject.id)}
+              >
+                <b>{subject.name}</b>
+                <small>{relativeTime(subject.updatedAt, nowIso)}</small>
+              </button>
+              <button
+                className="icon-btn"
+                aria-label="Delete subject"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setConfirmSubjectId(subject.id);
+                }}
+              >
+                ×
+              </button>
+            </div>
+            {props.sessions
+              .filter((s) => s.subjectId === subject.id)
+              .map((s) => lessonRow(s, true))}
+          </Fragment>
+        ))}
+      </div>
       <span className="label">Lessons</span>
       <div className="list">
-        {props.sessions.length === 0 ? <span className="note">No lessons yet.</span> : null}
-        {props.sessions.map((s) => (
-          <div key={s.id} className={"lesson-row" + (s.id === props.activeId ? " is-active" : "")}>
-            <button type="button" className="row-main" onClick={() => props.onOpen(s.id)}>
-              <b>{s.topic}</b>
-              <small>{`${phaseLabel(s.phase)} · ${relativeTime(s.updatedAt, nowIso)}`}</small>
-            </button>
-            <button
-              className="icon-btn"
-              aria-label="Delete lesson"
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmId(s.id);
-              }}
-            >
-              ×
-            </button>
-          </div>
-        ))}
+        {free.length === 0 ? <span className="note">No lessons yet.</span> : null}
+        {free.map((s) => lessonRow(s, false))}
       </div>
       <button className="btn" onClick={props.onKnowledge}>
         Knowledge
@@ -57,6 +106,19 @@ export function Sidebar(props: {
             setConfirmId(null);
           }}
           onCancel={() => setConfirmId(null)}
+        />
+      ) : null}
+      {confirmSubjectId !== null ? (
+        <ConfirmDialog
+          message={`Delete this subject and its ${
+            props.sessions.filter((s) => s.subjectId === confirmSubjectId).length
+          } lessons? This cannot be undone.`}
+          confirmLabel="Delete"
+          onConfirm={() => {
+            props.onDeleteSubject(confirmSubjectId);
+            setConfirmSubjectId(null);
+          }}
+          onCancel={() => setConfirmSubjectId(null)}
         />
       ) : null}
     </div>

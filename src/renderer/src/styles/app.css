@@ -218,6 +218,9 @@ body {
   font: var(--text-xs) var(--font-mono);
   color: var(--color-muted);
 }
+.lesson-row.is-unit {
+  padding-left: var(--space-5);
+}
 .lesson-row.is-hover {
   background: var(--color-surface);
 }

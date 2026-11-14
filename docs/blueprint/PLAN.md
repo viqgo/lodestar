@@ -108,7 +108,8 @@ Tick a box only after the task's verify step passed. Append the commit hash.
 - [x] T74 Outline review
 - [x] T75 Senior chat
 - [x] T76 Subject screen and form
-- [ ] T77-T78 Milestone 4: subjects (outline, expanded at stage start)
+- [x] T77 Sidebar and app
+- [ ] T78 Evals and README
 - [ ] GATE H Subjects
 - [ ] T79-T88 Milestone 5: voice (outline)
 - [ ] GATE I Voice

@@ -4,7 +4,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Sidebar } from "../../src/renderer/src/components/Sidebar";
-import type { SessionSummary } from "../../src/shared/types";
+import type { SessionSummary, SubjectSummary } from "../../src/shared/types";
 
 const NOW = new Date("2026-03-03T12:00:00.000Z");
 const sessions: SessionSummary[] = [
@@ -18,6 +18,17 @@ const sessions: SessionSummary[] = [
   },
 ];
 
+const subjects: SubjectSummary[] = [
+  { id: "u_1", name: "Physics", updatedAt: "2026-03-03T09:00:00.000Z" },
+  { id: "u_2", name: "History", updatedAt: "2026-03-03T08:00:00.000Z" },
+];
+const inSubject = (id: string, topic: string, subjectId: string | null): SessionSummary => ({
+  ...sessions[0],
+  id,
+  topic,
+  subjectId,
+});
+
 function setup(over: Partial<Parameters<typeof Sidebar>[0]> = {}) {
   const props = {
     sessions,
@@ -28,6 +39,11 @@ function setup(over: Partial<Parameters<typeof Sidebar>[0]> = {}) {
     onKnowledge: vi.fn(),
     onProfile: vi.fn(),
     newDisabled: false,
+    subjects: [],
+    activeSubjectId: null,
+    onNewSubject: vi.fn(),
+    onOpenSubject: vi.fn(),
+    onDeleteSubject: vi.fn(),
     ...over,
   };
   const user = userEvent.setup();
@@ -102,5 +118,65 @@ describe("Sidebar", () => {
     await user.keyboard("{Enter}");
     expect(props.onOpen).toHaveBeenCalledTimes(1);
     expect(props.onOpen).toHaveBeenCalledWith("s_1");
+  });
+  it("sidebar_groups_lessons_by_subject", () => {
+    setup({
+      subjects,
+      sessions: [
+        inSubject("s_a", "Unit A", "u_1"),
+        inSubject("s_b", "Unit B", "u_2"),
+        inSubject("s_c", "Free lesson", null),
+      ],
+    });
+    const rows = (t: string) => screen.getByText(t).closest(".lesson-row");
+    expect(rows("Unit A")).toHaveClass("is-unit");
+    expect(rows("Unit B")).toHaveClass("is-unit");
+    expect(rows("Free lesson")).not.toHaveClass("is-unit");
+    const follows = (a: Node, b: Node) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+    const subjectsLabel = screen.getByText("Subjects");
+    const lessonsLabel = screen.getByText("Lessons");
+    expect(follows(subjectsLabel, lessonsLabel)).toBe(true);
+    expect(follows(screen.getByText("Physics"), screen.getByText("Unit A"))).toBe(true);
+    expect(follows(screen.getByText("Unit A"), screen.getByText("History"))).toBe(true);
+    expect(follows(screen.getByText("History"), screen.getByText("Unit B"))).toBe(true);
+    expect(follows(screen.getByText("Unit B"), lessonsLabel)).toBe(true);
+    expect(follows(lessonsLabel, screen.getByText("Free lesson"))).toBe(true);
+  });
+  it("Sidebar opens a subject and marks it active", async () => {
+    const { props, user } = setup({ subjects, activeSubjectId: "u_2" });
+    expect(screen.getByText("History").closest(".lesson-row")).toHaveClass("is-active");
+    expect(screen.getByText("Physics").closest(".lesson-row")).not.toHaveClass("is-active");
+    await user.click(screen.getByText("Physics"));
+    expect(props.onOpenSubject).toHaveBeenCalledWith("u_1");
+  });
+  it("Sidebar asks before deleting a subject", async () => {
+    const { props, user } = setup({
+      subjects,
+      sessions: [inSubject("s_a", "Unit A", "u_1"), inSubject("s_b", "Unit B", "u_1")],
+    });
+    const del = () => screen.getAllByRole("button", { name: "Delete subject" })[0];
+    await user.click(del());
+    expect(
+      screen.getByText("Delete this subject and its 2 lessons? This cannot be undone."),
+    ).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(props.onDeleteSubject).not.toHaveBeenCalled();
+    await user.click(del());
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(props.onDeleteSubject).toHaveBeenCalledTimes(1);
+    expect(props.onDeleteSubject).toHaveBeenCalledWith("u_1");
+  });
+  it("Sidebar New subject calls back and respects newDisabled", async () => {
+    const { props, user, view } = setup();
+    await user.click(screen.getByRole("button", { name: "New subject" }));
+    expect(props.onNewSubject).toHaveBeenCalledTimes(1);
+    view.rerender(<Sidebar {...props} newDisabled={true} />);
+    expect(screen.getByRole("button", { name: "New subject" })).toBeDisabled();
+  });
+  it("Sidebar says No lessons yet when every lesson belongs to a subject", () => {
+    setup({ subjects, sessions: [inSubject("s_a", "Unit A", "u_1")] });
+    expect(screen.getByText("No lessons yet.")).toBeInTheDocument();
+    expect(screen.getByText("Unit A")).toBeInTheDocument();
   });
 });
