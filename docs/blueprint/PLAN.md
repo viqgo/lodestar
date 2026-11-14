@@ -189,7 +189,7 @@ What the owner can see working at the end: `npm test` shows 61 passing tests tha
 - There is no `"type": "module"` in `package.json`; keep it that way so main and preload build as CommonJS (a sandboxed preload cannot be an ES module).
 
 **Files**
-- Create: `electron.vite.config.ts`, `src/main/index.ts`, `src/preload/index.ts`, `src/renderer/index.html`, `src/renderer/src/main.tsx`, `src/renderer/src/App.tsx`, `src/renderer/src/styles/tokens.css`, `src/renderer/src/styles/app.css`
+- Create: `electron.vite.config.ts`, `src/main/index.ts`, `src/preload/index.ts`, `src/renderer/index.html`, `src/renderer/src/main.tsx`, `src/renderer/src/App.tsx`, `src/renderer/src/styles/tokens.css`, `src/renderer/src/styles/app.css`, `src/renderer/src/vite-env.d.ts`
 - Do NOT add IPC, storage or CLI code. Do NOT add dependencies.
 
 **Steps**
@@ -207,7 +207,7 @@ What the owner can see working at the end: `npm test` shows 61 passing tests tha
    ```
 3. Create `src/renderer/index.html`: a standard HTML5 page, `<title>lodestar</title>`, body containing `<div id="root"></div>` and `<script type="module" src="/src/main.tsx"></script>`.
 4. Create `src/renderer/src/main.tsx`: import `./styles/tokens.css` then `./styles/app.css`, and render `<App />` into `#root` with `createRoot` inside `<StrictMode>`.
-5. Create `src/renderer/src/App.tsx`: `export function App()` returning `<main><h1>lodestar</h1></main>`.
+5. Create `src/renderer/src/vite-env.d.ts` containing exactly the one line `/// <reference types="vite/client" />` (without it, TypeScript 6 rejects the CSS imports in `main.tsx`). Create `src/renderer/src/App.tsx`: `export function App()` returning `<main><h1>lodestar</h1></main>`.
 6. Create `src/preload/index.ts` containing only `export {};`.
 7. Create `src/main/index.ts`:
    ```ts
